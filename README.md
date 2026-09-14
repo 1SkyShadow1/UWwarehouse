@@ -16,7 +16,11 @@ The **Scanned Receipts & Invoices** page contains the 366 files from `D:\UW\UW I
 
 The scanned page supports filename/date/category filtering and local uploads for future JPG, PNG, and PDF scans. Uploaded files are stored in the browser database and can be reviewed with the same viewer controls. The Dashboard reports the number awaiting review, but does not invent invoice or expense amounts from image pixels. Quote creation includes price-book presets for the established item names, sizes, types, and materials; selecting a preset fills the code, description, and calculated starting price.
 
+All document-facing pages (invoices, quotes, receipts, expenses, payables, the full document register, scanned documents, and the media gallery) provide consistent search, category, status, and date filtering where applicable. Filters update the displayed rows immediately and show the matching count.
+
 Optional Supabase cloud backup is available under Settings. Use **Save to Cloud** for an encrypted-in-transit JSON backup and **Restore from Cloud** to pull the selected workspace back into local storage after device loss or replacement. Configure Row Level Security and use a publishable/anonymous key only; never place a service-role key in the browser.
+
+Google Drive backup is also available under Settings. Enter a Google OAuth access token, test the connection, optionally choose a Drive folder, and enable **Keep backup continuously updated**. The connection preference, folder, backup filename, and Drive file ID are retained locally until **Disconnect** is selected. Automatic saves update the same Drive JSON file instead of creating duplicate files. Google access tokens can still expire or be revoked by Google, in which case reconnect with a fresh token.
 
 ## Run locally on Windows
 
