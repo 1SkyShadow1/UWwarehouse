@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#121212">
+<meta name="description" content="Offline-first accounting and operations system for Upholstery Warehouse">
+<link rel="manifest" href="manifest.webmanifest">
+<title>UW Accounting System — Upholstery Warehouse</title>
+<style>
+:root{
+  --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
+  --gold:#D4AF37; --gold2:#E5C07B; --gold-dim:#8a7228;
+  --text:#f5f5f0; --muted:#9a9a92; --line:#2e2e2e;
+  --green:#4CAF7D; --red:#D9534F; --amber:#E0A800;
+  --radius:12px;
+}
+body.light{
+  --bg:#f4f1e8; --bg2:#fffdf7; --bg3:#ebe6d8; --card:#fffefa;
+  --text:#25251f; --muted:#6c6a60; --line:#d8d1bf; --gold-dim:#a98d2e;
+}
+body.light #sidebar{background:linear-gradient(180deg,#fffdf7,#eee9dc)}
+body.light #topbar{background:#fffdf7}
+body.light .nav-item:hover,body.light tr:hover td{background:#f0ecdf}
+body.light .doc-preview{color:#111}
+body.light td{color:#25251f}
+body.light .sidebar-foot,body.light .footer-note{color:#6c6a60}
+body.light .fld input,body.light .fld select,body.light .fld textarea,body.light .search{color:#25251f;background:#fffdf7}
+body.light .btn,body.light .tb-btn{color:#25251f}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#3a3a3a;border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ===== SIDEBAR ===== */
+#sidebar{width:250px;min-width:250px;background:linear-gradient(180deg,#161616,#101010);border-right:1px solid var(--line);display:flex;flex-direction:column;transition:width .25s;overflow:hidden}
+#sidebar.collapsed{width:70px;min-width:70px}
+.brand{display:flex;align-items:center;gap:12px;padding:18px 14px;border-bottom:1px solid var(--line)}
+.logo-badge{width:44px;height:44px;min-width:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#3a3a3a,#151515);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:var(--gold2);letter-spacing:-1px;box-shadow:0 0 14px rgba(212,175,55,.25)}
+.brand-text{white-space:nowrap}
+.brand-text h1{font-size:15px;color:var(--gold);letter-spacing:2px}
+.brand-text p{font-size:9px;color:var(--muted);letter-spacing:1.5px;margin-top:2px}
+.nav{flex:1;overflow-y:auto;padding:10px 0}
+.nav-item{display:flex;align-items:center;gap:12px;padding:11px 16px;cursor:pointer;color:var(--muted);font-size:13.5px;border-left:3px solid transparent;white-space:nowrap;transition:all .15s}
+.nav-item:hover{background:#1e1e1e;color:var(--text)}
+.nav-item.active{background:linear-gradient(90deg,rgba(212,175,55,.12),transparent);color:var(--gold2);border-left-color:var(--gold)}
+.nav-item .ico{width:20px;text-align:center;min-width:20px}
+.nav-sec{font-size:9.5px;letter-spacing:2px;color:#5c5c54;padding:14px 16px 5px;white-space:nowrap}
+#sidebar.collapsed .brand-text,#sidebar.collapsed .nav-item span.lbl,#sidebar.collapsed .nav-sec{display:none}
+.sidebar-foot{border-top:1px solid var(--line);padding:12px 14px;font-size:11px;color:var(--muted);white-space:nowrap}
+#sidebar.collapsed .sidebar-foot{display:none}
+
+/* ===== MAIN ===== */
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#topbar{display:flex;align-items:center;gap:14px;padding:12px 22px;border-bottom:1px solid var(--line);background:#161616}
+#topbar h2{font-size:17px;color:var(--gold2);font-weight:600;flex:1}
+.tb-btn{background:var(--bg3);border:1px solid var(--line);color:var(--text);padding:7px 13px;border-radius:8px;font-size:12.5px;cursor:pointer;transition:.15s}
+.tb-btn:hover{border-color:var(--gold);color:var(--gold2)}
+.tb-btn.gold{background:linear-gradient(135deg,var(--gold),#b8952c);color:#111;font-weight:700;border:none}
+.tb-btn.gold:hover{filter:brightness(1.1)}
+#content{flex:1;overflow-y:auto;padding:22px}
+
+/* ===== CARDS / GRIDS ===== */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent)}
+.card .lbl{font-size:11px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+.card .val{font-size:26px;font-weight:700;margin-top:6px;color:var(--text)}
+.card .val.gold{color:var(--gold2)} .card .val.green{color:var(--green)} .card .val.red{color:var(--red)}
+.card .sub{font-size:11.5px;color:var(--muted);margin-top:4px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:20px}
+.panel h3{font-size:14px;color:var(--gold2);margin-bottom:14px;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:1000px){.grid2{grid-template-columns:1fr}}
+
+/* ===== TABLES ===== */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;padding:9px 10px;color:var(--gold);font-size:11px;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--gold-dim);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);color:#d8d8d0}
+tr:hover td{background:#242424}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;letter-spacing:.5px}
+.tag.paid{background:rgba(76,175,125,.15);color:var(--green);border:1px solid rgba(76,175,125,.4)}
+.tag.pending{background:rgba(224,168,0,.13);color:var(--amber);border:1px solid rgba(224,168,0,.4)}
+.tag.overdue{background:rgba(217,83,79,.13);color:var(--red);border:1px solid rgba(217,83,79,.4)}
+.tag.quote{background:rgba(120,120,255,.12);color:#9aa0ff;border:1px solid rgba(120,120,255,.35)}
+
+/* ===== FORMS ===== */
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.fld label{display:block;font-size:10.5px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
+.fld input,.fld select,.fld textarea{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:7px;font-size:13px;outline:none}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--gold)}
+.btn{background:var(--bg3);border:1px solid var(--line);color:var(--text);padding:8px 15px;border-radius:7px;font-size:12.5px;cursor:pointer}
+.btn:hover{border-color:var(--gold);color:var(--gold2)}
+.btn.gold{background:linear-gradient(135deg,var(--gold),#b8952c);color:#111;font-weight:700;border:none}
+.btn.sm{padding:4px 9px;font-size:11px}
+.btn.danger{color:var(--red)} .btn.danger:hover{border-color:var(--red)}
+.toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.search{background:var(--bg2);border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:7px;font-size:12.5px;min-width:210px;outline:none}
+.search:focus{border-color:var(--gold)}
+
+/* misc */
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:12px}
+.bar-track{flex:1;background:var(--bg2);border-radius:5px;height:14px;overflow:hidden}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--gold-dim),var(--gold));border-radius:5px;transition:width .5s}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.kv b{color:var(--gold2);font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:13px;padding:22px;text-align:center}
+.footer-note{margin-top:auto;font-size:10.5px;color:#55554e;padding:12px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between}
+.toast{position:fixed;bottom:24px;right:24px;background:#242424;border:1px solid var(--gold);color:var(--gold2);padding:11px 18px;border-radius:9px;font-size:13px;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.6)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal{background:var(--bg2);border:1px solid var(--gold-dim);border-radius:14px;padding:22px;width:min(720px,94vw);max-height:88vh;overflow-y:auto}
+.modal h3{color:var(--gold2);margin-bottom:16px}
+@media print{body *{visibility:hidden}#print-area,#print-area *{visibility:visible}#print-area{position:absolute;inset:0;background:#fff;color:#000}}
+.template-doc{background:#fff;color:#111;max-width:820px;margin:0 auto;padding:28px 34px;font-family:Arial,Helvetica,sans-serif;box-shadow:0 0 0 1px #ddd}
+.template-doc .template-logo{display:block;max-width:100%;height:88px;object-fit:contain;object-position:left center;margin-bottom:18px;background:#000}
+.template-doc .doc-heading{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #222;padding-bottom:10px;margin-bottom:14px}
+.template-doc .doc-heading h1{font-size:25px;margin:0;letter-spacing:1px;color:#111}
+.template-doc .doc-heading .doc-number{text-align:right;font-size:12px;line-height:1.65}
+.template-doc .company-details{font-size:11px;line-height:1.45;margin-bottom:18px}
+.template-doc .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;font-size:11px;margin-bottom:15px}
+.template-doc .field{border-bottom:1px solid #999;min-height:19px}.template-doc .field b{display:inline-block;min-width:125px}
+.template-doc .template-section{font-weight:bold;font-size:12px;border-bottom:1px solid #222;padding-bottom:4px;margin:17px 0 7px}
+.template-doc table{width:100%;border-collapse:collapse;color:#111;background:#fff;font-size:11px}.template-doc th{font-weight:bold;border-top:1px solid #222;border-bottom:1px solid #222;text-align:left;padding:6px 4px}.template-doc td{border-bottom:1px solid #bbb;padding:6px 4px;vertical-align:top}.template-doc .right{text-align:right}
+.template-doc .grand-total{font-weight:bold;border-top:2px solid #222;border-bottom:0}.template-doc .terms{font-size:10px;line-height:1.55;margin-top:18px}.template-doc .signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px;font-size:10px}.template-doc .signature-grid div{border-top:1px solid #222;padding-top:5px}
+.template-doc .signature-grid{row-gap:42px;margin-top:34px}.template-doc .signature-grid div{min-height:32px;padding-top:9px}
+.quote-reference{display:grid;grid-template-columns:290px 1fr;border-top:1px solid #222;border-bottom:1px solid #222;min-height:30px;font-size:13px}.quote-reference b,.quote-reference span{padding:6px 8px}.quote-reference b{border-right:1px solid #222}.quote-introduction{border-bottom:1px solid #222;padding-bottom:10px;font-size:13px;line-height:1.55;white-space:pre-line}
+.doc-viewer{max-height:68vh;overflow:auto;background:var(--bg);border:1px solid var(--border);padding:10px}.doc-viewer img{display:block;max-width:none;transform-origin:top left}.doc-viewer iframe{display:block;min-width:100%;min-height:65vh}.viewer-tools{display:flex;gap:6px;align-items:center;margin:8px 0}.viewer-tools .btn{min-width:42px}.viewer-scale{font-size:12px;color:var(--muted);min-width:54px;text-align:center}
+.review-needed{background:rgba(220,70,70,.12)!important;color:#ffb0a8!important}.review-approved{background:rgba(50,180,100,.1)!important;color:#9be7b0!important}
+@media print{.template-doc{box-shadow:none;max-width:none;padding:12mm 14mm}.template-doc .template-logo{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.g-item{background:var(--bg2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.g-item img{width:100%;height:110px;object-fit:cover;display:block}
+.g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
+.doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="brand">
+    <div class="logo-badge">UW</div>
+    <div class="brand-text"><h1>UPHOLSTERY<br>WAREHOUSE</h1><p>ALL THINGS UPHOLSTERY...</p></div>
+  </div>
+  <div class="nav" id="nav"></div>
+  <div class="sidebar-foot">077 412 8367<br>info@upholsterywarehouse.co.za</div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <button class="tb-btn" onclick="toggleSidebar()">☰</button>
+    <h2 id="page-title">Dashboard</h2>
+    <button class="tb-btn" onclick="exportBackup()">⬇ Export Backup</button>
+    <button class="tb-btn" onclick="document.getElementById('importFile').click()">⬆ Restore Backup</button>
+    <button class="tb-btn" onclick="refreshBundledData()">↻ Refresh D:\UW Data</button>
+    <button class="tb-btn" id="installBtn" hidden onclick="installApp()">⇩ Install App</button>
+    <button class="tb-btn" id="themeBtn" onclick="toggleTheme()" title="Switch light/dark mode">☀ Light</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">
+    <button class="tb-btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
+  </div>
+  <div id="content"></div>
+  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span>Data stored locally on this device · Capitec Business 1052000444 · Branch 450105</span></div>
+</div>
+
+<div id="modal-root"></div>
+
+<script src="imported-data.js"></script>
+<script src="operations-data.js"></script>
+<script src="scanned-data.js"></script>
+<script>
+/* ============================================================
+   UW ACCOUNTING SYSTEM — Offline-first local persistence layer
+   ============================================================ */
+const DB_KEY = 'UW_DB_V1';
+const DATA_SOURCE_PATH = 'D:\\UW';
+const today = () => new Date().toISOString().slice(0,10);
+
+const seed = {
+  meta:{company:'Upholstery Warehouse',tagline:'ALL THINGS UPHOLSTERY...',phone:'077 412 8367',email:'info@upholsterywarehouse.co.za',address:'4, 5th Avenue, Edenvale',bank:'Capitec Business Bank',account:'1052000444',branch:'450105',vatNote:'*Prices are Exclusive of VAT, not charged',fy:'2026',cloud:{url:'',key:'',table:'uw_accounting_data',workspace:'default'}},
+  invoices:[
+    {id:'GM04032503',date:'2025-04-12',customer:'Waseela',contact:'0832186063',email:'',project:'Re-Upholstery',items:[{code:'1001-01',desc:'2x Wingback Chairs',qty:1,price:3800},{code:'1001-02',desc:'Transport',qty:1,price:300}],deposit:0,paid:4100,status:'Paid',fy:'2025'},
+    {id:'GM11042501',date:'2025-04-11',customer:'Transworld',contact:'Luzaan · 614011766',email:'info@upholsterywarehouse.co.za',project:'Office Re-Upholstery',items:[{code:'1002-01',desc:'Guest Chairs (Super Leather, new foam/decron)',qty:6,price:1350},{code:'1002-02',desc:'Office Desk Chairs on Wheels (Super Leather)',qty:3,price:1650}],deposit:0,paid:0,status:'Pending',fy:'2025'},
+    {id:'GM05042502',date:'2025-04-05',customer:'Lee Coker',contact:'',email:'',project:'Patio Cushions',items:[{code:'',desc:'Patio Cushions',qty:1,price:1260}],deposit:0,paid:1260,status:'Paid',fy:'2025'},
+    {id:'GM05042501',date:'2025-04-05',customer:'Sylvia',contact:'',email:'',project:'Patio Cushions',items:[{code:'',desc:'Patio Cushions',qty:1,price:1050}],deposit:0,paid:1050,status:'Paid',fy:'2025'},
+    {id:'GM10032502',date:'2025-03-10',customer:'City Lodge Hotel',contact:'',email:'',project:'10 x Restaurant Bench Seats',items:[{code:'',desc:'Restaurant Bench Seats',qty:10,price:1713}],deposit:13704,paid:17130,status:'Paid',fy:'2025'},
+    {id:'GM14042501',date:'2025-04-15',customer:'Ronnie',contact:'',email:'',project:'3 Piece Lounge Suite',items:[{code:'',desc:'3 Piece Lounge Suite',qty:1,price:3500}],deposit:3500,paid:3500,status:'Paid',fy:'2025'}
+  ],
+  quotes:[
+    {id:'GM11042501',date:'2025-04-11',customer:'Transworld',contact:'Luzaan · 614011766',expiry:'2025-05-11',items:[{desc:'Guest Chairs',qty:6,price:1350},{desc:'Office Desk Chairs on wheels',qty:3,price:1650}],notes:'6x Guest Chairs + 3x Office Desk Chairs to be re-upholstered in Super Leather. Add new foam/decron.',status:'Sent',terms:true},
+    {id:'GM27032505',date:'2025-03-27',customer:'Jo-Ann',contact:'',email:'',expiry:'2025-04-27',items:[{desc:'4 Piece Cain Lounge Suite',qty:1,price:10182}],notes:'',status:'Accepted',terms:true}
+  ],
+  expenses:[
+    {id:1,date:'2025-01-04',vendor:"George - Landlord",desc:'January Rent',category:'Rent',invoiceNo:'DT',paidBy:'Brian',amount:12000,fundedBy:'Company',fy:'2025'},
+    {id:2,date:'2025-02-29',vendor:'George',desc:'February Rent',category:'Rent',invoiceNo:'DT',paidBy:'Brian',amount:12000,fundedBy:'Company',fy:'2025'},
+    {id:3,date:'2025-02-28',vendor:'Hawaii Commodoties',desc:'Leather',category:'Consumables',invoiceNo:'DT',paidBy:'Brian',amount:3742,fundedBy:'Company',fy:'2025'},
+    {id:4,date:'2025-02-29',vendor:'Sullies',desc:'Material',category:'Consumables',invoiceNo:'67',paidBy:'Brian',amount:3140,fundedBy:'Company',fy:'2025'},
+    {id:5,date:'2025-02-29',vendor:'Outsurance',desc:'Vehicle Insurance',category:'Vehicle',invoiceNo:'DD',paidBy:'Brian',amount:1407.83,fundedBy:'Company',fy:'2025'},
+    {id:6,date:'2025-02-31',vendor:'CEBK',desc:'Facebook Ads',category:'Marketing',invoiceNo:'DD',paidBy:'Brian',amount:615.25,fundedBy:'Company',fy:'2025'},
+    {id:7,date:'2025-01-03',vendor:'MBT Edleen Garage',desc:'NP300 Fuel',category:'Fuel',invoiceNo:'7607',paidBy:'Mike',amount:500.05,fundedBy:'Company',fy:'2025'},
+    {id:8,date:'2025-01-04',vendor:'Chamdor',desc:'Material',category:'Consumables',invoiceNo:'1688',paidBy:'Mike',amount:578.75,fundedBy:'Company',fy:'2025'},
+    {id:9,date:'2025-01-17',vendor:'Rain',desc:'Internet',category:'Office',invoiceNo:'DD',paidBy:'Brian',amount:595,fundedBy:'Company',fy:'2025'},
+    {id:10,date:'2025-03-05',vendor:'African Game Skin',desc:'Leather',category:'Consumables',invoiceNo:'',paidBy:'Brian',amount:3558.10,fundedBy:'Company',fy:'2025'}
+  ],
+  receipts:[
+    {id:1,date:'2025-04-12',customer:'Waseela',invoiceId:'GM04032503',amount:4100,method:'EFT',fy:'2025'},
+    {id:2,date:'2025-04-05',customer:'Lee Coker',invoiceId:'GM05042502',amount:1260,method:'Cash',fy:'2025'},
+    {id:3,date:'2025-03-10',customer:'City Lodge Hotel',invoiceId:'GM10032502',amount:17130,method:'EFT',fy:'2025'}
+  ],
+  wages:[
+    {name:'Esther',rateDay:325,days:5,weeks:[{w:'26-01 & 04-08',owed:4650},{w:'11-15',owed:625},{w:'18-22',owed:0},{w:'25-29',owed:1300}],advances:0},
+    {name:'Themba',rateDay:375,days:5,weeks:[{w:'26-01 & 04-08',owed:3195},{w:'11-15',owed:1875},{w:'18-22',owed:750},{w:'28-31',owed:1500}],advances:0},
+    {name:'Victor',rateDay:300,days:5,weeks:[{w:'26-01 & 04-08',owed:2300},{w:'11-15',owed:1300},{w:'18-22',owed:1800},{w:'25-29',owed:1200}],advances:0},
+    {name:'Simba',rateDay:220,days:5,weeks:[{w:'26-01 & 04-08',owed:0},{w:'11-15',owed:900},{w:'18-22',owed:220},{w:'25-29',owed:0}],advances:0},
+    {name:'Vincent',rateDay:200,days:5,weeks:[{w:'1-5',owed:1000}],advances:100}
+  ],
+  staff:[{name:'Esther',role:'Upholsterer',phone:''},{name:'Themba',role:'Upholsterer',phone:''},{name:'Victor',role:'Upholsterer',phone:''},{name:'Simba',role:'Upholsterer',phone:''},{name:'Vincent',role:'Assistant',phone:''}],
+  fabrics:[
+    {supplier:'Hawaii Commodoties',code:'HC-LEATHER-01',desc:'Leather hide',cost:1250,markup:100,sell:2500},
+    {supplier:'African Game Skin',code:'AGS-01',desc:'Game skin leather',cost:1779,markup:100,sell:3558},
+    {supplier:'Chamdor',code:'CH-VINYL-STD',desc:'Vinyl (standard)',cost:99,markup:100,sell:198},
+    {supplier:'Sullies',code:'SUL-FAB-STD',desc:'Fabric (standard)',cost:120,markup:100,sell:240}
+  ],
+  priceBook:[
+    {code:'STD-COU-1',desc:'One Seater Couch - Standard',mtr:7,fabCost:120,matCost:150,labHr:4},
+    {code:'STD-COU-2',desc:'Two Seater Couch - Standard',mtr:8,fabCost:46,matCost:200,labHr:7},
+    {code:'STD-COU-3',desc:'Three Seater Couch - Standard',mtr:11,fabCost:120,matCost:300,labHr:8},
+    {code:'WIN-CHR-1',desc:'Wingback Chair',mtr:6,fabCost:99,matCost:250,labHr:1},
+    {code:'DIN-CHR-1',desc:'Dining Chair (Standard)',mtr:1,fabCost:120,matCost:250,labHr:1},
+    {code:'DIN-CHR-HB',desc:'Dining Chair (High Back)',mtr:12,fabCost:120,matCost:350,labHr:1},
+    {code:'HED-BRD-Q',desc:'Headboard - Queen',mtr:5,fabCost:120,matCost:900,labHr:1},
+    {code:'LSH-COU-3',desc:'L-Shape 3 Seater',mtr:20,fabCost:120,matCost:2200,labHr:12},
+    {code:'SCA-CUS-M',desc:'Scatter Cushion - Medium',mtr:1,fabCost:120,matCost:120,labHr:1}
+  ],
+  loans:[
+    {name:'Jerome Loan',principal:0,rate:0,start:'',payments:[{date:'',amount:0,note:''}]},
+    {name:'GJM Statement',principal:0,rate:0,start:'',payments:[]}
+  ],
+  budgets:{Rent:12000,Utilities:1500,Supplies:8000,Logistics:2500,Marketing:1500,Other:2000},
+  gallery:[{id:1,label:'Waseela — 2x Wingback (After)',data:null}],
+  counters:{invoice:4,quote:2,expense:10,receipt:3}
+};
+
+let DB = load();
+function normalizeQuoteFields(db){
+  (db.quotes||[]).forEach(q=>{
+    if(q.projectReference===undefined) q.projectReference='';
+    if(q.introduction===undefined) q.introduction=q.notes||'';
+  });
+  return db;
+}
+function load(){
+  const imported=window.UW_IMPORTED||{};
+  const operations=window.UW_OPERATIONS||{};
+  const scanned=window.UW_SCANNED||{};
+  const base={...JSON.parse(JSON.stringify(seed)),...imported,...operations,scannedDocuments:scanned.documents||[],meta:{...seed.meta,...(imported.meta||{}),...(operations.meta||{}),scannedVersion:scanned.version||''}};
+  try{
+    const raw=localStorage.getItem(DB_KEY);
+    if(raw){
+      const parsed=JSON.parse(raw);
+      const merged={...base,...parsed,meta:{...base.meta,...(parsed.meta||{})}};
+      const importedNeedsRefresh=merged.meta.importVersion!==(imported.meta||{}).importVersion
+        || merged.invoices.length<(imported.invoices||[]).length
+        || merged.expenses.length<(imported.expenses||[]).length
+        || merged.quotes.length<(imported.quotes||[]).length;
+      if(importedNeedsRefresh){
+        merged.invoices=imported.invoices||[];
+        merged.quotes=imported.quotes||[];
+        merged.expenses=imported.expenses||[];
+        merged.priceBook=imported.priceBook||merged.priceBook;
+        merged.fabrics=imported.fabrics||merged.fabrics;
+        merged.meta.importVersion=(imported.meta||{}).importVersion;
+        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+      }
+      const operationsNeedRefresh=merged.meta.sourceVersion!==(operations.meta||{}).sourceVersion
+        || (merged.documents||[]).length<(operations.documents||[]).length
+        || (merged.jobs||[]).length<(operations.jobs||[]).length
+        || (merged.wages||[]).length<(operations.wages||[]).length;
+      if(operationsNeedRefresh){
+        ['suppliers','stock','documents','filesystemFiles','filesystemAudit','payables','bankStatements','jobs','aiNotes','wages','wageOperationalCosts'].forEach(k=>{if(operations[k])merged[k]=operations[k];});
+        merged.meta.sourceVersion=(operations.meta||{}).sourceVersion;
+        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+      }
+      if(merged.meta.scannedVersion!==(scanned.version||'')||(merged.scannedDocuments||[]).length<(scanned.documents||[]).length){
+        const previous=new Map((merged.scannedDocuments||[]).map(x=>[x.hash,x]));
+        merged.scannedDocuments=(scanned.documents||[]).map(x=>{const old=previous.get(x.hash)||{};return {...x,reviewStatus:old.reviewStatus||x.reviewStatus,includedInTotals:old.includedInTotals||false,reviewedAt:old.reviewedAt||''};});
+        merged.meta.scannedVersion=scanned.version||'';
+        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+      }
+      normalizeQuoteFields(merged);
+      localStorage.setItem(DB_KEY,JSON.stringify(merged));
+      return merged;
+    }
+  }catch(e){console.warn('Local database could not be loaded',e);}
+  const initial={...base,meta:{...base.meta,cloud:{url:'',key:'',table:'uw_accounting_data',workspace:'default'}}};
+  normalizeQuoteFields(initial);
+  localStorage.setItem(DB_KEY,JSON.stringify(initial)); return initial;
+}
+let cloudSyncTimer;
+function refreshBundledData(){
+  const imported=window.UW_IMPORTED||{},operations=window.UW_OPERATIONS||{};
+  if(!confirm('Refresh the current local dataset imported from '+DATA_SOURCE_PATH+'? This replaces the local historical collections with the current bundled D:\\UW snapshot. Export a backup first if needed.'))return;
+  DB.invoices=imported.invoices||[];DB.quotes=imported.quotes||[];DB.expenses=imported.expenses||[];
+  DB.priceBook=imported.priceBook||DB.priceBook;DB.fabrics=imported.fabrics||DB.fabrics;
+  ['suppliers','stock','documents','filesystemFiles','filesystemAudit','payables','bankStatements','jobs','aiNotes','wages','wageOperationalCosts'].forEach(k=>{if(operations[k])DB[k]=operations[k];});
+  DB.meta={...DB.meta,...(imported.meta||{}),...(operations.meta||{})};save();toast('Current D:\\UW dataset loaded locally');render();
+}
+function save(){
+  localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  clearTimeout(cloudSyncTimer);
+  if(DB.meta.cloud&&DB.meta.cloud.url&&DB.meta.cloud.key) cloudSyncTimer=setTimeout(()=>cloudSync('push'),1200);
+}
+function cloudConfig(){return DB.meta.cloud||{};}
+async function cloudSync(direction){
+  const cfg=cloudConfig(); if(!cfg.url||!cfg.key){toast('Configure cloud sync in Settings first');return;}
+  const base=cfg.url.replace(/\/+$/,'')+'/rest/v1/'+encodeURIComponent(cfg.table||'uw_accounting_data');
+  const headers={'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  try{
+    if(direction==='push'){
+      const response=await fetch(base,{method:'POST',headers,body:JSON.stringify({id:cfg.workspace||'default',data:DB,updated_at:new Date().toISOString()})});
+      if(!response.ok) throw new Error('Cloud save failed ('+response.status+')');
+      toast('Cloud backup saved');
+    }else{
+      const response=await fetch(base+'?id=eq.'+encodeURIComponent(cfg.workspace||'default'),{headers});
+      if(!response.ok) throw new Error('Cloud load failed ('+response.status+')');
+      const rows=await response.json();
+      if(!rows.length){toast('No cloud backup found');return;}
+      if(!confirm('Replace local data with the cloud backup?')) return;
+      DB=rows[0].data; save(); render(); toast('Cloud backup restored');
+    }
+  }catch(err){console.error(err);toast(err.message||'Cloud sync failed');}
+}
+async function googleDriveSync(direction){
+  const cfg=DB.meta.googleDrive||{};if(!cfg.token){toast('Add a Google Drive OAuth access token in Settings first');return;}
+  const headers={Authorization:'Bearer '+cfg.token};
+  try{
+    if(direction==='push'){
+      const metadata={name:cfg.fileName||'UW_ACCOUNTING_BACKUP.json',mimeType:'application/json',parents:cfg.folderId?[cfg.folderId]:undefined};
+      const boundary='uw_boundary_'+Date.now(),content=JSON.stringify(DB),multipart='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n--'+boundary+'--';
+      const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{...headers,'Content-Type':'multipart/related; boundary='+boundary},body:multipart});if(!r.ok)throw new Error('Google Drive upload failed ('+r.status+')');toast('Google Drive backup saved');
+    }else{
+      const name=encodeURIComponent(cfg.fileName||'UW_ACCOUNTING_BACKUP.json'),r=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%27'+name+'%27+and+trashed%3Dfalse&fields=files(id,name,modifiedTime)&orderBy=modifiedTime%20desc&pageSize=1',{headers});if(!r.ok)throw new Error('Google Drive lookup failed ('+r.status+')');const found=(await r.json()).files||[];if(!found.length){toast('No Google Drive backup found');return}const d=await fetch('https://www.googleapis.com/drive/v3/files/'+found[0].id+'?alt=media',{headers});if(!d.ok)throw new Error('Google Drive download failed ('+d.status+')');if(!confirm('Replace local data with the Google Drive backup?'))return;DB=await d.json();save();render();toast('Google Drive backup restored');
+    }
+  }catch(err){console.error(err);toast(err.message||'Google Drive sync failed');}
+}
+const R = n => 'R ' + Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+const invTotal = inv => inv.items.reduce((s,i)=>s+i.qty*i.price,0);
+const invBalance = inv => invTotal(inv) - (inv.paid||0) - (inv.deposit||0);
+function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
+function applyTheme(theme){
+  const selected=theme==='light'?'light':'dark';
+  document.body.classList.toggle('light',selected==='light');
+  localStorage.setItem('UW_THEME',selected);
+  const button=document.getElementById('themeBtn');
+  if(button)button.textContent=selected==='light'?'☾ Dark':'☀ Light';
+}
+function toggleTheme(){applyTheme(document.body.classList.contains('light')?'dark':'light');render();}
+
+/* ---------- Backup / Restore ---------- */
+function exportBackup(){
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='UW_BACKUP_'+today()+'.json';a.click();toast('Backup exported');
+}
+function importBackup(e){
+  const f=e.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{ try{DB=JSON.parse(r.result);save();toast('Backup restored');go(current);}catch(err){toast('Invalid backup file');} };
+  r.readAsText(f); e.target.value='';
+}
+
+/* ---------- Router / Navigation ---------- */
+const NAV=[
+ {sec:'OVERVIEW'},
+ {id:'dashboard',ico:'◈',lbl:'Dashboard'},
+ {id:'reports',ico:'▤',lbl:'Reports & P&L'},
+ {sec:'SALES'},
+ {id:'invoices',ico:'▣',lbl:'Income & Invoices'},
+ {id:'quotes',ico:'✎',lbl:'Quotes & Orders'},
+ {id:'receipts',ico:'✓',lbl:'Client Receipts'},
+ {sec:'OPERATIONS'},
+ {id:'expenses',ico:'▼',lbl:'Expenses & Budget'},
+ {id:'loans',ico:'⇄',lbl:'Loan Tracker'},
+ {id:'pricing',ico:'∑',lbl:'Pricing Calculator'},
+ {id:'fabrics',ico:'▦',lbl:'Fabric Price Lists'},
+ {id:'wages',ico:'👷',lbl:'Staff & Wages'},
+ {id:'jobs',ico:'▸',lbl:'Jobs & Production'},
+ {id:'suppliers',ico:'♙',lbl:'Suppliers & Stock'},
+ {id:'payables',ico:'⇩',lbl:'Purchases & Payables'},
+ {id:'documents',ico:'▤',lbl:'Document Register'},
+ {id:'scanned',ico:'▧',lbl:'Scanned Receipts & Invoices'},
+ {id:'assistant',ico:'✦',lbl:'AI Business Assistant'},
+ {sec:'ASSETS'},
+ {id:'gallery',ico:'▨',lbl:'UW Media Gallery'},
+ {id:'settings',ico:'⚙',lbl:'Settings'}
+];
+let current='dashboard';
+function renderNav(){
+  document.getElementById('nav').innerHTML=NAV.map(n=>
+    n.sec?`<div class="nav-sec">${n.sec}</div>`:
+    `<div class="nav-item ${current===n.id?'active':''}" onclick="go('${n.id}')"><span class="ico">${n.ico}</span><span class="lbl">${n.lbl}</span></div>`).join('');
+}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+function go(id){current=id;renderNav();render();document.getElementById('content').scrollTop=0;}
+
+/* ---------- Shared helpers ---------- */
+function monthOf(d){return (d||'').slice(0,7);}
+function fyData(arr){return arr.filter(x=>x.fy===DB.meta.fy);}
+function statusBadge(s){return `<span class="tag ${s.toLowerCase()}">${s}</span>`;}
+function monthFilterHtml(id){
+  const start=new Date(2024,0,1); const end=new Date(); end.setDate(1);
+  const months=[]; for(let d=new Date(end);d>=start;d.setMonth(d.getMonth()-1)) months.push(d.toISOString().slice(0,7));
+  return `<select class="search" id="${id}" aria-label="Date range" onchange="state.mfilter=this.value;render()"><option value="">All dates (2024–present)</option>${months.map(m=>`<option value="${m}" ${state.mfilter===m?'selected':''}>${m}</option>`).join('')}</select>`;
+}
+let state={mfilter:''};
+function getMF(){const el=document.getElementById('mf');return el?el.value:'';}
+
+/* ============================================================ MODULES */
+function render(){
+  document.getElementById('page-title').textContent=(NAV.find(n=>n.id===current)||{}).lbl||'';
+  const c=document.getElementById('content');
+  ({dashboard:vDashboard,invoices:vInvoices,quotes:vQuotes,receipts:vReceipts,expenses:vExpenses,loans:vLoans,pricing:vPricing,fabrics:vFabrics,wages:vWages,jobs:vJobs,suppliers:vSuppliers,payables:vPayables,documents:vDocuments,scanned:vScanned,assistant:vAssistant,reports:vReports,gallery:vGallery,settings:vSettings})[current](c);
+}
+
+/* ---------- DASHBOARD ---------- */
+function vDashboard(c){
+  state.mfilter=getMF()||state.mfilter;
+  const mf=state.mfilter;
+  const inv=mf?DB.invoices.filter(i=>monthOf(i.date)===mf):DB.invoices;
+  const exp=mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses;
+  const inc=inv.reduce((s,i)=>s+(i.paid||0),0);
+  const expT=exp.reduce((s,e)=>s+e.amount,0);
+  const out=inv.filter(i=>invBalance(i)>0.005);
+  const outT=out.reduce((s,i)=>s+invBalance(i),0);
+  const qPend=DB.quotes.filter(q=>q.status!=='Accepted').length;
+  const cats={};exp.forEach(e=>cats[e.category]=(cats[e.category]||0)+e.amount);
+  const maxC=Math.max(1,...Object.values(cats));
+  c.innerHTML=`
+  <div class="toolbar">${monthFilterHtml('mf')}</div>
+  <div class="cards">
+    <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} invoice(s)${mf?' · '+mf:''}</div></div>
+    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} entries</div></div>
+    <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
+    <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
+    <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${DB.quotes.length} total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
+    <div class="card"><div class="lbl">Scanned documents awaiting review</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch&&d.reviewStatus!=='Approved').length}</div><div class="sub">Excluded from totals until verified</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h3>Expense Categories ${mf?'· '+mf:''}</h3>
+      ${Object.keys(cats).length?Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
+        <div class="bar-row"><span style="width:110px;color:var(--muted)">${k}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxC*100).toFixed(1)}%"></div></div>
+        <b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No expenses this period</div>'}
+    </div>
+    <div class="panel"><h3>Recent Invoices</h3>
+      <table><tr><th>No</th><th>Customer</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th></tr>
+      ${DB.invoices.slice(0,6).map(i=>`<tr><td>${i.id}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R(invBalance(i))}</td><td>${statusBadge(i.status)}</td></tr>`).join('')}
+      </table>
+    </div>
+  </div>
+  <div class="panel"><h3>Quick Actions</h3>
+    <div class="toolbar">
+      <button class="btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
+      <button class="btn gold" onclick="go('quotes');setTimeout(newQuote,100)">+ New Quote</button>
+      <button class="btn" onclick="go('receipts');setTimeout(newReceipt,100)">+ Log Receipt</button>
+      <button class="btn" onclick="go('expenses');setTimeout(newExpense,100)">+ Add Expense</button>
+      <button class="btn" onclick="go('pricing')">Open Pricing Calculator</button>
+    </div>
+  </div>`;
+}
+
+/* ---------- INVOICES ---------- */
+function vInvoices(c){
+  const q=(document.getElementById('q')?.value||'').toLowerCase();
+  const rows=DB.invoices.filter(i=>!q||i.customer.toLowerCase().includes(q)||i.id.toLowerCase().includes(q));
+  const years=[];for(let y=2024;y<=new Date().getFullYear();y++)years.push(y);
+  c.innerHTML=`
+  <div class="toolbar">
+    <input class="search" id="q" placeholder="Search customer / invoice no…" value="${document.getElementById('q')?.value||''}" oninput="render()">
+    <select class="search" aria-label="Financial year" onchange="DB.meta.fy=this.value;save();render()">${years.map(y=>`<option ${DB.meta.fy===String(y)?'selected':''}>${y}</option>`).join('')}</select>
+    <button class="btn gold" onclick="newInvoice()">+ New Invoice</button>
+  </div>
+  <div class="panel"><table>
+    <tr><th>Invoice No</th><th>Date</th><th>Customer</th><th>Project</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th>Status</th><th></th></tr>
+    ${rows.map(i=>`<tr>
+      <td style="color:var(--gold2)">${i.id}</td><td>${i.date}</td><td>${i.customer}</td><td>${i.project||''}</td>
+      <td class="num">${R(invTotal(i))}</td><td class="num">${R((i.paid||0)+(i.deposit||0))}</td>
+      <td class="num" style="color:${invBalance(i)>0?'var(--amber)':'var(--green)'}">${R(invBalance(i))}</td>
+      <td>${statusBadge(i.status)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" onclick="viewInvoice('${i.id}')">View</button>
+        <button class="btn sm" onclick="editInvoice('${i.id}')">Edit</button>
+        <button class="btn sm" onclick="recordPayment('${i.id}')">Pay</button>
+        ${i.generatedFromQuote?`<button class="btn sm danger" onclick="undoQuoteInvoice('${i.id}')">Undo invoice</button>`:''}
+        <button class="btn sm danger" onclick="del('invoices','${i.id}')">✕</button>
+      </td></tr>`).join('')||'<tr><td colspan="9" class="empty">No invoices</td></tr>'}
+  </table></div>`;
+}
+function invoiceDateKey(date){return String(date||today()).slice(0,10).replaceAll('-','/');}
+function nextInvoiceNo(date=today(),prefix='BB'){
+  const p=/^(BB|EE)$/.test(prefix)?prefix:'BB', key=invoiceDateKey(date);
+  const re=new RegExp('^'+p+key.replaceAll('/','\\/')+'(\\d+)$');
+  const used=(DB.invoices||[]).map(i=>String(i.id||'').match(re)).filter(Boolean).map(m=>Number(m[1])||0);
+  const sequence=(used.length?Math.max(...used):0)+1;
+  return p+key+String(sequence).padStart(2,'0');
+}
+function validInvoiceNo(id,date){
+  return /^(BB|EE)\d{4}\/\d{2}\/\d{2}\d{2}$/.test(String(id||'')) &&
+    String(id).slice(2,12)===invoiceDateKey(date);
+}
+function genNo(prefix){const d=today();return prefix==='GM'?nextInvoiceNo(d,'BB'):'QU'+d.replaceAll('-','')+String(++DB.counters.quote).padStart(2,'0');}
+function newInvoice(mode='invoice'){
+  window.invoiceFormMode=mode;
+  const initialDate=today(), initialPrefix='BB';
+  const prefixField=mode==='quote'?'':'<div class="fld"><label>Invoice initials</label><select id="f-prefix" onchange="document.getElementById(\'f-no\').value=nextInvoiceNo(document.getElementById(\'f-date\').value,this.value)"><option value="BB">BB</option><option value="EE">EE</option></select></div>';
+  const dateHandler=mode==='quote'?'':'document.getElementById(\'f-no\').value=nextInvoiceNo(this.value,document.getElementById(\'f-prefix\').value)';
+  modal(`<h3>New Invoice</h3>
+  <div class="frm">
+    <div class="fld"><label>${mode==='quote'?'Quote No':'Invoice No'}</label><input id="f-no" value="${mode==='quote'?genNo('QU'):nextInvoiceNo(initialDate,initialPrefix)}" ${mode==='quote'?'':'readonly'}></div>
+    ${prefixField}
+    <div class="fld"><label>Date</label><input id="f-date" type="date" value="${initialDate}" onchange="${dateHandler}"></div>
+    <div class="fld"><label>Customer</label><input id="f-cust"></div>
+    <div class="fld"><label>Contact / Phone</label><input id="f-contact"></div>
+    <div class="fld"><label>Email</label><input id="f-email"></div>
+    <div class="fld"><label>${mode==='quote'?'Project Reference':'Project'}</label><input id="f-project" value="${mode==='quote'?'':'Re-Upholstery'}"></div>
+    ${mode==='quote'?`<div class="fld"><label>Quote item preset</label><select id="f-preset" onchange="applyQuotePreset(this.value)"><option value="">Choose size/type/material preset…</option>${DB.priceBook.map((p,i)=>`<option value="${i}">${p.code} — ${p.desc}</option>`).join('')}</select></div>`:''}
+  </div>
+  ${mode==='quote'?'<div class="fld" style="margin-bottom:8px"><label>Introduction, notes and specifications</label><textarea id="f-introduction" rows="3"></textarea></div>':''}
+  <div class="fld" style="margin-bottom:8px"><label>Line Items</label></div>
+  <table id="f-items"><tr><th>Code</th><th>Description</th><th>Qty</th><th class="num">Unit Price</th><th></th></tr></table>
+  <button class="btn sm" onclick="addItemRow()">+ Add line</button>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+    <button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn gold" onclick="saveInvoice()">Save ${mode==='quote'?'Quote':'Invoice'}</button>
+  </div>`);
+  addItemRow();
+}
+function applyQuotePreset(index){const p=DB.priceBook[+index];if(!p)return;const row=document.querySelector('#f-items tr:last-child');if(!row)return;row.querySelector('.i-code').value=p.code;row.querySelector('.i-desc').value=p.desc;row.querySelector('.i-qty').value=1;row.querySelector('.i-price').value=priceCalc(p,1,p.fabCost,p.mtr,1,p.matCost,1,400,p.labHr,20,0).sell.toFixed(2);}
+function addItemRow(){const t=document.getElementById('f-items');const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input style="width:80px" class="i-code"></td><td><input style="width:100%" class="i-desc"></td><td><input style="width:55px" class="i-qty" type="number" value="1"></td><td><input style="width:100px" class="i-price" type="number" value="0"></td><td><button class="btn sm danger" onclick="this.parentElement.parentElement.remove()">✕</button></td>`;
+  t.appendChild(tr);}
+function saveInvoice(){
+  const items=[...document.querySelectorAll('#f-items tr')].slice(1).map(tr=>({code:tr.querySelector('.i-code').value,desc:tr.querySelector('.i-desc').value,qty:+tr.querySelector('.i-qty').value||0,price:+tr.querySelector('.i-price').value||0})).filter(i=>i.desc);
+  const common={id:document.getElementById('f-no').value,date:document.getElementById('f-date').value,customer:document.getElementById('f-cust').value,contact:document.getElementById('f-contact').value,email:document.getElementById('f-email').value,items};
+  if(!common.id||!common.date||!common.customer||!items.length){toast('Enter invoice number, date, customer and at least one line item');return;}
+  if(window.invoiceFormMode==='quote'){
+    DB.quotes.unshift({...common,expiry:'',projectReference:document.getElementById('f-project').value,introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false});
+    save();closeModal();toast('Quote '+common.id+' created');go('quotes');
+  }else{
+    if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
+    const inv={...common,project:document.getElementById('f-project').value,deposit:0,paid:0,status:'Pending',fy:DB.meta.fy};
+    DB.invoices.unshift(inv);save();closeModal();toast('Invoice '+inv.id+' created');render();
+  }
+}
+function editInvoice(id){
+    const i=DB.invoices.find(x=>x.id===id); if(!i)return;
+    modal(`<h3>Edit Invoice ${i.id}</h3><div class="frm">
+      <div class="fld"><label>Invoice No</label><input id="ef-no" value="${i.id}"></div><div class="fld"><label>Date</label><input id="ef-date" type="date" value="${i.date}"></div>
+      <div class="fld"><label>Customer</label><input id="ef-cust" value="${i.customer||''}"></div><div class="fld"><label>Contact / Phone</label><input id="ef-contact" value="${i.contact||''}"></div>
+      <div class="fld"><label>Email</label><input id="ef-email" value="${i.email||''}"></div><div class="fld"><label>Project</label><input id="ef-project" value="${i.project||''}"></div>
+    </div><div class="fld"><label>Line Items</label></div><table id="ef-items"><tr><th>Code</th><th>Description</th><th>Qty</th><th>Unit Price</th><th></th></tr></table>
+    <button class="btn sm" onclick="addEditItemRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedInvoice('${id}')">Save Changes</button></div>`);
+    (i.items||[]).forEach(addEditItemRow); if(!(i.items||[]).length)addEditItemRow();
+  }
+function addEditItemRow(item){const t=document.getElementById('ef-items');if(!t)return;const tr=document.createElement('tr');item=item||{};tr.innerHTML=`<td><input class="ei-code" style="width:80px" value="${item.code||''}"></td><td><input class="ei-desc" style="width:100%" value="${item.desc||''}"></td><td><input class="ei-qty" style="width:55px" type="number" value="${item.qty||1}"></td><td><input class="ei-price" style="width:100px" type="number" value="${item.price||0}"></td><td><button class="btn sm danger" onclick="this.closest('tr').remove()">✕</button></td>`;t.appendChild(tr);}
+function saveEditedInvoice(id){const i=DB.invoices.find(x=>x.id===id);const items=[...document.querySelectorAll('#ef-items tr')].slice(1).map(tr=>({code:tr.querySelector('.ei-code').value,desc:tr.querySelector('.ei-desc').value,qty:+tr.querySelector('.ei-qty').value||0,price:+tr.querySelector('.ei-price').value||0})).filter(x=>x.desc);if(!fa('ef-no')||!fa('ef-date')||!fa('ef-cust')||!items.length){toast('Complete invoice number, date, customer and line items');return}if(!validInvoiceNo(fa('ef-no'),fa('ef-date'))){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return}Object.assign(i,{id:fa('ef-no'),date:fa('ef-date'),customer:fa('ef-cust'),contact:fa('ef-contact'),email:fa('ef-email'),project:fa('ef-project'),items});save();closeModal();toast('Invoice updated');render();}
+function recordPayment(id){
+  const inv=DB.invoices.find(i=>i.id===id);const bal=invBalance(inv);
+  modal(`<h3>Record Payment — ${id}</h3>
+  <div class="frm">
+    <div class="fld"><label>Date</label><input id="p-date" type="date" value="${today()}"></div>
+    <div class="fld"><label>Amount (balance ${R(bal)})</label><input id="p-amt" type="number" value="${bal.toFixed(2)}"></div>
+    <div class="fld"><label>Method</label><select id="p-m"><option>EFT</option><option>Cash</option><option>Card</option></select></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn gold" onclick="savePay('${id}')">Save Payment</button></div>`);
+}
+function savePay(id){
+  const inv=DB.invoices.find(i=>i.id===id);
+  const amt=+document.getElementById('p-amt').value||0;
+  inv.paid=(inv.paid||0)+amt; inv.deposit=0;
+  inv.status=invBalance(inv)<=0.005?'Paid':'Pending';
+  DB.receipts.push({id:++DB.counters.receipt,date:document.getElementById('p-date').value,customer:inv.customer,invoiceId:id,amount:amt,method:document.getElementById('p-m').value,fy:DB.meta.fy});
+  save();closeModal();toast('Payment recorded');render();
+}
+function viewInvoiceLegacy(id){
+  const i=DB.invoices.find(x=>x.id===id);const m=DB.meta;const t=invTotal(i);
+  modal(`<h3>Invoice ${i.id} <span style="float:right">${statusBadge(i.status)}</span></h3>
+  <div class="doc-preview" id="print-area">
+    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px">
+      <div><b style="font-size:17px;letter-spacing:2px">UPHOLSTERY WAREHOUSE</b><br><i>ALL THINGS UPHOLSTERY...</i><br>${m.address}<br>Tel: ${m.phone} · ${m.email}</div>
+      <div style="text-align:right"><b style="font-size:15px">INVOICE</b><br>No: ${i.id}<br>Date: ${i.date}</div>
+    </div>
+    <p style="margin:12px 0"><b>Invoice To:</b> ${i.customer}<br>${i.contact||''} ${i.email?'<br>'+i.email:''}</p>
+    <p><b>Project:</b> ${i.project||'Re-Upholstery'}</p>
+    <table style="color:#111;font-size:12px">
+      <tr style="background:#eee"><th>Item Code</th><th>Description</th><th class="num">Qty</th><th class="num">Amount</th></tr>
+      ${i.items.map(x=>`<tr><td>${x.code||''}</td><td>${x.desc}</td><td class="num">${x.qty}</td><td class="num">${R(x.qty*x.price)}</td></tr>`).join('')}
+      <tr><td colspan="3" style="text-align:right;font-weight:bold">TOTAL:</td><td class="num"><b>${R(t)}</b></td></tr>
+      <tr><td colspan="3" style="text-align:right">Paid:</td><td class="num">${R((i.paid||0)+(i.deposit||0))}</td></tr>
+      <tr><td colspan="3" style="text-align:right;font-weight:bold">BALANCE:</td><td class="num"><b>${R(invBalance(i))}</b></td></tr>
+    </table>
+    <p style="font-size:10px;margin-top:12px">${m.vatNote}. All goods remain the property of Upholstery Warehouse until account is settled in full. Banking: ${m.bank}, Current Account ${m.account}, Branch ${m.branch}. Kindly use INV number as reference. E&OE</p>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+    <button class="btn" onclick="closeModal()">Close</button>
+    <button class="btn gold" onclick="window.print()">🖨 Print / Save PDF</button>
+  </div>`,'');
+}
+function del(coll,id){if(!confirm('Delete this record?'))return;DB[coll]=DB[coll].filter(x=>x.id!==id);save();render();toast('Deleted');}
+
+/* ---------- QUOTES ---------- */
+function vQuotes(c){
+  c.innerHTML=`<div class="toolbar"><button class="btn gold" onclick="newQuote()">+ New Quote</button></div>
+  <div class="panel"><table><tr><th>Quote No</th><th>Date</th><th>Customer</th><th class="num">Total</th><th>Status</th><th></th></tr>
+  ${DB.quotes.map(q=>`<tr><td style="color:var(--gold2)">${q.id}</td><td>${q.date}</td><td>${q.customer}</td>
+    <td class="num">${R(q.items.reduce((s,i)=>s+i.qty*i.price,0))}</td><td>${q.status==='Accepted'?'<span class="tag paid">Accepted</span>':'<span class="tag quote">'+q.status+'</span>'}</td>
+    <td style="white-space:nowrap"><button class="btn sm" onclick="viewQuote('${q.id}')">View</button>
+    <button class="btn sm" onclick="editQuote('${q.id}')">Edit</button>
+    <button class="btn sm" onclick="convertQuote('${q.id}')">→ Invoice</button>
+    <button class="btn sm danger" onclick="del('quotes','${q.id}')">✕</button></td></tr>`).join('')}
+  </table></div>`;
+}
+function newQuote(){newInvoice('quote');document.querySelector('#modal-root h3').textContent='New Quote';}
+function editQuote(id){
+  const q=DB.quotes.find(x=>x.id===id);if(!q)return;
+  modal(`<h3>Edit Quote ${q.id}</h3><div class="frm"><div class="fld"><label>Quote No</label><input id="eq-no" value="${q.id}"></div><div class="fld"><label>Date</label><input id="eq-date" type="date" value="${q.date}"></div><div class="fld"><label>Customer</label><input id="eq-cust" value="${q.customer||''}"></div><div class="fld"><label>Contact</label><input id="eq-contact" value="${q.contact||''}"></div><div class="fld"><label>Expiry</label><input id="eq-expiry" type="date" value="${q.expiry||''}"></div><div class="fld"><label>Project Reference</label><input id="eq-project" value="${q.projectReference||''}"></div><div class="fld"><label>Introduction, notes and specifications</label><textarea id="eq-introduction" rows="3">${q.introduction||q.notes||''}</textarea></div></div><div class="fld"><label>Line Items</label></div><table id="eq-items"><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th></th></tr></table><button class="btn sm" onclick="addEditQuoteRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedQuote('${id}')">Save Changes</button></div>`);
+  (q.items||[]).forEach(addEditQuoteRow);if(!(q.items||[]).length)addEditQuoteRow();
+}
+function addEditQuoteRow(item){const t=document.getElementById('eq-items');if(!t)return;const tr=document.createElement('tr');item=item||{};tr.innerHTML=`<td><input class="eq-desc" style="width:100%" value="${item.desc||''}"></td><td><input class="eq-qty" style="width:55px" type="number" value="${item.qty||1}"></td><td><input class="eq-price" style="width:100px" type="number" value="${item.price||0}"></td><td><button class="btn sm danger" onclick="this.closest('tr').remove()">✕</button></td>`;t.appendChild(tr);}
+function saveEditedQuote(id){const q=DB.quotes.find(x=>x.id===id);const items=[...document.querySelectorAll('#eq-items tr')].slice(1).map(tr=>({desc:tr.querySelector('.eq-desc').value,qty:+tr.querySelector('.eq-qty').value||0,price:+tr.querySelector('.eq-price').value||0})).filter(x=>x.desc);if(!fa('eq-no')||!fa('eq-date')||!fa('eq-cust')||!items.length){toast('Complete quote number, date, customer and line items');return}Object.assign(q,{id:fa('eq-no'),date:fa('eq-date'),customer:fa('eq-cust'),contact:fa('eq-contact'),expiry:fa('eq-expiry'),projectReference:fa('eq-project'),introduction:fa('eq-introduction'),notes:fa('eq-introduction'),items});save();closeModal();toast('Quote updated');render();}
+function viewQuoteLegacy(id){
+  const q=DB.quotes.find(x=>x.id===id);const m=DB.meta;const t=q.items.reduce((s,i)=>s+i.qty*i.price,0);
+  modal(`<h3>Quotation ${q.id}</h3><div class="doc-preview" id="print-area">
+    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px">
+      <div><b style="font-size:16px;letter-spacing:2px">UPHOLSTERY WAREHOUSE</b><br><i>ALL THINGS UPHOLSTERY...</i><br>${m.address} · ${m.phone}</div>
+      <div style="text-align:right"><b>QUOTATION</b><br>${q.id}<br>${q.date} ${q.expiry?'· Exp: '+q.expiry:''}</div></div>
+    <p style="margin:10px 0"><b>Client:</b> ${q.customer} ${q.contact?'· '+q.contact:''}</p>
+    ${q.notes?'<p><b>Notes:</b> '+q.notes+'</p>':''}
+    <table style="color:#111;font-size:12px;margin-top:8px">
+      <tr style="background:#eee"><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Total</th></tr>
+      ${q.items.map(x=>`<tr><td>${x.desc}</td><td class="num">${x.qty}</td><td class="num">${R(x.price)}</td><td class="num">${R(x.qty*x.price)}</td></tr>`).join('')}
+      <tr><td colspan="3" style="text-align:right;font-weight:bold">TOTAL</td><td class="num"><b>${R(t)}</b></td></tr></table>
+    <p style="font-size:10px;margin-top:10px">Quote includes collection & delivery within 10km. 80% deposit due on collection, 20% balance prior to delivery. No works commence until deposit paid. Kindly use Quote Number as payment reference. ${m.bank}, Acc ${m.account}, BC ${m.branch}.</p>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button>
+  <button class="btn gold" onclick="window.print()">🖨 Print / PDF</button></div>`);
+}
+function money(n){return Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function viewInvoice(id){
+  const i=DB.invoices.find(x=>x.id===id),m=DB.meta,t=invTotal(i);
+  modal(`<h3>Invoice ${i.id} <span style="float:right">${statusBadge(i.status)}</span></h3>${viewerControls('invoice-preview')}<div class="doc-viewer"><div class="template-doc" id="invoice-preview" data-scale="1">
+    <img class="template-logo" src="uw-official-logo.png" alt="Upholstery Warehouse">
+    <div class="doc-heading"><h1>INVOICE</h1><div class="doc-number"><b>INVOICE NO:</b> ${i.id}<br><b>DATE:</b> ${i.date}</div></div>
+    <div class="company-details"><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address||'4, 5th Avenue, Edenvale, JHB, 1609.'}<br>${m.phone||'077 412 8367'} / ${m.email||'info@upholsterywarehouse.co.za'}</div>
+    <div class="field-grid"><div class="field"><b>INVOICE TO:</b> ${i.customer||''}</div><div class="field"><b>Client Contact:</b> ${i.contact||''}</div><div class="field"><b>Contact:</b> ${i.phone||''}</div><div class="field"><b>Order NO:</b> ${i.orderNo||''}</div><div class="field"><b>VAT NO:</b> ${i.vatNo||''}</div><div class="field"><b>Project:</b> ${i.project||'Re-Upholstery'}</div></div>
+    <div class="template-section">ITEM CODE <span style="margin-left:18%">DESCRIPTION</span><span style="float:right">AMOUNT</span></div>
+    <table><tbody>${i.items.map(x=>`<tr><td style="width:20%">${x.code||''}</td><td>${x.desc||''}${x.qty>1?` <small>(${x.qty} × ${R(x.price)})</small>`:''}</td><td class="right" style="width:20%">R ${money(x.qty*x.price)}</td></tr>`).join('')}</tbody><tfoot><tr class="grand-total"><td colspan="2" class="right">*Grand Total:</td><td class="right">R ${money(t)}</td></tr></tfoot></table>
+    <div class="terms">${m.vatNote||'*Quoted prices above exclude VAT.'}<br>Full Terms and Conditions can be provided.<br>All goods received/collected in terms of this order remain the property of Upholstery Warehouse Pty Ltd until account is settled in full.<br><br><b>Banking Details:</b><br>Account Name: Upholstery Warehouse (Pty) Ltd<br>Bank Name: ${m.bank||'First National Bank'}<br>Account type: Current<br>Account Number: ${m.account||'63173509557'}<br>Branch Code: ${m.branch||'250655'}<br><br>*Kindly use ${i.id} as reference when making payment.</div>
+    <div class="signature-grid"><div>Received By: ...........................................................</div><div>Signature: ...............................................................</div><div>Date: ..................................................</div><div style="text-align:right;border-top:0">E&OE.<br>Produced by UW</div></div></div></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
+}
+function viewQuote(id){
+  const q=DB.quotes.find(x=>x.id===id),m=DB.meta,t=q.items.reduce((s,i)=>s+i.qty*i.price,0);
+  modal(`<h3>Quotation ${q.id}</h3>${viewerControls('quote-preview')}<div class="doc-viewer"><div class="template-doc" id="quote-preview" data-scale="1"><img class="template-logo" src="uw-official-logo.png" alt="Upholstery Warehouse">
+    <div class="doc-heading"><h1>QUOTATION</h1><div class="doc-number"><b>Quote number:</b> ${q.id}<br><b>Date generated:</b> ${q.date}<br><b>Expiry date:</b> ${q.expiry||''}</div></div>
+    <div class="company-details"><b>Upholstery Warehouse (Pty) Ltd</b><br>077 412 8367<br>4, 5th Avenue, Edenvale, Johannesburg.<br>info@upholsterywarehouse.co.za</div>
+    <div class="field-grid"><div class="field"><b>Client account name:</b> ${q.customer||''}</div><div class="field"><b>Prepared by:</b> ${q.preparedBy||'Brian Raymond'}</div><div class="field"><b>Client contact name:</b> ${q.contact||''}</div><div class="field"><b>Contact mobile:</b> ${q.phone||''}</div><div class="field"><b>Client telephone:</b> ${q.phone||''}</div><div class="field"><b>Contact email:</b> ${q.email||'info@upholsterywarehouse.co.za'}</div><div class="field"><b>Client email:</b> ${q.email||''}</div></div>
+    <div class="quote-reference"><b>Project Reference</b><span>${q.projectReference||''}</span></div>
+    <div class="template-section">Introduction, notes and specifications</div><div class="quote-introduction">${q.introduction||q.notes||''}</div><div class="template-section">Quote line items</div>
+    <table><thead><tr><th>Description</th><th class="right">Qty</th><th class="right">Unit Price</th><th class="right">Total Price</th></tr></thead><tbody>${q.items.map(x=>`<tr><td>${x.desc||''}</td><td class="right">${x.qty}</td><td class="right">R ${money(x.price)}</td><td class="right">R ${money(x.qty*x.price)}</td></tr>`).join('')}</tbody><tfoot><tr class="grand-total"><td colspan="3" class="right">*TOTAL</td><td class="right">R ${money(t)}</td></tr></tfoot></table>
+    <div class="template-section">Payment Details: COD or EFT</div><div class="terms">• Upholstery Warehouse (PTY) LTD, First National Bank, Account Number: 63173509557 - Branch Code: 250655<br><b><i>Kindly use Quote Number as reference when making payment. *Quoted prices above exclude VAT. To be Invoiced.</i></b><br><br>By my signature I hereby declare that I have read, understood, and accept the above quotation and below terms.<br>• 80% Deposit due on collection, 20% balance due prior to delivery.<br>• No works will commence until deposit payment is made in full.<br>• Unpaid balances will result in interest being charged as well as storage costs.<br>• Quote includes FREE collection and delivery within a 5km radius of our workshop.<br>• Quote is valid for 30 days from date generated.</div><div class="signature-grid"><div>Client signature: ...........................................................</div><div>Date: ...............................................................</div></div></div></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / PDF</button></div>`);
+}
+function convertQuote(id){
+  const q=DB.quotes.find(x=>x.id===id);
+  if(!q)return;
+  if(DB.invoices.some(i=>i.generatedFromQuote===id||i.id===id)){toast('This quote already has an invoice; use Undo invoice first');return;}
+  const invoiceId=nextInvoiceNo(today(),'BB');
+  DB.invoices.unshift({id:invoiceId,date:today(),customer:q.customer,contact:q.contact||'',email:'',project:q.projectReference||'Re-Upholstery',introduction:q.introduction||q.notes||'',items:q.items.map(i=>({code:'',...i})),deposit:0,paid:0,status:'Pending',fy:DB.meta.fy,reviewStatus:'Approved',includedInTotals:true,generatedFromQuote:id});
+  q.status='Accepted';q.invoicedAt=new Date().toISOString();q.invoiceId=invoiceId;save();toast('Quote '+id+' converted to invoice '+invoiceId);go('invoices');
+}
+function undoQuoteInvoice(invoiceId){
+  const invoice=DB.invoices.find(i=>i.id===invoiceId),quote=invoice&&DB.quotes.find(q=>q.id===invoice.generatedFromQuote);
+  if(!invoice||!quote)return;
+  const paid=(invoice.paid||0)+(invoice.deposit||0),receipts=(DB.receipts||[]).filter(r=>r.invoiceId===invoiceId);
+  if(paid>0||receipts.length){toast('Cannot undo an invoice with payments or receipts recorded');return;}
+  if(!confirm('Undo this invoice and return the quote to Draft?'))return;
+  DB.invoices=DB.invoices.filter(i=>i!==invoice);quote.status='Draft';delete quote.invoiceId;delete quote.invoicedAt;save();toast('Invoice undone; quote returned to Draft');go('quotes');
+}
+
+/* ---------- RECEIPTS ---------- */
+function vReceipts(c){
+  c.innerHTML=`<div class="toolbar"><button class="btn gold" onclick="newReceipt()">+ Log Receipt</button></div>
+  <div class="panel"><table><tr><th>Date</th><th>Customer</th><th>Invoice</th><th class="num">Amount</th><th>Method</th><th></th></tr>
+  ${DB.receipts.map(r=>`<tr><td>${r.date}</td><td>${r.customer}</td><td style="color:var(--gold2)">${r.invoiceId}</td><td class="num">${R(r.amount)}</td><td>${r.method}</td>
+  <td><button class="btn sm danger" onclick="DB.receipts=DB.receipts.filter(x=>x.id!==${r.id});save();render()">✕</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">No receipts logged</td></tr>'}
+  </table></div>`;
+}
+function newReceipt(){
+  modal(`<h3>Log Client Receipt</h3><div class="frm">
+    <div class="fld"><label>Date</label><input id="r-date" type="date" value="${today()}"></div>
+    <div class="fld"><label>Customer</label><input id="r-cust"></div>
+    <div class="fld"><label>Invoice</label><select id="r-inv">${DB.invoices.map(i=>`<option>${i.id}</option>`).join('')}</select></div>
+    <div class="fld"><label>Amount</label><input id="r-amt" type="number"></div>
+    <div class="fld"><label>Method</label><select id="r-m"><option>EFT</option><option>Cash</option><option>Card</option></select></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn gold" onclick="saveReceipt()">Save</button></div>`);
+}
+function saveReceipt(){
+  const r={id:++DB.counters.receipt,date:document.getElementById('r-date').value,customer:document.getElementById('r-cust').value,invoiceId:document.getElementById('r-inv').value,amount:+document.getElementById('r-amt').value||0,method:document.getElementById('r-m').value,fy:DB.meta.fy};
+  DB.receipts.push(r);
+  const inv=DB.invoices.find(i=>i.id===r.invoiceId);
+  if(inv){inv.paid=(inv.paid||0)+r.amount;inv.deposit=0;inv.status=invBalance(inv)<=0.005?'Paid':'Pending';}
+  save();closeModal();toast('Receipt logged');render();
+}
+
+/* ---------- EXPENSES ---------- */
+const EXP_CATS=['Rent','Utilities','Consumables','Office','Marketing','Vehicle','Fuel','Staff','Workshop','Renovations','Loan Account','Bank','Other'];
+function vExpenses(c){
+  const mf=state.mfilter;const el=document.getElementById('mf');const mf2=el?el.value:'';
+  const exp=mf2?DB.expenses.filter(e=>monthOf(e.date)===mf2):DB.expenses;
+  const tot=exp.reduce((s,e)=>s+e.amount,0);
+  const budTot=Object.values(DB.budgets).reduce((s,v)=>s+v,0);
+  c.innerHTML=`
+  <div class="toolbar">${monthFilterHtml('mf')}<span style="font-size:12.5px;color:var(--muted)">Total: <b style="color:var(--gold2)">${R(tot)}</b></span>
+  <button class="btn gold" onclick="newExpense()">+ Add Expense</button></div>
+  <div class="grid2">
+    <div class="panel"><h3>Expense Ledger</h3><div style="max-height:420px;overflow-y:auto"><table>
+      <tr><th>Date</th><th>Vendor</th><th>Description</th><th>Category</th><th>Paid By</th><th class="num">Amount</th><th></th></tr>
+      ${exp.map(e=>`<tr><td>${e.date}</td><td>${e.vendor}</td><td>${e.desc}</td><td>${e.category}</td><td>${e.paidBy}</td><td class="num">${R(e.amount)}</td>
+      <td><button class="btn sm danger" onclick="del('expenses',${e.id})">✕</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No expenses</td></tr>'}
+    </table></div></div>
+    <div class="panel"><h3>Budget vs Actual ${mf2?'· '+mf2:''}</h3>
+      ${Object.entries(DB.budgets).map(([k,b])=>{
+        const a=exp.filter(e=>e.category.toLowerCase().includes(k.toLowerCase())||k==='Supplies'&&e.category==='Consumables'||k==='Utilities'&&['Office','Electricity'].includes(e.category)).reduce((s,e)=>s+e.amount,0);
+        const pct=b?Math.min(100,a/b*100):0;
+        return `<div class="kv"><span>${k}</span><b>${R(a)} / ${R(b)}</b></div>
+        <div class="bar-track" style="margin:-2px 0 8px"><div class="bar-fill" style="width:${pct}%;${pct>100?'background:var(--red)':''}"></div></div>`;}).join('')}
+      <div class="kv" style="border-top:1px solid var(--gold-dim);margin-top:6px"><span>Monthly Budget Total</span><b>${R(budTot)}</b></div>
+    </div>
+  </div>`;
+}
+function newExpense(){
+  modal(`<h3>Add Expense</h3><div class="frm">
+    <div class="fld"><label>Date</label><input id="e-date" type="date" value="${today()}"></div>
+    <div class="fld"><label>Vendor / Customer</label><input id="e-ven"></div>
+    <div class="fld"><label>Description</label><input id="e-desc"></div>
+    <div class="fld"><label>Category</label><select id="e-cat">${EXP_CATS.map(x=>`<option>${x}</option>`).join('')}</select></div>
+    <div class="fld"><label>Invoice No</label><input id="e-inv"></div>
+    <div class="fld"><label>Paid By</label><select id="e-by"><option>Brian</option><option>Mike</option><option>Tania</option><option>Company</option></select></div>
+    <div class="fld"><label>Amount (R)</label><input id="e-amt" type="number"></div>
+    <div class="fld"><label>Funded By</label><select id="e-fund"><option>Company</option><option>Mike</option><option>Brian</option><option>Tania</option></select></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn gold" onclick="saveExpense()">Save</button></div>`);
+}
+function saveExpense(){
+  DB.expenses.push({id:++DB.counters.expense,date:document.getElementById('e-date').value,vendor:document.getElementById('e-ven').value,desc:document.getElementById('e-desc').value,category:document.getElementById('e-cat').value,invoiceNo:document.getElementById('e-inv').value,paidBy:document.getElementById('e-by').value,amount:+document.getElementById('e-amt').value||0,fundedBy:document.getElementById('e-fund').value,fy:DB.meta.fy});
+  save();closeModal();toast('Expense added');render();
+}
+
+/* ---------- LOANS ---------- */
+function vLoans(c){
+  c.innerHTML=`<div class="toolbar"><button class="btn gold" onclick="newLoanPay()">+ Log Loan Payment</button></div>
+  ${DB.loans.map((L,li)=>{const paid=L.payments.reduce((s,p)=>s+p.amount,0);const bal=L.principal-paid;
+  return `<div class="panel"><h3>${L.name} <span style="font-size:12px;color:var(--muted)">Running balance: <b style="color:${bal>0?'var(--amber)':'var(--green)'}">${R(bal)}</b></span></h3>
+  <div class="frm">
+    <div class="fld"><label>Original Loan</label><input type="number" value="${L.principal}" onchange="DB.loans[${li}].principal=+this.value;save()"></div>
+    <div class="fld"><label>Interest % p.a.</label><input type="number" value="${L.rate}" onchange="DB.loans[${li}].rate=+this.value;save()"></div>
+    <div class="fld"><label>Total Paid</label><input value="${R(paid)}" disabled></div>
+  </div>
+  <table><tr><th>Date</th><th>Note</th><th class="num">Amount</th><th></th></tr>
+  ${L.payments.map((p,pi)=>`<tr><td>${p.date}</td><td>${p.note}</td><td class="num">${R(p.amount)}</td>
+  <td><button class="btn sm danger" onclick="DB.loans[${li}].payments.splice(${pi},1);save();render()">✕</button></td></tr>`).join('')||'<tr><td colspan="4" class="empty">No payments logged</td></tr>'}
+  </table></div>`;}).join('')}`;
+}
+function newLoanPay(){
+  modal(`<h3>Log Loan Payment</h3><div class="frm">
+    <div class="fld"><label>Loan</label><select id="l-loan">${DB.loans.map((l,i)=>`<option value="${i}">${l.name}</option>`).join('')}</select></div>
+    <div class="fld"><label>Date</label><input id="l-date" type="date" value="${today()}"></div>
+    <div class="fld"><label>Amount</label><input id="l-amt" type="number"></div>
+    <div class="fld"><label>Note</label><input id="l-note"></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn gold" onclick="DB.loans[+document.getElementById('l-loan').value].payments.push({date:document.getElementById('l-date').value,amount:+document.getElementById('l-amt').value||0,note:document.getElementById('l-note').value});save();closeModal();toast('Payment logged');render()">Save</button></div>`);
+}
+
+/* ---------- PRICING CALCULATOR ---------- */
+function vPricing(c){
+  c.innerHTML=`
+  <div class="grid2">
+  <div class="panel"><h3>Job Builder</h3>
+    <div class="frm">
+      <div class="fld"><label>Item (from price book)</label><select id="pc-item" onchange="calcPrice()">${DB.priceBook.map((p,i)=>`<option value="${i}">${p.code} — ${p.desc}</option>`).join('')}</select></div>
+      <div class="fld"><label>Fabric quantity (items)</label><input id="pc-fqty" type="number" value="1" min="0" step="1" oninput="calcPrice()"></div>
+      <div class="fld"><label>Fabric (R/m)</label><input id="pc-fab" type="number" oninput="calcPrice()"></div>
+      <div class="fld"><label>Fabric Metres / item</label><input id="pc-mtr" type="number" oninput="calcPrice()"></div>
+      <div class="fld"><label>Consumables quantity (items)</label><input id="pc-mqty" type="number" value="1" min="0" step="1" oninput="calcPrice()"></div>
+      <div class="fld"><label>Consumables / item (R)</label><input id="pc-mat" type="number" oninput="calcPrice()"></div>
+      <div class="fld"><label>Labor rate (R/hr)</label><input id="pc-lrate" type="number" value="400" oninput="calcPrice()"></div>
+      <div class="fld"><label>Labor quantity (items)</label><input id="pc-lqty" type="number" value="1" min="0" step="1" oninput="calcPrice()"></div>
+      <div class="fld"><label>Labor hrs / item</label><input id="pc-lhrs" type="number" oninput="calcPrice()"></div>
+      <div class="fld"><label>Markup % (on cost)</label><input id="pc-mu" type="number" value="20" oninput="calcPrice()"></div>
+      <div class="fld"><label>Transport / extras (R)</label><input id="pc-extra" type="number" value="0" oninput="calcPrice()"></div>
+    </div>
+    <div id="pc-out"></div>
+    <div class="toolbar" style="margin-top:12px"><button class="btn gold" onclick="quoteFromCalc()">→ Create Quote from this</button></div>
+  </div>
+  <div class="panel"><h3>Price Book (NEW PRICING formulas)</h3><div style="max-height:480px;overflow-y:auto"><table>
+    <tr><th>Code</th><th>Description</th><th class="num">Fab m</th><th class="num">Fab R/m</th><th class="num">Sundries</th><th class="num">Lab hrs</th><th class="num">Est. price</th></tr>
+    ${DB.priceBook.map((p,i)=>`<tr style="cursor:pointer" onclick="document.getElementById('pc-item').value=${i};calcPrice()"><td style="color:var(--gold2)">${p.code}</td><td>${p.desc}</td><td class="num">${p.mtr}</td><td class="num">${p.fabCost}</td><td class="num">${p.matCost}</td><td class="num">${p.labHr}</td><td class="num" id="pb-${i}"></td></tr>`).join('')}
+  </table></div></div>
+  </div>`;
+  calcPrice();
+}
+function priceCalc(p,fqty,fab,mtr,mqty,mat,lqty,lrate,lhrs,mu,extra){
+  const fabricQuantity=Math.max(0,Number(fqty)||0), consumableQuantity=Math.max(0,Number(mqty)||0), laborQuantity=Math.max(0,Number(lqty)||0);
+  const fabT=fab*mtr*fabricQuantity, matT=mat*consumableQuantity, labT=lrate*lhrs*laborQuantity;
+  const cost=fabT+matT+labT+ +extra;
+  const sell=cost*(1+mu/100);
+  const units=Math.max(fabricQuantity,laborQuantity,consumableQuantity,1);
+  return {fabT,matT,labT,cost,sell,each:sell/units,fabricQuantity,consumableQuantity,laborQuantity};
+}
+function calcPrice(){
+  const p=DB.priceBook[+document.getElementById('pc-item').value]||DB.priceBook[0];
+  const g=id=>+document.getElementById(id).value||0;
+  // prefill from price book when unchanged from defaults
+  if(!document.getElementById('pc-fab').dataset.t){document.getElementById('pc-fab').value=p.fabCost;document.getElementById('pc-mtr').value=p.mtr;document.getElementById('pc-mat').value=p.matCost;document.getElementById('pc-lhrs').value=p.labHr;}
+  document.getElementById('pc-fab').dataset.t=1;
+  const r=priceCalc(p,g('pc-fqty'),g('pc-fab'),g('pc-mtr'),g('pc-mqty'),g('pc-mat'),g('pc-lqty'),g('pc-lrate'),g('pc-lhrs'),g('pc-mu'),g('pc-extra'));
+  document.getElementById('pc-out').innerHTML=`
+    <div class="kv"><span>Fabric total (${g('pc-mtr')}m × ${R(g('pc-fab'))}/m × ${r.fabricQuantity} fabric items)</span><b>${R(r.fabT)}</b></div>
+    <div class="kv"><span>Consumables (${r.consumableQuantity} items × ${R(g('pc-mat'))})</span><b>${R(r.matT)}</b></div>
+    <div class="kv"><span>Labor (${g('pc-lhrs')}h × ${R(g('pc-lrate'))}/h × ${r.laborQuantity} labor items)</span><b>${R(r.labT)}</b></div>
+    <div class="kv"><span>Extras</span><b>${R(g('pc-extra'))}</b></div>
+    <div class="kv"><span>Total cost</span><b>${R(r.cost)}</b></div>
+    <div class="kv" style="font-size:15px"><span>CLIENT PRICE (+${g('pc-mu')}% markup)</span><b style="font-size:19px;color:var(--gold)">${R(r.sell)}</b></div>
+    <div class="kv"><span>Each</span><b>${R(r.each)}</b></div>`;
+  DB.priceBook.forEach((pb,i)=>{const rr=priceCalc(pb,1,pb.fabCost,pb.mtr,1,pb.matCost,1,400,pb.labHr,20,0);const el=document.getElementById('pb-'+i);if(el)el.textContent=R(rr.sell);});
+}
+function quoteFromCalc(){
+  const g=id=>+document.getElementById(id).value||0;
+  const p=DB.priceBook[+document.getElementById('pc-item').value];
+  const r=priceCalc(p,g('pc-fqty'),g('pc-fab'),g('pc-mtr'),g('pc-mqty'),g('pc-mat'),g('pc-lqty'),g('pc-lrate'),g('pc-lhrs'),g('pc-mu'),g('pc-extra'));
+  const qid=genNo('GM');
+  DB.quotes.push({id:qid,date:today(),customer:'',contact:'',expiry:'',items:[{desc:`Fabric ${r.fabricQuantity} item(s) + Labor ${r.laborQuantity} item(s) — ${p.desc}`,qty:1,price:r.sell}],notes:'',status:'Draft',terms:true});
+  save();toast('Quote '+qid+' created from calculation');go('quotes');
+}
+
+/* ---------- FABRICS ---------- */
+function vFabrics(c){
+  const q=(document.getElementById('fq')?.value||'').toLowerCase();
+  const rows=DB.fabrics.filter(f=>!q||f.supplier.toLowerCase().includes(q)||f.code.toLowerCase().includes(q)||f.desc.toLowerCase().includes(q));
+  c.innerHTML=`<div class="toolbar">
+    <input class="search" id="fq" placeholder="Search supplier / code / fabric…" value="${document.getElementById('fq')?.value||''}" oninput="render()">
+    <button class="btn gold" onclick="newFabric()">+ Add Fabric</button></div>
+  <div class="panel"><table><tr><th>Supplier</th><th>Fabric Code</th><th>Description</th><th class="num">Cost /m</th><th class="num">Markup %</th><th class="num">Selling /m</th><th></th></tr>
+  ${rows.map((f,i)=>`<tr><td>${f.supplier}</td><td style="color:var(--gold2)">${f.code}</td><td>${f.desc}</td>
+    <td class="num">${R(f.cost)}</td><td class="num">${f.markup}%</td><td class="num" style="color:var(--green)">${R(f.sell)}</td>
+    <td><button class="btn sm danger" onclick="DB.fabrics.splice(DB.fabrics.findIndex(x=>x.code==='${f.code}'),1);save();render()">✕</button></td></tr>`).join('')}
+  </table></div>`;
+}
+function newFabric(){
+  modal(`<h3>Add Fabric Price</h3><div class="frm">
+    <div class="fld"><label>Supplier</label><input id="fa-sup"></div>
+    <div class="fld"><label>Code</label><input id="fa-code"></div>
+    <div class="fld"><label>Description</label><input id="fa-desc"></div>
+    <div class="fld"><label>Cost /m (R)</label><input id="fa-cost" type="number" oninput="document.getElementById('fa-sell').value=((+this.value)*(1+(+document.getElementById('fa-mu').value)/100)).toFixed(2)"></div>
+    <div class="fld"><label>Markup %</label><input id="fa-mu" type="number" value="100" oninput="document.getElementById('fa-sell').value=((+document.getElementById('fa-cost').value)*(1+(+this.value)/100)).toFixed(2)"></div>
+    <div class="fld"><label>Selling /m (R)</label><input id="fa-sell" type="number"></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn gold" onclick="DB.fabrics.push({supplier:fa('fa-sup'),code:fa('fa-code'),desc:fa('fa-desc'),cost:+fa('fa-cost')||0,markup:+fa('fa-mu')||0,sell:+fa('fa-sell')||0});save();closeModal();toast('Fabric added');render()">Save</button></div>`);
+}
+const fa=id=>document.getElementById(id).value;
+
+/* ---------- WAGES ---------- */
+function vWages(c){
+  const sourceWages=DB.wages||[];
+  const tot=sourceWages.reduce((s,w)=>s+(w.weeks||[]).reduce((a,x)=>a+x.owed,0)-w.advances,0);
+  const monthly=sourceWages.reduce((s,w)=>s+(w.monthly||0),0);
+  c.innerHTML=`
+  <div class="cards"><div class="card"><div class="lbl">Monthly Wage Cost</div><div class="val gold">${R(monthly)}</div><div class="sub">from WAGES.xlsx</div></div>
+  <div class="card"><div class="lbl">Total Wages Owed</div><div class="val ${tot>0?'gold':'green'}">${R(tot)}</div><div class="sub">${sourceWages.length} staff on ledger</div></div>
+  <div class="card"><div class="lbl">Target Monthly Turnover</div><div class="val gold">${R(200000)}</div><div class="sub">per WAGES sheet</div></div></div>
+  <div class="panel"><h3>Payroll Ledger <button class="btn sm gold" onclick="newStaff()">+ Add Staff</button></h3>
+  <div style="overflow-x:auto"><table>
+    <tr><th>Staff</th><th>Rate/Day</th><th>Per Week</th><th>Per Month</th><th>Per Year</th>${[1,2,3,4,5].map(w=>`<th>Week ${w}</th>`).join('')}<th>Advances (−)</th><th class="num">Owed</th><th></th></tr>
+    ${sourceWages.map((w,i)=>{const owed=(w.weeks||[]).reduce((a,x)=>a+x.owed,0)-w.advances;
+    return `<tr><td><b>${w.name}</b></td>
+    <td><input style="width:70px" type="number" value="${w.rateDay}" onchange="DB.wages[${i}].rateDay=+this.value;save()"></td>
+    <td>${R(w.weekly||0)}</td><td>${R(w.monthly||0)}</td><td>${R(w.yearly||0)}</td>
+    ${[0,1,2,3,4].map(wi=>`<td><input style="width:75px" type="number" value="${w.weeks[wi]?w.weeks[wi].owed:0}" onchange="if(DB.wages[${i}].weeks[${wi}])DB.wages[${i}].weeks[${wi}].owed=+this.value;else DB.wages[${i}].weeks[${wi}]={w:'',owed:+this.value};save();render()"></td>`).join('')}
+    <td><input style="width:75px" type="number" value="${w.advances}" onchange="DB.wages[${i}].advances=+this.value;save();render()"></td>
+    <td class="num" style="color:var(--gold2)">${R(owed)}</td>
+    <td><button class="btn sm danger" onclick="if(confirm('Remove ${w.name}?')){DB.wages.splice(${i},1);save();render()}">✕</button></td></tr>`;}).join('')}
+  </table></div></div>`;
+}
+function newStaff(){
+  modal(`<h3>Add Staff Member</h3><div class="frm">
+    <div class="fld"><label>Name</label><input id="s-name"></div>
+    <div class="fld"><label>Rate / Day (R)</label><input id="s-rate" type="number"></div>
+    <div class="fld"><label>Role</label><input id="s-role"></div>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
+  <button class="btn gold" onclick="const n=fa('s-name');DB.wages.push({name:n,rateDay:+fa('s-rate')||0,days:5,weeks:[],advances:0});DB.staff.push({name:n,role:fa('s-role'),phone:''});save();closeModal();render()">Save</button></div>`);
+}
+
+/* ---------- JOBS / OPERATIONS ---------- */
+function vJobs(c){
+  const stages=['All','Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'];
+  const filter=state.jobStage||'All';
+  const normalizedStage=s=>({ 'In progress':'In production','In Production':'In production','Quote':'Quoted','Quoted ':'Quoted'}[String(s||'').trim()]||String(s||'').trim()||'Quoted');
+  const existingIds=new Set((DB.jobs||[]).map(j=>String(j.quoteId||j.invoiceId||j.id)));
+  const quoteJobs=(DB.quotes||[]).filter(q=>!existingIds.has(String(q.id))&&q.status!=='Accepted').map(q=>({id:q.id,quoteId:q.id,customer:q.customer||'',project:q.projectReference||'',stage:'Quoted',startDate:q.date||'',balance:0,invoiceTotal:q.items.reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.price)||0),0),notes:'Live from quote ledger'}));
+  const jobs=(DB.jobs||[]).map(j=>{const inv=j.invoiceId?DB.invoices.find(i=>i.id===j.invoiceId):null;return {...j,stage:normalizedStage(j.stage),liveBalance:inv?Math.max(0,invBalance(inv)):Number(j.balance||0),invoiceTotal:inv?invTotal(inv):Number(j.invoiceTotal||0),invoiceId:inv?inv.id:j.invoiceId};}).concat(quoteJobs).filter(j=>filter==='All'||j.stage===filter);
+  c.innerHTML=`<div class="toolbar"><select class="search" onchange="state.jobStage=this.value;render()">${stages.map(s=>`<option ${filter===s?'selected':''}>${s}</option>`).join('')}</select><button class="btn gold" onclick="newJob()">+ New Job</button></div>
+  <div class="cards">${stages.slice(1).map(s=>`<div class="card"><div class="lbl">${s}</div><div class="val">${jobs.filter(j=>j.stage===s).length}</div></div>`).join('')}</div>
+  <div class="panel"><h3>Production Job Cards</h3><p style="font-size:11px;color:var(--muted)">Balances and invoice totals are read live from linked invoices. Update the invoice or record a payment and this page reflects it immediately.</p><table><tr><th>Job</th><th>Customer</th><th>Project</th><th>Stage</th><th>Start</th><th class="num">Invoice total</th><th class="num">Balance</th><th></th></tr>${jobs.map((j,i)=>`<tr><td style="color:var(--gold2)">${j.id}</td><td>${j.customer}</td><td>${j.project||''}</td><td><select class="search" style="min-width:145px" onchange="DB.jobs.find(x=>x.id==='${j.id}').stage=this.value;save();render()">${stages.slice(1).map(s=>`<option ${j.stage===s?'selected':''}>${s}</option>`).join('')}</select></td><td>${j.startDate||''}</td><td class="num">${R(j.invoiceTotal)}</td><td class="num">${R(j.liveBalance)}</td><td><button class="btn sm" onclick="viewJob('${j.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">No jobs</td></tr>'}</table></div>`;
+}
+function newJob(){modal(`<h3>New Job Card</h3><div class="frm"><div class="fld"><label>Job No</label><input id="j-id" value="JOB-${Date.now()}"></div><div class="fld"><label>Invoice</label><select id="j-invoice"><option value="">Not linked</option>${DB.invoices.map(i=>`<option value="${i.id}">${i.id} — ${i.customer}</option>`).join('')}</select></div><div class="fld"><label>Customer</label><input id="j-cust"></div><div class="fld"><label>Project</label><input id="j-project"></div><div class="fld"><label>Start date</label><input id="j-date" type="date" value="${today()}"></div><div class="fld"><label>Stage</label><select id="j-stage">${['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="fld"><label>Notes</label><input id="j-notes"></div></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="const inv=DB.invoices.find(i=>i.id===fa('j-invoice'));DB.jobs.push({id:fa('j-id'),invoiceId:fa('j-invoice'),customer:fa('j-cust')||(inv?.customer||''),project:fa('j-project')||(inv?.project||''),stage:fa('j-stage'),startDate:fa('j-date'),balance:inv?invBalance(inv):0,notes:fa('j-notes')});save();closeModal();render()">Save Job</button></div>`)}
+function viewJob(id){const j=DB.jobs.find(x=>x.id===id);modal(`<h3>Job ${j.id}</h3><div class="kv"><span>Customer</span><b>${j.customer}</b></div><div class="kv"><span>Project</span><b>${j.project||''}</b></div><div class="kv"><span>Stage</span><b>${j.stage}</b></div><div class="kv"><span>Notes</span><b>${j.notes||''}</b></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`)}
+function vSuppliers(c){
+  c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Suppliers</div><div class="val gold">${(DB.suppliers||[]).length}</div></div><div class="card"><div class="lbl">Catalogued stock sources</div><div class="val">${(DB.stock||[]).length}</div></div></div><div class="grid2"><div class="panel"><h3>Supplier Directory</h3><table><tr><th>Supplier</th><th>Category</th><th class="num">Source files</th><th>Status</th></tr>${(DB.suppliers||[]).map(s=>`<tr><td>${s.name}</td><td>${s.category}</td><td class="num">${s.items}</td><td>${statusBadge(s.status)}</td></tr>`).join('')}</table></div><div class="panel"><h3>Stock & Material Sources</h3><table><tr><th>Item</th><th>Supplier</th><th>Unit</th><th>Qty</th><th>Reorder</th></tr>${(DB.stock||[]).map((s,i)=>`<tr><td>${s.name}</td><td>${s.supplier}</td><td>${s.unit}</td><td><input style="width:65px" type="number" value="${s.quantity}" onchange="DB.stock[${i}].quantity=+this.value;save()"></td><td>${s.reorderLevel}</td></tr>`).join('')}</table></div></div>`;
+}
+function vPayables(c){const rows=DB.payables||[];c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Imported supplier documents</div><div class="val gold">${rows.length}</div></div><div class="card"><div class="lbl">Unreviewed</div><div class="val amber">${rows.filter(x=>x.status==='Unreviewed').length}</div></div></div><div class="panel"><h3>Purchases & Accounts Payable</h3><table><tr><th>Document</th><th>Supplier</th><th>Date</th><th class="num">Amount</th><th>Status</th><th></th></tr>${rows.map((p,i)=>`<tr><td>${p.description}</td><td>${p.supplier}</td><td>${p.date||'—'}</td><td class="num">${R(p.amount)}</td><td><select class="search" style="min-width:120px" onchange="DB.payables[${i}].status=this.value;save();render()">${['Unreviewed','Received','Approved','Paid','Disputed'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td><td><button class="btn sm" onclick="toast('Source: ${String(p.document).replace(/'/g,'')}')">Source</button></td></tr>`).join('')}</table></div>`}
+function sourceUrl(path){const p=String(path||'').replace(/^D:\\UW[\\/]?/i,'').replace(/\\/g,'/').split('/').filter(Boolean).map(encodeURIComponent).join('/');return './__source/'+p}
+function viewerControls(target){return `<div class="viewer-tools"><button class="btn sm" onclick="viewerZoom('${target}',-0.1)">−</button><span id="${target}-scale" class="viewer-scale">100%</span><button class="btn sm" onclick="viewerZoom('${target}',0.1)">+</button><button class="btn sm" onclick="viewerZoom('${target}',0,true)">Reset</button><span style="font-size:11px;color:var(--muted)">Scroll to pan</span></div>`}
+function viewerZoom(target,delta,reset){const el=document.getElementById(target);if(!el)return;const scale=reset?1:Math.max(.4,Math.min(3,(Number(el.dataset.scale)||1)+delta));el.dataset.scale=scale;el.style.transform=`scale(${scale})`;const label=document.getElementById(target+'-scale');if(label)label.textContent=Math.round(scale*100)+'%';}
+function viewDocument(d){const url=d.data||sourceUrl(d.path),ext=String(d.name||d.path||'').split('.').pop().toLowerCase(),safe=String(d.path||'').replace(/</g,'&lt;');let body;if(['png','jpg','jpeg','gif','webp','avif'].includes(ext))body=viewerControls('document-image')+`<div class="doc-viewer"><img id="document-image" data-scale="1" src="${url}" alt="${d.name||'Source document'}" style="background:#111" onerror="this.outerHTML='<p class=\\'empty\\'>Image could not be loaded.</p>'"></div>`;else if(ext==='pdf')body=viewerControls('document-pdf')+`<div class="doc-viewer"><iframe id="document-pdf" src="${url}" title="${d.name||'PDF'}"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;else body=`<div class="kv"><span>Source document</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">This file type is opened by the system application rather than rendered inside the browser.</p><a class="btn gold" href="${url}" target="_blank" rel="noopener">Open / Download document</a>`;modal(`<h3>${d.name||'Source document'}</h3>${body}<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`)}
+function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
+function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
+function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:''}
+function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.includes('invoice')?'Invoice scan':n.includes('receipt')||n.includes('proof')?'Receipt scan':'Unclassified scan'}
+function uploadScannedDocuments(e){[...e.target.files].forEach(file=>{const r=new FileReader();r.onload=()=>{const hash='local-'+Date.now()+'-'+file.size;DB.scannedDocuments.push({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false});save();render();};r.readAsDataURL(file)});e.target.value='';}
+function vScanned(c){const q=(document.getElementById('scanq')?.value||'').toLowerCase(),date=document.getElementById('scandate')?.value||'',cat=document.getElementById('scancat')?.value||'';const rows=scannedRows().map(d=>({...d,scanDate:d.scanDate||scannedDate(d),category:d.category&&d.category!=='Scanned receipt/invoice image'?d.category:scannedCategory(d)})).filter(d=>(!q||String(d.name).toLowerCase().includes(q)||String(d.path).toLowerCase().includes(q))&&(!date||d.scanDate===date)&&(!cat||d.category===cat));const meta=window.UW_SCANNED||{};const body=rows.map(d=>{const approved=d.reviewStatus==='Approved',payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+d.scanDate+'</td><td><b>'+d.reviewStatus+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar"><input id="scanq" class="search" placeholder="Search scanned receipts and invoices…" value="'+q+'" oninput="render()"><input id="scandate" class="search" type="date" value="'+date+'" onchange="render()"><select id="scancat" class="search" onchange="render()"><option value="">All categories</option><option '+(cat==='Receipt scan'?'selected':'')+'>Receipt scan</option><option '+(cat==='Invoice scan'?'selected':'')+'>Invoice scan</option><option '+(cat==='Unclassified scan'?'selected':'')+'>Unclassified scan</option></select><label class="btn gold">＋ Upload scans<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' shown · '+(meta.uniqueFiles||0)+' unique hashes · '+(meta.duplicateFiles||0)+' duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Scan dates and categories are metadata. Image-only amounts are not added to dashboard totals until manually verified and linked to a ledger record.</p><table><tr><th>File</th><th>Category</th><th>Scan date</th><th>Review</th><th>Source</th><th></th></tr>'+body+'</table></div>'}
+function vDocuments(c){const q=(document.getElementById('docq')?.value||'').toLowerCase();const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true})));const rows=all.filter(d=>!q||String(d.name).toLowerCase().includes(q)||String(d.category).toLowerCase().includes(q)||String(d.path).toLowerCase().includes(q));const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar"><input id="docq" class="search" placeholder="Search all D:\\UW documents and media…" value="'+q+'" oninput="render()"><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
+function vAssistant(c){
+  const inc=DB.invoices.reduce((s,i)=>s+(i.paid||0),0), exp=DB.expenses.reduce((s,e)=>s+(e.amount||0),0), outstanding=DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
+  const category={};DB.expenses.forEach(e=>category[e.category]=(category[e.category]||0)+e.amount);const top=Object.entries(category).sort((a,b)=>b[1]-a[1])[0];
+  const insights=[`Collected income is ${R(inc)} against ${R(exp)} recorded expenses, a calculated net of ${R(inc-exp)}.`,`There are ${unpaid.length} unpaid invoices with ${R(outstanding)} outstanding.`,`The largest recorded expense category is ${top?top[0]:'not available'} at ${R(top?top[1]:0)}.`,`There are ${(DB.jobs||[]).filter(j=>j.stage!=='Closed').length} active production jobs and ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length} supplier documents awaiting review.`];
+  const sourceGaps=(DB.payables||[]).filter(p=>!p.amount||p.amount===0).length+(DB.stock||[]).filter(s=>!s.quantity).length;const audit=DB.filesystemAudit||{};
+  c.innerHTML=`<div class="panel"><h3>Local AI Business Assistant <span class="tag paid">No cloud/API required</span></h3><p style="color:var(--muted);font-size:12px;margin-bottom:14px">This explainable assistant analyses the complete locally stored D:\\UW snapshot. It never invents amounts and flags records requiring source review.</p>${insights.map(x=>`<div class="kv"><span>${x}</span><b>✓</b></div>`).join('')}<div class="kv"><span>Source records needing amount/quantity verification</span><b>${sourceGaps}</b></div><div class="kv"><span>Filesystem evidence indexed for review</span><b>${audit.files||0}</b></div><div class="kv"><span>Backup/copy files excluded from primary accounting totals</span><b>${audit.backupOrCopy||0}</b></div><div class="toolbar" style="margin-top:14px"><button class="btn gold" onclick="exportAssistantReport()">Export AI Review</button><button class="btn" onclick="go('documents')">View Source Documents</button><button class="btn" onclick="go('jobs')">Open Jobs</button><button class="btn" onclick="go('payables')">Review Payables</button></div></div><div class="panel"><h3>Suggested next actions</h3><div class="kv"><span>Review unpaid invoices and allocate receipts</span><b>${unpaid.length}</b></div><div class="kv"><span>Review imported supplier documents</span><b>${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}</b></div><div class="kv"><span>Update stock quantities and reorder levels</span><b>${(DB.stock||[]).length}</b></div></div>`;
+}
+function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(DB.expenses.reduce((s,e)=>s+e.amount,0))}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
+
+/* ---------- REPORTS ---------- */
+function vReports(c){
+  const start=new Date(2024,0,1), end=new Date(); end.setDate(1); const months=[];
+  for(let d=new Date(start);d<=end;d.setMonth(d.getMonth()+1)) months.push(d.toISOString().slice(0,7));
+  const rows=months.map(m=>{
+    const inc=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+(i.paid||0),0);
+    const qtot=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
+    const exp=DB.expenses.filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
+    return {m,inc,qtot,exp,net:inc-exp};
+  });
+  const tI=rows.reduce((s,r)=>s+r.inc,0),tE=rows.reduce((s,r)=>s+r.exp,0);
+  const y25=DB.invoices.filter(i=>i.fy==='2025').reduce((s,i)=>s+(i.paid||0),0);
+  const y26=DB.invoices.filter(i=>i.fy==='2026').reduce((s,i)=>s+(i.paid||0),0);
+  const maxN=Math.max(1,...rows.map(r=>Math.abs(r.net)));
+  c.innerHTML=`
+  <div class="cards">
+    <div class="card"><div class="lbl">P&L (all data)</div><div class="val ${tI-tE>=0?'green':'red'}">${R(tI-tE)}</div><div class="sub">${R(tI)} income − ${R(tE)} expenses</div></div>
+    <div class="card"><div class="lbl">FY 2025 Collected</div><div class="val gold">${R(y25)}</div></div>
+    <div class="card"><div class="lbl">FY 2026 Collected</div><div class="val gold">${R(y26)}</div></div>
+  </div>
+  <div class="panel"><h3>Monthly Profit & Loss</h3><div style="overflow-x:auto"><table>
+    <tr><th>Month</th><th class="num">Invoiced</th><th class="num">Collected</th><th class="num">Expenses</th><th class="num">Net</th><th>Trend</th></tr>
+    ${rows.map(r=>`<tr><td>${r.m}</td><td class="num">${R(r.qtot)}</td><td class="num" style="color:var(--gold2)">${R(r.inc)}</td><td class="num" style="color:var(--red)">${R(r.exp)}</td>
+    <td class="num" style="color:${r.net>=0?'var(--green)':'var(--red)'}">${R(r.net)}</td>
+    <td><div class="bar-track" style="width:120px"><div class="bar-fill" style="width:${(Math.abs(r.net)/maxN*100).toFixed(1)}%;${r.net<0?'background:var(--red)':''}"></div></div></td></tr>`).join('')}
+  </table></div>
+  <div class="toolbar" style="margin-top:14px"><button class="btn gold" onclick="exportMonthSummary()">⬇ Export Month-End Summary (.csv)</button></div>
+  </div>`;
+}
+function exportMonthSummary(){
+  let csv='Month,Invoiced,Collected,Expenses,Net\n';
+  [...new Set(DB.invoices.map(i=>monthOf(i.date)).concat(DB.expenses.map(e=>monthOf(e.date))))].sort().forEach(m=>{
+    const inc=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+(i.paid||0),0);
+    const q=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
+    const exp=DB.expenses.filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
+    csv+=`${m},${q},${inc},${exp},${inc-exp}\n`;});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='UW_MONTH_END_'+today()+'.csv';a.click();toast('Summary exported');
+}
+
+/* ---------- GALLERY ---------- */
+function vGallery(c){
+  c.innerHTML=`<div class="toolbar"><input type="file" id="g-file" accept="image/*" multiple style="display:none" onchange="addPhotos(event)">
+    <button class="btn gold" onclick="document.getElementById('g-file').click()">+ Upload Job Photos</button>
+    <span style="font-size:12px;color:var(--muted)">Before & After photos — stored locally in this browser</span></div>
+  <div class="gallery-grid">${DB.gallery.map((g,i)=>`<div class="g-item">
+    ${g.data?`<img src="${g.data}">`:'<div style="height:110px;display:flex;align-items:center;justify-content:center;color:#4a4a44;font-size:30px">▨</div>'}
+    <div class="cap">${g.label}<br><button class="btn sm danger" style="margin-top:5px" onclick="DB.gallery.splice(${i},1);save();render()">✕ Remove</button></div></div>`).join('')}
+  </div>`;
+}
+function addPhotos(e){
+  [...e.target.files].forEach(f=>{const r=new FileReader();r.onload=()=>{DB.gallery.push({id:Date.now(),label:f.name,data:r.result});save();render();};r.readAsDataURL(f);});
+  e.target.value='';
+}
+
+/* ---------- SETTINGS ---------- */
+function vSettings(c){
+  const m=DB.meta;
+  c.innerHTML=`<div class="panel" style="max-width:640px"><h3>Company & Branding</h3><div class="frm">
+    ${Object.entries({company:'Company',tagline:'Tagline',phone:'Phone',email:'Email',address:'Address',bank:'Bank',account:'Account No',branch:'Branch Code',vatNote:'VAT Note'}).map(([k,l])=>`
+    <div class="fld"><label>${l}</label><input value="${m[k]}" onchange="DB.meta['${k}']=this.value;save();toast('Saved')"></div>`).join('')}
+  </div>
+  <h3 style="margin-top:22px">Appearance</h3>
+  <div class="toolbar"><button class="btn gold" onclick="toggleTheme()">☀ / ☾ Switch Light / Dark Mode</button><span style="font-size:12px;color:var(--muted)">Current: ${document.body.classList.contains('light')?'Light':'Dark'}</span></div>
+  <div class="toolbar" style="margin-top:8px">
+    <button class="btn gold" onclick="exportBackup()">⬇ Export Full Database (JSON)</button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">⬆ Import / Restore Backup</button>
+    <button class="btn gold" onclick="refreshBundledData()">↻ Refresh current D:\UW data</button>
+    <button class="btn danger" onclick="if(confirm('Wipe ALL local data and restore factory seed?')){localStorage.removeItem(DB_KEY);location.reload()}">Factory Reset</button>
+  </div>
+  <h3 style="margin-top:22px">Optional Cloud Sync (Supabase)</h3>
+  <div class="frm">
+    <div class="fld"><label>Project URL</label><input type="url" placeholder="https://your-project.supabase.co" value="${(m.cloud||{}).url||''}" onchange="DB.meta.cloud={...(DB.meta.cloud||{}),url:this.value};save()"></div>
+    <div class="fld"><label>Anon / Publishable Key</label><input type="password" autocomplete="off" value="${(m.cloud||{}).key||''}" onchange="DB.meta.cloud={...(DB.meta.cloud||{}),key:this.value};save()"></div>
+    <div class="fld"><label>Table</label><input value="${(m.cloud||{}).table||'uw_accounting_data'}" onchange="DB.meta.cloud={...(DB.meta.cloud||{}),table:this.value};save()"></div>
+    <div class="fld"><label>Workspace ID</label><input value="${(m.cloud||{}).workspace||'default'}" onchange="DB.meta.cloud={...(DB.meta.cloud||{}),workspace:this.value};save()"></div>
+  </div>
+  <div class="toolbar"><button class="btn gold" onclick="cloudSync('push')">☁ Save to Cloud</button><button class="btn" onclick="cloudSync('pull')">☁ Restore from Cloud</button></div>
+  <h3 style="margin-top:22px">Optional Google Drive Backup</h3>
+  <div class="frm">
+    <div class="fld"><label>OAuth access token</label><input type="password" autocomplete="off" value="${(m.googleDrive||{}).token||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),token:this.value};save()"></div>
+    <div class="fld"><label>Drive folder ID (optional)</label><input value="${(m.googleDrive||{}).folderId||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),folderId:this.value};save()"></div>
+    <div class="fld"><label>Backup filename</label><input value="${(m.googleDrive||{}).fileName||'UW_ACCOUNTING_BACKUP.json'}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),fileName:this.value};save()"></div>
+  </div>
+  <div class="toolbar"><button class="btn gold" onclick="googleDriveSync('push')">☁ Save to Google Drive</button><button class="btn" onclick="googleDriveSync('pull')">☁ Restore from Google Drive</button></div>
+  <p style="font-size:11.5px;color:var(--muted);margin-top:10px">Google Drive uses the official Drive API with a user OAuth token. Tokens stay in this browser's local storage; use a short-lived token or a proper OAuth client flow for production deployment. No service-account secrets belong in this app.</p>
+  <p style="font-size:11.5px;color:var(--muted);margin-top:14px">Local storage is always the primary offline database. Current bundled source: <b style="color:var(--gold2)">${DATA_SOURCE_PATH}</b>. Cloud sync is optional and uses Supabase REST. Create a table named <b>uw_accounting_data</b> with columns <b>id text primary key</b>, <b>data jsonb</b>, and <b>updated_at timestamptz</b>; enable Row Level Security with policies appropriate for your users. Financial year filter: <b style="color:var(--gold2)">${DB.meta.fy}</b>.</p></div>`;
+}
+
+/* ---------- Modal ---------- */
+function modal(html){document.getElementById('modal-root').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;}
+function closeModal(){document.getElementById('modal-root').innerHTML='';}
+
+renderNav();render();applyTheme(localStorage.getItem('UW_THEME')||'dark');
+
+let deferredInstallPrompt;
+window.addEventListener('beforeinstallprompt', event=>{
+  event.preventDefault();
+  deferredInstallPrompt=event;
+  const button=document.getElementById('installBtn');
+  if(button) button.hidden=false;
+});
+async function installApp(){
+  if(!deferredInstallPrompt)return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt=null;
+  document.getElementById('installBtn').hidden=true;
+}
+window.addEventListener('appinstalled',()=>{document.getElementById('installBtn').hidden=true;toast('UW Accounting installed');});
+window.addEventListener('error',e=>{
+  const root=document.getElementById('content');
+  if(root && !root.dataset.errorShown){
+    root.dataset.errorShown='1';
+    root.innerHTML='<div class="panel"><h3>Unable to display this page</h3><p style="color:var(--muted)">The local data is safe. Reload the app or use Settings → Factory Reset if the browser database is corrupted.</p><button class="btn gold" onclick="location.reload()">Reload app</button></div>';
+  }
+  console.error('UW Accounting display error',e.error||e.message);
+});
+if('serviceWorker' in navigator && location.protocol!=='file:'){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Offline cache unavailable',err)));
+}
+</script>
+</body>
+</html>
