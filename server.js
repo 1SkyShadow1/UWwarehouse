@@ -9,6 +9,7 @@ const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const rootDir = __dirname;
 const stateStore = new Map();
+const STATE_TTL_MS = 10 * 60 * 1000;
 const driveState = {
   tokens: null,
   connected: false,
@@ -19,10 +20,20 @@ const driveState = {
   lastSync: null,
 };
 
+const cleanStateStore = () => {
+  const now = Date.now();
+  for (const [key, payload] of stateStore.entries()) {
+    if (!payload || !payload.createdAt || now - payload.createdAt > STATE_TTL_MS) {
+      stateStore.delete(key);
+    }
+  }
+};
+
 const normalizeGoogleRedirectUri = (value = '') => {
   const cleaned = String(value).trim();
   if (!cleaned) return cleaned;
-  return cleaned.replace(/([^:])\/{2,}/g, '$1/');
+  const withoutDoubleSlashes = cleaned.replace(/([^:])\/{2,}/g, '$1/');
+  return withoutDoubleSlashes.replace(/\/+$/, '');
 };
 
 const getGoogleConfig = () => ({
@@ -93,6 +104,7 @@ app.get('/api/google-drive/auth', (_, res) => {
   if (!config.clientId || !config.clientSecret) {
     return res.status(503).json({ error: 'Google OAuth is not configured on the backend.' });
   }
+  cleanStateStore();
   const state = crypto.randomBytes(16).toString('hex');
   stateStore.set(state, { createdAt: Date.now() });
   const oauth2Client = makeOAuthClient();
@@ -112,8 +124,15 @@ app.get('/api/google-drive/callback', async (req, res) => {
     if (error) {
       return res.status(400).send(`<html><body><h2>Google OAuth failed</h2><p>${String(error)}</p><p><a href="/">Return to app</a></p></body></html>`);
     }
-    if (!code || !state || !stateStore.has(String(state))) {
-      return res.status(400).send('<html><body><h2>Invalid Google OAuth state.</h2><p>Please retry the connection.</p><p><a href="/">Return to app</a></p></body></html>');
+    if (!code) {
+      return res.status(400).send('<html><body><h2>Missing Google OAuth code.</h2><p>Please retry the connection.</p><p><a href="/">Return to app</a></p></body></html>');
+    }
+    if (!state || !stateStore.has(String(state))) {
+      cleanStateStore();
+      if (!state) {
+        return res.status(400).send('<html><body><h2>Invalid Google OAuth state.</h2><p>The Google callback did not return a valid security state. This usually happens when the redirect URL is wrong or the OAuth flow was restarted.</p><p><a href="/">Return to app</a></p></body></html>');
+      }
+      return res.status(400).send('<html><body><h2>Invalid Google OAuth state.</h2><p>The security token expired or was lost. Please start the Google Drive sign-in again from the app.</p><p><a href="/">Return to app</a></p></body></html>');
     }
 
     stateStore.delete(String(state));
