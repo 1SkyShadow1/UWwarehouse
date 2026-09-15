@@ -1,4 +1,4 @@
-const CACHE_NAME = 'uw-accounting-v20';
+const CACHE_NAME = 'uw-accounting-v21';
 const APP_SHELL = ['./', './index.html', './imported-data.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
@@ -25,7 +25,6 @@ self.addEventListener('fetch', event => {
     }).catch(() => caches.match('./index.html')))
   );
 });
-
 
 
 
