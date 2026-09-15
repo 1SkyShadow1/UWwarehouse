@@ -263,7 +263,7 @@ function load(){
   const scanned=window.UW_SCANNED||{};
   const fnb=window.UW_FNB_STATEMENTS||{};
   const base={...JSON.parse(JSON.stringify(seed)),...imported,...operations,scannedDocuments:scanned.documents||[],fnbStatements:fnb.statements||[],meta:{...seed.meta,...(imported.meta||{}),...(operations.meta||{}),scannedVersion:scanned.version||'',fnbVersion:fnb.version||''}};
-  base.meta.googleDrive={clientId:'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',autoBackup:false,...(base.meta.googleDrive||{})};
+  base.meta.googleDrive={clientId:'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',backupFolderName:'UW Accounting Backups',autoBackup:false,...(base.meta.googleDrive||{})};
   try{
     const raw=localStorage.getItem(DB_KEY);
     if(raw){
@@ -370,13 +370,13 @@ async function googleDriveSync(direction,silent=false){
   if(backend){
     try{
       const response=direction==='push'
-        ? await googleDriveBackendRequest('/sync',{method:'POST',body:{data:DB,fileName:cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',fileId:cfg.fileId||''}})
-        : await googleDriveBackendRequest('/restore',{method:'POST',body:{fileName:cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',fileId:cfg.fileId||''}});
-      DB.meta.googleDrive={...cfg,fileId:response.fileId||cfg.fileId||'',fileName:response.fileName||cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',lastSync:response.lastSync||new Date().toISOString(),connected:true,account:backend.state?.accountEmail||cfg.account||''};
+        ? await googleDriveBackendRequest('/sync',{method:'POST',body:{data:DB,fileName:cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',backupFolderName:cfg.backupFolderName||'UW Accounting Backups',fileId:cfg.fileId||''}})
+        : await googleDriveBackendRequest('/restore',{method:'POST',body:{fileName:cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',backupFolderName:cfg.backupFolderName||'UW Accounting Backups',fileId:cfg.fileId||''}});
+      const nextFolderId=response.folderId||cfg.folderId||'';
+      DB.meta.googleDrive={...cfg,backupFolderName:cfg.backupFolderName||'UW Accounting Backups',fileId:response.fileId||cfg.fileId||'',fileName:response.fileName||cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:nextFolderId,lastSync:response.lastSync||new Date().toISOString(),connected:true,account:backend.state?.accountEmail||cfg.account||''};
       save();
-      if(direction==='push'){if(!silent)toast('Google Drive backup saved via secure backend');}
-      else{if(!confirm('Replace local data with the Google Drive backup?'))return;DB=response.data||DB;DB.meta={...(DB.meta||{}),googleDrive:{...cfg,fileId:response.fileId||cfg.fileId||'',fileName:response.fileName||cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',lastSync:response.lastSync||new Date().toISOString(),connected:true,account:backend.state?.accountEmail||cfg.account||''}};save();render();toast('Google Drive backup restored');}
-      return;
+      if(direction==='push'){if(!silent)toast('Google Drive backup saved via secure backend to UW Accounting Backups');}
+      else{if(!confirm('Replace local data with the Google Drive backup?'))return;DB=response.data||DB;      DB.meta={...(DB.meta||{}),googleDrive:{...cfg,backupFolderName:cfg.backupFolderName||'UW Accounting Backups',fileId:response.fileId||cfg.fileId||'',fileName:response.fileName||cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:nextFolderId,lastSync:response.lastSync||new Date().toISOString(),connected:true,account:backend.state?.accountEmail||cfg.account||''}};save();render();toast('Google Drive backup restored');}      return;
     }catch(err){console.error(err);if(!silent)toast(err.message||'Google Drive sync failed');return;}
   }
   const headers={Authorization:'Bearer '+cfg.token};
@@ -436,7 +436,7 @@ async function disconnectGoogleDrive(){
   if(backend){
     try{await googleDriveBackendRequest('/disconnect',{method:'POST'});}catch(err){console.warn('Backend disconnect failed',err);}
   }
-  DB.meta.googleDrive={clientId:'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',autoBackup:false};save();render();toast('Google Drive disconnected and local authorization removed');
+  DB.meta.googleDrive={clientId:'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',backupFolderName:'UW Accounting Backups',autoBackup:false};save();render();toast('Google Drive disconnected and local authorization removed');
 }
 const R = n => 'R ' + Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
 const invTotal = inv => inv.items.reduce((s,i)=>s+i.qty*i.price,0);
@@ -1196,6 +1196,7 @@ function vSettings(c){
       <div class="fld"><label>OAuth access token (advanced fallback)</label><input type="password" autocomplete="off" value="${drive.token||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),token:this.value,connected:false};save()"></div>
       <div class="fld"><label>Drive folder ID (optional)</label><input value="${drive.folderId||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),folderId:this.value,fileId:''};save()"></div>
       <div class="fld"><label>Backup filename</label><input value="${drive.fileName||'UW_ACCOUNTING_BACKUP.json'}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),fileName:this.value,fileId:''};save()"></div>
+        <div class="fld"><label>Backup folder</label><input value="${drive.backupFolderName||'UW Accounting Backups'}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),backupFolderName:this.value};save()"></div>
     </div>
     <div class="toolbar">
       <button class="btn gold" onclick="googleDriveOAuthLogin()">Sign in with Google Drive</button>
