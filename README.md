@@ -16,21 +16,31 @@ The **Scanned Receipts & Invoices** page contains the 366 files from `D:\UW\UW I
 
 The scanned page supports filename/date/category filtering and local uploads for future JPG, PNG, and PDF scans. Uploaded files are stored in the browser database and can be reviewed with the same viewer controls. The Dashboard reports the number awaiting review, but does not invent invoice or expense amounts from image pixels. Quote creation includes price-book presets for the established item names, sizes, types, and materials; selecting a preset fills the code, description, and calculated starting price.
 
-The **FNB Reconciliation** page inventories all 12 authoritative PDFs in `D:\UW\2025\UW\FNB Bank\2025-2026` (44 pages total). The tagged PDF attachments were unavailable in this workspace, so the import deliberately records 0 readable transaction rows and 0 statement totals rather than guessing values. All 12 statements remain **Needs review**, with exact filename/path/page provenance. The page preserves the statement register, supports statement/status/category filters, matched/unmatched counters, and a review queue. Only verified, non-duplicate rows may be added after cross-checking invoices, expenses, receipts, payables/purchases, and existing bank data.
+The **FNB Reconciliation** page now uses the 12 attached `GOLD_BUSINESS_ACCOUNT_1-12.docx` statements (44 pages total) for the FNB Gold Business Account ending `9557`. It imports and reconciles 1,563 statement transactions, ZAR 1,043,240.67 in credits, ZAR 1,037,709.38 in debits, and the 31 August 2026 closing balance of ZAR 5,531.29. Statement turnover is deliberately kept separate from invoices, expenses, receipts, payables/purchases, and reports until each transaction is allocated, preventing duplicate counting. The page provides monthly balances, statement-level credit/debit totals, source-period provenance, and an allocation queue.
 
 All document-facing pages (invoices, quotes, receipts, expenses, payables, the full document register, scanned documents, and the media gallery) provide consistent search, category, status, and date filtering where applicable. Filters update the displayed rows immediately and show the matching count.
 
 Optional Supabase cloud backup is available under Settings. Use **Save to Cloud** for an encrypted-in-transit JSON backup and **Restore from Cloud** to pull the selected workspace back into local storage after device loss or replacement. Configure Row Level Security and use a publishable/anonymous key only; never place a service-role key in the browser.
 
-Google Drive backup is also available under Settings. Enter a Google OAuth access token, test the connection, optionally choose a Drive folder, and enable **Keep backup continuously updated**. The connection preference, folder, backup filename, and Drive file ID are retained locally until **Disconnect** is selected. Automatic saves update the same Drive JSON file instead of creating duplicate files. Google access tokens can still expire or be revoked by Google, in which case reconnect with a fresh token.
+Google Drive backup is now implemented through a secure backend-first OAuth flow. Configure a Google Web OAuth client in Google Cloud Console and add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your environment before using **Sign in with Google Drive**. The app keeps the browser app offline-first, but the durable Google Drive connection is managed through the backend so the system is ready for safe deployment. The app still supports a local advanced token fallback until the backend credentials are configured.
 
 ## Run locally on Windows
 
-1. Double-click `start-local.ps1`, or run `.\start-local.ps1` in PowerShell. The launcher uses Python when available and otherwise includes a Windows PowerShell web-server fallback.
-3. Open `http://localhost:8080`.
-4. Use the browser menu's **Install app** option, or use **Install App** in the top bar when available.
+1. Install the app dependencies with `npm install`.
+2. Copy `.env.example` to `.env` and add your Google Web OAuth credentials.
+3. Start the app with `npm start`.
+4. Open `http://localhost:8080`.
+5. Use the browser menu's **Install app** option, or use **Install App** in the top bar when available.
 
 Do not open `index.html` directly with `file://` when you need installability or cloud sync. Browsers require a local HTTP server for service workers and PWA features.
+
+## Production deployment checklist
+
+- Create a Google Cloud **Web OAuth client** for the deployed domain.
+- Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your deployment environment.
+- Ensure the OAuth redirect URI matches the deployed backend route exactly.
+- Keep the app offline-first for local use, but run Google Drive sync through the backend in production.
+- Store secrets only in environment variables or a secure secret manager; never embed them in the browser bundle.
 
 ## Data and backups
 

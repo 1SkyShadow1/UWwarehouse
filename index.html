@@ -160,7 +160,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <button class="tb-btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
   </div>
   <div id="content"></div>
-  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span>Data stored locally on this device · Capitec Business 1052000444 · Branch 450105</span></div>
+  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span>Data stored locally on this device · FNB Gold Business 63173509557 · Branch 250655</span></div>
 </div>
 
 <div id="modal-root"></div>
@@ -169,6 +169,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="operations-data.js"></script>
 <script src="scanned-data.js"></script>
 <script src="bank-statements.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 /* ============================================================
    UW ACCOUNTING SYSTEM — Offline-first local persistence layer
@@ -178,7 +179,7 @@ const DATA_SOURCE_PATH = 'D:\\UW';
 const today = () => new Date().toISOString().slice(0,10);
 
 const seed = {
-  meta:{company:'Upholstery Warehouse',tagline:'ALL THINGS UPHOLSTERY...',phone:'077 412 8367',email:'info@upholsterywarehouse.co.za',address:'4, 5th Avenue, Edenvale',bank:'Capitec Business Bank',account:'1052000444',branch:'450105',vatNote:'*Prices are Exclusive of VAT, not charged',fy:'2026',cloud:{url:'',key:'',table:'uw_accounting_data',workspace:'default'}},
+  meta:{company:'Upholstery Warehouse',tagline:'ALL THINGS UPHOLSTERY...',phone:'077 412 8367',email:'info@upholsterywarehouse.co.za',address:'4, 5th Avenue, Edenvale',bank:'First National Bank',account:'63173509557',branch:'250655',vatNote:'*Prices are Exclusive of VAT, not charged',fy:'2026',cloud:{url:'',key:'',table:'uw_accounting_data',workspace:'default'}},
   invoices:[
     {id:'GM04032503',date:'2025-04-12',customer:'Waseela',contact:'0832186063',email:'',project:'Re-Upholstery',items:[{code:'1001-01',desc:'2x Wingback Chairs',qty:1,price:3800},{code:'1001-02',desc:'Transport',qty:1,price:300}],deposit:0,paid:4100,status:'Paid',fy:'2025'},
     {id:'GM11042501',date:'2025-04-11',customer:'Transworld',contact:'Luzaan · 614011766',email:'info@upholsterywarehouse.co.za',project:'Office Re-Upholstery',items:[{code:'1002-01',desc:'Guest Chairs (Super Leather, new foam/decron)',qty:6,price:1350},{code:'1002-02',desc:'Office Desk Chairs on Wheels (Super Leather)',qty:3,price:1650}],deposit:0,paid:0,status:'Pending',fy:'2025'},
@@ -256,11 +257,12 @@ function load(){
   const scanned=window.UW_SCANNED||{};
   const fnb=window.UW_FNB_STATEMENTS||{};
   const base={...JSON.parse(JSON.stringify(seed)),...imported,...operations,scannedDocuments:scanned.documents||[],fnbStatements:fnb.statements||[],meta:{...seed.meta,...(imported.meta||{}),...(operations.meta||{}),scannedVersion:scanned.version||'',fnbVersion:fnb.version||''}};
+  base.meta.googleDrive={clientId:'25892110982-qd3olguer3obs0u6co1qtbh49e2qsvbv.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',autoBackup:false,...(base.meta.googleDrive||{})};
   try{
     const raw=localStorage.getItem(DB_KEY);
     if(raw){
       const parsed=JSON.parse(raw);
-      const merged={...base,...parsed,meta:{...base.meta,...(parsed.meta||{})}};
+      const merged={...base,...parsed,meta:{...base.meta,...(parsed.meta||{}),googleDrive:{...base.meta.googleDrive,...((parsed.meta||{}).googleDrive||{})}}};
       const importedNeedsRefresh=merged.meta.importVersion!==(imported.meta||{}).importVersion
         || merged.invoices.length<(imported.invoices||[]).length
         || merged.expenses.length<(imported.expenses||[]).length
@@ -340,8 +342,37 @@ async function cloudSync(direction){
     }
   }catch(err){console.error(err);toast(err.message||'Cloud sync failed');}
 }
+async function googleDriveBackendStatus(){
+  try{
+    const response=await fetch('/api/google-drive/config');
+    if(!response.ok) return null;
+    const data=await response.json();
+    return data.clientConfigured ? data : null;
+  }catch(err){return null;}
+}
+async function googleDriveBackendRequest(path,options={}){
+  const requestOptions={headers:{'Content-Type':'application/json'},...options};
+  if(requestOptions.body!==undefined && typeof requestOptions.body!=='string'){requestOptions.body=JSON.stringify(requestOptions.body);}
+  const response=await fetch('/api/google-drive'+path,requestOptions);
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(data.error||'Google Drive request failed');
+  return data;
+}
 async function googleDriveSync(direction,silent=false){
-  const cfg=DB.meta.googleDrive||{};if(!cfg.token){if(!silent)toast('Connect Google Drive in Settings first');return;}
+  const cfg=DB.meta.googleDrive||{};
+  const backend=await googleDriveBackendStatus();
+  if(backend){
+    try{
+      const response=direction==='push'
+        ? await googleDriveBackendRequest('/sync',{method:'POST',body:{data:DB,fileName:cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',fileId:cfg.fileId||''}})
+        : await googleDriveBackendRequest('/restore',{method:'POST',body:{fileName:cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',fileId:cfg.fileId||''}});
+      DB.meta.googleDrive={...cfg,fileId:response.fileId||cfg.fileId||'',fileName:response.fileName||cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',lastSync:response.lastSync||new Date().toISOString(),connected:true,account:backend.state?.accountEmail||cfg.account||''};
+      save();
+      if(direction==='push'){if(!silent)toast('Google Drive backup saved via secure backend');}
+      else{if(!confirm('Replace local data with the Google Drive backup?'))return;DB=response.data||DB;DB.meta={...(DB.meta||{}),googleDrive:{...cfg,fileId:response.fileId||cfg.fileId||'',fileName:response.fileName||cfg.fileName||'UW_ACCOUNTING_BACKUP.json',folderId:cfg.folderId||'',lastSync:response.lastSync||new Date().toISOString(),connected:true,account:backend.state?.accountEmail||cfg.account||''}};save();render();toast('Google Drive backup restored');}
+      return;
+    }catch(err){console.error(err);if(!silent)toast(err.message||'Google Drive sync failed');return;}
+  }
   const headers={Authorization:'Bearer '+cfg.token};
   try{
     if(direction==='push'){
@@ -365,10 +396,42 @@ async function googleDriveSync(direction,silent=false){
   }catch(err){console.error(err);if(!silent)toast(err.message||'Google Drive sync failed');}
 }
 async function googleDriveTest(){
-  const cfg=DB.meta.googleDrive||{};if(!cfg.token){toast('Enter an OAuth access token first');return;}
+  const cfg=DB.meta.googleDrive||{};
+  const backend=await googleDriveBackendStatus();
+  if(backend){
+    try{
+      const status=await googleDriveBackendRequest('/status');
+      DB.meta.googleDrive={...cfg,connected:Boolean(status.connected),lastChecked:new Date().toISOString(),account:status.accountEmail||cfg.account||''};
+      save();render();
+      toast(status.connected ? 'Google Drive connected via secure backend'+(status.accountEmail?' as '+status.accountEmail:'') : 'Google Drive is not connected yet');
+      return;
+    }catch(err){DB.meta.googleDrive={...cfg,connected:false};save();render();toast(err.message||'Google Drive connection failed');return;}
+  }
+  if(!cfg.token){toast('Enter an OAuth access token first');return;}
   try{const r=await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota',{headers:{Authorization:'Bearer '+cfg.token}});if(!r.ok)throw new Error('Connection failed ('+r.status+')');const data=await r.json();DB.meta.googleDrive={...cfg,connected:true,lastChecked:new Date().toISOString(),account:data.user?.emailAddress||''};save();render();toast('Google Drive connected'+(data.user?.emailAddress?' as '+data.user.emailAddress:''));}catch(err){DB.meta.googleDrive={...cfg,connected:false};save();render();toast(err.message||'Google Drive connection failed');}
 }
-function disconnectGoogleDrive(){DB.meta.googleDrive={fileName:'UW_ACCOUNTING_BACKUP.json',autoBackup:false};save();render();toast('Google Drive disconnected');}
+async function googleDriveOAuthLogin(){
+  const backend=await googleDriveBackendStatus();
+  if(backend){
+    window.location.href='/api/google-drive/auth';
+    return;
+  }
+  const cfg=DB.meta.googleDrive||{},clientId=cfg.clientId||'25892110982-qd3olguer3obs0u6co1qtbh49e2qsvbv.apps.googleusercontent.com';
+  if(!window.google?.accounts?.oauth2){toast('Google sign-in is still loading; try again in a moment');return;}
+  const client=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:'https://www.googleapis.com/auth/drive.file',callback:async response=>{
+    if(response.error){toast('Google sign-in failed: '+response.error);return;}
+    DB.meta.googleDrive={...cfg,clientId,token:response.access_token,connected:false,tokenIssuedAt:new Date().toISOString()};
+    save();await googleDriveTest();googleDriveSync('push');
+  }});
+  client.requestAccessToken({prompt:cfg.account?'':'consent'});
+}
+async function disconnectGoogleDrive(){
+  const backend=await googleDriveBackendStatus();
+  if(backend){
+    try{await googleDriveBackendRequest('/disconnect',{method:'POST'});}catch(err){console.warn('Backend disconnect failed',err);}
+  }
+  DB.meta.googleDrive={clientId:'25892110982-qd3olguer3obs0u6co1qtbh49e2qsvbv.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',autoBackup:false};save();render();toast('Google Drive disconnected and local authorization removed');
+}
 const R = n => 'R ' + Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
 const invTotal = inv => inv.items.reduce((s,i)=>s+i.qty*i.price,0);
 const invBalance = inv => invTotal(inv) - (inv.paid||0) - (inv.deposit||0);
@@ -983,7 +1046,7 @@ function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d
 function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.includes('invoice')?'Invoice scan':n.includes('receipt')||n.includes('proof')?'Receipt scan':'Unclassified scan'}
 function uploadScannedDocuments(e){[...e.target.files].forEach(file=>{const r=new FileReader();r.onload=()=>{const hash='local-'+Date.now()+'-'+file.size;DB.scannedDocuments.push({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false});save();render();};r.readAsDataURL(file)});e.target.value='';}
 function vScanned(c){const f=docFilterState('scanned');const rows=scannedRows().map(d=>({...d,scanDate:d.scanDate||scannedDate(d),category:d.category&&d.category!=='Scanned receipt/invoice image'?d.category:scannedCategory(d)})).filter(d=>docMatches(d,'scanned',d.category,d.reviewStatus,'scanDate'));const meta=window.UW_SCANNED||{};const body=rows.map(d=>{const approved=d.reviewStatus==='Approved',payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>—</td><td>—</td><td>'+d.scanDate+'</td><td><b>'+d.reviewStatus+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan'],['Needs review','Approved'])+'<label class="btn gold">＋ Upload scans<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' shown · '+(meta.uniqueFiles||0)+' unique hashes · '+(meta.duplicateFiles||0)+' duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Amounts, merchants and transaction dates are blank unless reliably extracted and reviewed. Image-only scans remain excluded from totals.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>Statement / source</th><th></th></tr>'+body+'</table></div>'}
-function vBank(c){const meta=window.UW_FNB_STATEMENTS||{},all=DB.fnbStatements||[],f=docFilterState('bank'),q=(f.q||'').toLowerCase(),status=f.status||'',rows=all.filter(s=>(!q||s.name.toLowerCase().includes(q)||s.path.toLowerCase().includes(q))&&(!status||s.status===status));const tx=rows.flatMap(s=>(s.transactions||[]).map(t=>({...t,statement:s})));const cats=[...new Set(tx.map(t=>t.category).filter(Boolean))];const cat=f.category||'';const filteredTx=tx.filter(t=>!cat||t.category===cat);const body=rows.map(s=>'<tr class="review-needed"><td>'+s.name+'</td><td>'+s.pages+'</td><td>'+s.transactions.length+'</td><td>—</td><td>'+s.status+'</td><td style="font-size:10px;color:var(--muted)">'+s.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+JSON.stringify(s).replace(/'/g,'&#39;')+')\'>Review source</button></td></tr>').join('');c.innerHTML='<div class="toolbar"><input class="search" placeholder="Search statements…" value="'+(f.q||'')+'" oninput="setDocFilter(\'bank\',\'q\',this.value)"><select class="search" onchange="setDocFilter(\'bank\',\'status\',this.value)"><option value="">All review statuses</option><option '+(status==='Needs review'?'selected':'')+'>Needs review</option><option '+(status==='Approved'?'selected':'')+'>Approved</option></select><select class="search" onchange="setDocFilter(\'bank\',\'category\',this.value)"><option value="">All transaction categories</option>'+cats.map(x=>'<option '+(cat===x?'selected':'')+'>'+x+'</option>').join('')+'</select><span style="color:var(--muted);font-size:12px">'+rows.length+' statements · '+filteredTx.length+' extracted transactions · '+filteredTx.filter(t=>t.matchStatus==='Matched').length+' matched · '+filteredTx.filter(t=>t.matchStatus!=='Matched').length+' unmatched</span></div><div class="panel"><h3>FNB Bank Statement Register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+'. No unverified statement data changes invoices, expenses, receipts, payables or reports. Categories supported: Personal, Fuel, Consumables/Materials, Utilities, Rent, Staff, Marketing, Bank Fees, Loan, Client Receipt/Income, Transfer, Other.</p><table><tr><th>Statement</th><th>Pages</th><th>Rows</th><th>Statement total</th><th>Review</th><th>Source</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Transaction review queue</h3><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th><th>Status</th><th>Statement</th></tr>'+((filteredTx.map(t=>'<tr><td>'+t.date+'</td><td>'+t.description+'</td><td class="num">'+R(t.amount)+'</td><td>'+t.category+'</td><td>'+t.reviewStatus+'</td><td>'+t.statement.name+'</td></tr>').join(''))||'<tr><td colspan="6" class="empty">No reliable transaction rows extracted. Review the source PDFs manually or provide OCR-capable tooling.</td></tr>')+'</table></div>'}
+function vBank(c){const meta=window.UW_FNB_STATEMENTS||{},all=DB.fnbStatements||[],f=docFilterState('bank'),q=(f.q||'').toLowerCase(),status=f.status||'',rows=all.filter(s=>(!q||s.name.toLowerCase().includes(q)||s.period.toLowerCase().includes(q))&&(!status||s.status===status)),r=meta.reconciliation||{},body=rows.map(s=>'<tr class="review-approved"><td><b>'+s.name+'</b><small>'+s.period+'</small></td><td>'+s.pages+'</td><td>'+s.creditTransactions+' cr / '+s.debitTransactions+' dr</td><td class="num">'+R(s.credits)+' / '+R(s.debits)+'</td><td class="num">'+R(s.closingBalance)+'</td><td><b>'+s.status+'</b></td><td><button class="btn sm" onclick=\'viewDocument('+JSON.stringify(s).replace(/'/g,'&#39;')+')\'>View source</button></td></tr>').join('');c.innerHTML='<div class="cards"><div class="card"><div class="lbl">FNB closing balance · 31 Aug 2026</div><div class="val gold">'+R((all[all.length-1]||{}).closingBalance||0)+'</div></div><div class="card"><div class="lbl">Imported turnover credits</div><div class="val green">'+R(r.verifiedCredits||0)+'</div></div><div class="card"><div class="lbl">Imported turnover debits</div><div class="val amber">'+R(r.verifiedDebits||0)+'</div></div><div class="card"><div class="lbl">Statements / transactions</div><div class="val">'+(r.statementCount||0)+' / '+(r.extractedRows||0)+'</div></div></div><div class="toolbar"><input class="search" placeholder="Search statements…" value="'+(f.q||'')+'" oninput="setDocFilter(\'bank\',\'q\',this.value)"><select class="search" onchange="setDocFilter(\'bank\',\'status\',this.value)"><option value="">All statuses</option><option '+(status==='Imported'?'selected':'')+'>Imported</option></select><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' statements shown · '+(r.unmatchedRows||0)+' transactions awaiting allocation</span></div><div class="panel"><h3>FNB Gold Business Account · authoritative register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+' Statement turnover is reconciled here but excluded from invoices, expenses and reports until allocated.</p><table><tr><th>Statement / period</th><th>Pages</th><th>Transactions</th><th>Credits / debits</th><th>Closing balance</th><th>Status</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Allocation queue</h3><p class="empty">All '+(r.extractedRows||0)+' statement transactions are preserved in the source register. Allocate them to categories before posting them to the operational ledger.</p></div>'}
 function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date'));const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved'])+'<span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
 function vAssistant(c){
   const inc=DB.invoices.reduce((s,i)=>s+(i.paid||0),0), exp=DB.expenses.reduce((s,e)=>s+(e.amount||0),0), outstanding=DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
@@ -1074,13 +1137,14 @@ function vSettings(c){
   <div class="toolbar"><button class="btn gold" onclick="cloudSync('push')">☁ Save to Cloud</button><button class="btn" onclick="cloudSync('pull')">☁ Restore from Cloud</button></div>
   <h3 style="margin-top:22px">Optional Google Drive Backup</h3>
   <div class="frm">
-    <div class="fld"><label>OAuth access token</label><input type="password" autocomplete="off" value="${(m.googleDrive||{}).token||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),token:this.value,connected:false};save()"></div>
+    <div class="fld"><label>Google OAuth client ID</label><input value="${(m.googleDrive||{}).clientId||'25892110982-qd3olguer3obs0u6co1qtbh49e2qsvbv.apps.googleusercontent.com'}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),clientId:this.value};save()"></div>
+    <div class="fld"><label>OAuth access token (advanced)</label><input type="password" autocomplete="off" value="${(m.googleDrive||{}).token||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),token:this.value,connected:false};save()"></div>
     <div class="fld"><label>Drive folder ID (optional)</label><input value="${(m.googleDrive||{}).folderId||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),folderId:this.value,fileId:''};save()"></div>
     <div class="fld"><label>Backup filename</label><input value="${(m.googleDrive||{}).fileName||'UW_ACCOUNTING_BACKUP.json'}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),fileName:this.value,fileId:''};save()"></div>
   </div>
-  <div class="toolbar"><button class="btn gold" onclick="googleDriveTest()">Connect / Test Google Drive</button><button class="btn" onclick="googleDriveSync('push')">☁ Save to Google Drive</button><button class="btn" onclick="googleDriveSync('pull')">☁ Restore from Google Drive</button><button class="btn danger" onclick="disconnectGoogleDrive()">Disconnect</button></div>
+  <div class="toolbar"><button class="btn gold" onclick="googleDriveOAuthLogin()">Sign in with Google Drive</button><button class="btn" onclick="googleDriveTest()">Test current connection</button><button class="btn" onclick="googleDriveSync('push')">☁ Save to Google Drive</button><button class="btn" onclick="googleDriveSync('pull')">☁ Restore from Google Drive</button><button class="btn danger" onclick="disconnectGoogleDrive()">Disconnect</button></div>
   <div class="toolbar"><label class="btn"><input type="checkbox" ${m.googleDrive?.autoBackup?'checked':''} onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),autoBackup:this.checked};save()"> Keep backup continuously updated</label><span style="font-size:12px;color:${m.googleDrive?.connected?'var(--green)':'var(--muted)'}">${m.googleDrive?.connected?'Connected':'Not connected'}${m.googleDrive?.account?' · '+m.googleDrive.account:''}${m.googleDrive?.lastSync?' · Last sync '+new Date(m.googleDrive.lastSync).toLocaleString():''}</span></div>
-  <p style="font-size:11.5px;color:var(--muted);margin-top:10px">The connection settings, folder, file ID, and auto-backup preference are retained locally until you choose Disconnect. The app updates the same Drive backup file instead of creating duplicates. Access tokens are still governed by Google and may expire; reconnect with a fresh token when Google revokes one. No service-account secrets belong in this app.</p>
+  <p style="font-size:11.5px;color:var(--muted);margin-top:10px">This section is now backend-first for production: use the configured Google Web OAuth client and backend redirect URI to authorize Drive access securely. The advanced token field remains as a local development fallback, and the app continues to keep the offline database primary. The app updates the same Drive backup file instead of creating duplicates. No service-account secrets belong in this app.</p>
   <p style="font-size:11.5px;color:var(--muted);margin-top:14px">Local storage is always the primary offline database. Current bundled source: <b style="color:var(--gold2)">${DATA_SOURCE_PATH}</b>. Cloud sync is optional and uses Supabase REST. Create a table named <b>uw_accounting_data</b> with columns <b>id text primary key</b>, <b>data jsonb</b>, and <b>updated_at timestamptz</b>; enable Row Level Security with policies appropriate for your users. Financial year filter: <b style="color:var(--gold2)">${DB.meta.fy}</b>.</p></div>`;
 }
 

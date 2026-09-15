@@ -4,6 +4,18 @@ Write-Host "Starting UW Accounting System at http://localhost:$port"
 Write-Host "Keep this window open while using the app. Press Ctrl+C to stop."
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
+$nodeAvailable = $false
+$nodePath = $null
+try {
+  $nodePath = (Get-Command node -ErrorAction Stop).Source
+  $nodeAvailable = $true
+} catch {}
+if ($nodeAvailable) {
+  Set-Location $root
+  & $nodePath server.js
+  exit $LASTEXITCODE
+}
+
 $pythonAvailable = $false
 try {
   & python --version *> $null
