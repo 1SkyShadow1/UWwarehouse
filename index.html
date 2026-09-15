@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
 <meta name="description" content="Offline-first accounting and operations system for Upholstery Warehouse">
+<link rel="icon" href="uw-round-logo.png" type="image/png">
+<link rel="apple-touch-icon" href="uw-round-logo.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
 <style>
@@ -37,7 +39,7 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);colo
 #sidebar{width:250px;min-width:250px;background:linear-gradient(180deg,#161616,#101010);border-right:1px solid var(--line);display:flex;flex-direction:column;transition:width .25s;overflow:hidden}
 #sidebar.collapsed{width:70px;min-width:70px}
 .brand{display:flex;align-items:center;gap:12px;padding:18px 14px;border-bottom:1px solid var(--line)}
-.logo-badge{width:44px;height:44px;min-width:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#3a3a3a,#151515);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:var(--gold2);letter-spacing:-1px;box-shadow:0 0 14px rgba(212,175,55,.25)}
+.logo-badge{width:44px;height:44px;min-width:44px;border-radius:50%;background:url('uw-round-logo.png') center/cover no-repeat;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:transparent;letter-spacing:-1px;box-shadow:0 0 14px rgba(212,175,55,.25);overflow:hidden}
 .brand-text{white-space:nowrap}
 .brand-text h1{font-size:15px;color:var(--gold);letter-spacing:2px}
 .brand-text p{font-size:9px;color:var(--muted);letter-spacing:1.5px;margin-top:2px}

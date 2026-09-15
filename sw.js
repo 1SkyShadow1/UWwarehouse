@@ -1,5 +1,5 @@
-const CACHE_NAME = 'uw-accounting-v21';
-const APP_SHELL = ['./', './index.html', './imported-data.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
+const CACHE_NAME = 'uw-accounting-v22';
+const APP_SHELL = ['./', './index.html', './imported-data.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
