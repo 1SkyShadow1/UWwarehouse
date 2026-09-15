@@ -17,6 +17,7 @@ const driveState = {
   fileId: '',
   fileName: 'UW_ACCOUNTING_BACKUP.json',
   folderId: '',
+  backupFolderName: 'UW Accounting Backups',
   lastSync: null,
 };
 
@@ -68,6 +69,39 @@ const getDriveFileQuery = (fileName = driveState.fileName, folderId = driveState
     folderId ? ` '${escapeDriveQueryValue(folderId)}' in parents` : '',
   ].filter(Boolean).join(' and ');
   return q;
+};
+
+const ensureBackupFolder = async (drive, folderName = driveState.backupFolderName || 'UW Accounting Backups') => {
+  if (driveState.folderId) {
+    return { id: driveState.folderId };
+  }
+
+  const query = `name='${escapeDriveQueryValue(folderName)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const existing = await drive.files.list({
+    q: query,
+    pageSize: 1,
+    fields: 'files(id,name)',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+
+  const folder = existing.data.files && existing.data.files[0];
+  if (folder) {
+    driveState.folderId = folder.id;
+    return folder;
+  }
+
+  const created = await drive.files.create({
+    requestBody: {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    },
+    fields: 'id,name',
+    supportsAllDrives: true,
+  });
+
+  driveState.folderId = created.data.id || '';
+  return created.data;
 };
 
 const normalizeBackupData = (payload) => {
@@ -206,53 +240,66 @@ app.post('/api/google-drive/sync', async (req, res) => {
     const payload = normalizeBackupData(req.body);
     const fileName = String(req.body?.fileName || driveState.fileName || 'UW_ACCOUNTING_BACKUP.json');
     const folderId = String(req.body?.folderId || driveState.folderId || '');
-    const drive = getDriveClient();
+  const backupFolderName = String(req.body?.backupFolderName || driveState.backupFolderName || 'UW Accounting Backups');
+  const drive = getDriveClient();
 
-    let fileId = req.body?.fileId || driveState.fileId || '';
-    if (!fileId) {
-      const q = getDriveFileQuery(fileName, folderId);
-      const listResponse = await drive.files.list({ q, pageSize: 1, fields: 'files(id,name,modifiedTime)' });
-      fileId = listResponse.data.files?.[0]?.id || '';
-    }
+  const backupFolder = await ensureBackupFolder(drive, backupFolderName);
+  const effectiveFolderId = folderId || backupFolder.id || driveState.folderId || '';
 
-    const metadata = {
-      name: fileName,
-      mimeType: 'application/json',
-      ...(folderId ? { parents: [folderId] } : {}),
-    };
-
-    const uploadPayload = JSON.stringify(payload || {});
-    const response = fileId
-      ? await drive.files.update({
-          fileId,
-          requestBody: metadata,
-          media: { mimeType: 'application/json', body: uploadPayload },
-          fields: 'id,name,modifiedTime',
-        })
-      : await drive.files.create({
-          requestBody: metadata,
-          media: { mimeType: 'application/json', body: uploadPayload },
-          fields: 'id,name,modifiedTime',
-        });
-
-    driveState.fileId = response.data.id || fileId;
-    driveState.fileName = response.data.name || fileName;
-    driveState.folderId = folderId;
-    driveState.lastSync = new Date().toISOString();
-
-    return res.json({
-      ok: true,
-      fileId: driveState.fileId,
-      fileName: driveState.fileName,
-      lastSync: driveState.lastSync,
-      connected: true,
+  let fileId = req.body?.fileId || driveState.fileId || '';
+  if (!fileId) {
+    const q = getDriveFileQuery(fileName, effectiveFolderId);
+    const listResponse = await drive.files.list({
+      q,
+      pageSize: 1,
+      fields: 'files(id,name,modifiedTime)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
-  } catch (error) {
-    console.error('Google Drive sync failed:', error);
-    return res.status(500).json({
-      error: error.message || 'Google Drive sync failed.',
-    });
+    fileId = listResponse.data.files?.[0]?.id || '';
   }
+
+  const metadata = {
+    name: fileName,
+    mimeType: 'application/json',
+    ...(effectiveFolderId ? { parents: [effectiveFolderId] } : {}),
+  };
+
+  const uploadPayload = JSON.stringify(payload || {});
+  const response = fileId
+    ? await drive.files.update({
+        fileId,
+        requestBody: metadata,
+        media: { mimeType: 'application/json', body: uploadPayload },
+        fields: 'id,name,modifiedTime',
+        supportsAllDrives: true,
+      })
+    : await drive.files.create({
+        requestBody: metadata,
+        media: { mimeType: 'application/json', body: uploadPayload },
+        fields: 'id,name,modifiedTime',
+        supportsAllDrives: true,
+      });
+
+  driveState.fileId = response.data.id || fileId;
+  driveState.fileName = response.data.name || fileName;
+  driveState.folderId = effectiveFolderId;
+  driveState.lastSync = new Date().toISOString();
+
+  return res.json({
+    ok: true,
+    fileId: driveState.fileId,
+    fileName: driveState.fileName,
+    folderId: driveState.folderId,
+    lastSync: driveState.lastSync,
+    connected: true,
+  });
+} catch (error) {
+  console.error('Google Drive sync failed:', error);
+  return res.status(500).json({
+    error: error.message || 'Google Drive sync failed.',
+  });
+}
 });
 
 app.post('/api/google-drive/restore', async (req, res) => {
@@ -267,20 +314,29 @@ app.post('/api/google-drive/restore', async (req, res) => {
 
     const fileName = String(req.body?.fileName || driveState.fileName || 'UW_ACCOUNTING_BACKUP.json');
     const folderId = String(req.body?.folderId || driveState.folderId || '');
+    const backupFolderName = String(req.body?.backupFolderName || driveState.backupFolderName || 'UW Accounting Backups');
     const drive = getDriveClient();
-    const q = getDriveFileQuery(fileName, folderId);
-    const listResponse = await drive.files.list({ q, pageSize: 1, fields: 'files(id,name,modifiedTime)' });
+    const backupFolder = await ensureBackupFolder(drive, backupFolderName);
+    const effectiveFolderId = folderId || backupFolder.id || driveState.folderId || '';
+    const q = getDriveFileQuery(fileName, effectiveFolderId);
+    const listResponse = await drive.files.list({
+      q,
+      pageSize: 1,
+      fields: 'files(id,name,modifiedTime)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
     const match = listResponse.data.files?.[0];
     if (!match) {
       return res.status(404).json({ error: 'No matching Google Drive backup was found.' });
     }
 
-    const download = await drive.files.get({ fileId: match.id, alt: 'media' }, { responseType: 'arraybuffer' });
+    const download = await drive.files.get({ fileId: match.id, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
     const raw = Buffer.from(download.data).toString('utf8');
     const data = JSON.parse(raw);
     driveState.fileId = match.id;
     driveState.fileName = match.name || fileName;
-    driveState.folderId = folderId;
+    driveState.folderId = effectiveFolderId;
     driveState.lastSync = new Date().toISOString();
 
     return res.json({ ok: true, data, fileId: match.id, fileName: match.name || fileName });
