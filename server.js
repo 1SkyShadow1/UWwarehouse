@@ -19,10 +19,16 @@ const driveState = {
   lastSync: null,
 };
 
+const normalizeGoogleRedirectUri = (value = '') => {
+  const cleaned = String(value).trim();
+  if (!cleaned) return cleaned;
+  return cleaned.replace(/([^:])\/{2,}/g, '$1/');
+};
+
 const getGoogleConfig = () => ({
   clientId: process.env.GOOGLE_CLIENT_ID || '',
   clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-  redirectUri: process.env.GOOGLE_REDIRECT_URI || `http://localhost:${PORT}/api/google-drive/callback`,
+  redirectUri: normalizeGoogleRedirectUri(process.env.GOOGLE_REDIRECT_URI || `http://localhost:${PORT}/api/google-drive/callback`),
 });
 
 const makeOAuthClient = () => {

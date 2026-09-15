@@ -38,7 +38,8 @@ Do not open `index.html` directly with `file://` when you need installability or
 
 - Create a Google Cloud **Web OAuth client** for the deployed domain.
 - Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your deployment environment.
-- Ensure the OAuth redirect URI matches the deployed backend route exactly.
+- Ensure the OAuth redirect URI matches the deployed backend route exactly, without duplicate slashes.
+- Use `https://uwwarehouse-2.onrender.com/api/google-drive/callback` as the production URL for this specific deployment.
 - Keep the app offline-first for local use, but run Google Drive sync through the backend in production.
 - Store secrets only in environment variables or a secure secret manager; never embed them in the browser bundle.
 
