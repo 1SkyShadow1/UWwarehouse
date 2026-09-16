@@ -1322,7 +1322,6 @@ function closeModal(){document.getElementById('modal-root').innerHTML='';}
 function initializeAccessFlow(){
   const launchStartedAt=performance.now();
   const minimumLaunchMs=4000;
-  const accessToken = localStorage.getItem('UW_ACCESS_GRANTED');
   const bootScreen = document.getElementById('boot-screen');
   const loginScreen = document.getElementById('login-screen');
   const loginForm = document.getElementById('login-form');
@@ -1338,18 +1337,11 @@ function initializeAccessFlow(){
     bootScreen.classList.add('exit');
     setTimeout(() => {
       bootScreen.style.display = 'none';
-      if (accessToken === '1') {
-        loginScreen.classList.add('hidden');
-        startApplication();
-      } else {
-        loginScreen.classList.remove('hidden');
-      }
+      loginScreen.classList.remove('hidden');
     }, 700);
   };
 
   setTimeout(finishLaunch, Math.max(0, minimumLaunchMs-(performance.now()-launchStartedAt)));
-
-  if (accessToken === '1') return;
 
   loginForm.addEventListener('submit', event => {
     event.preventDefault();
