@@ -129,7 +129,12 @@ app.get('/api/google-drive/config', (_, res) => {
   const config = getGoogleConfig();
   res.json({
     clientConfigured: Boolean(config.clientId && config.clientSecret),
+    clientId: config.clientId,
     redirectUri: config.redirectUri,
+    expectedRedirectUris: [
+      'http://localhost:8080/api/google-drive/callback',
+      'https://uwwarehouse-2.onrender.com/api/google-drive/callback',
+    ],
     state: { connected: driveState.connected, accountEmail: driveState.accountEmail, fileName: driveState.fileName, folderId: driveState.folderId, fileId: driveState.fileId, lastSync: driveState.lastSync },
   });
 });

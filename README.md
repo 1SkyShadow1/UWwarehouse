@@ -40,6 +40,23 @@ Do not open `index.html` directly with `file://` when you need installability or
 - Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your deployment environment.
 - Ensure the OAuth redirect URI matches the deployed backend route exactly, without duplicate slashes.
 - Use `https://uwwarehouse-2.onrender.com/api/google-drive/callback` as the production URL for this specific deployment.
+
+### OAuth redirect mismatch troubleshooting
+
+Google validates OAuth URLs against the Google Cloud OAuth client, not against this repository. For the official web client
+`543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com`, configure both of these **Authorized JavaScript origins**:
+
+- `http://localhost:8080`
+- `https://uwwarehouse-2.onrender.com`
+
+Configure these exact **Authorized redirect URIs** for the secure backend flow:
+
+- `http://localhost:8080/api/google-drive/callback`
+- `https://uwwarehouse-2.onrender.com/api/google-drive/callback`
+
+Do not add a trailing slash, a doubled slash, or `/index.html`. The local backend also requires a `.env` file based on
+`.env.example`, including the Google client secret. If the client secret is absent, the browser fallback is used and Google
+will reject the request unless the current origin is registered as an Authorized JavaScript origin.
 - Keep the app offline-first for local use, but run Google Drive sync through the backend in production.
 - Store secrets only in environment variables or a secure secret manager; never embed them in the browser bundle.
 

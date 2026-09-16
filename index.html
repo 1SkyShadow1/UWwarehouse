@@ -499,7 +499,14 @@ async function googleDriveOAuthLogin(){
   const cfg=DB.meta.googleDrive||{},clientId=cfg.clientId||'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com';
   if(!window.google?.accounts?.oauth2){toast('Google sign-in is still loading; try again in a moment');return;}
   const client=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:'https://www.googleapis.com/auth/drive.file',callback:async response=>{
-    if(response.error){toast('Google sign-in failed: '+response.error);return;}
+    if(response.error){
+      const message=response.error==='redirect_uri_mismatch'
+        ? 'Google rejected this OAuth client because http://localhost:8080 is not registered as an authorized JavaScript origin. Add http://localhost:8080 in Google Cloud Console, then retry.'
+        : 'Google sign-in failed: '+response.error;
+      toast(message);
+      console.error('Google OAuth configuration error', { error: response.error, clientId, origin: location.origin });
+      return;
+    }
     DB.meta.googleDrive={...cfg,clientId,token:response.access_token,connected:false,tokenIssuedAt:new Date().toISOString()};
     save();await googleDriveTest();googleDriveSync('push');
   }});
