@@ -180,7 +180,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <div class="launch-orbit">
     <div class="orbit orbit-one"></div>
     <div class="orbit orbit-two"></div>
-    <img src="uw-official-logo.png" alt="UW loading logo" class="launch-logo">
+    <img src="uw-round-logo.png" alt="UW loading logo" class="launch-logo">
   </div>
   <div class="launch-copy">
     <span class="launch-tag">Upholstery Warehouse</span>
@@ -192,7 +192,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <div id="login-screen" class="login-screen hidden">
   <div class="login-panel">
     <div class="login-logo-wrap">
-      <img src="uw-round-logo.png" alt="UW login logo" class="login-logo">
+      <img src="uw-official-logo.png" alt="UW login logo" class="login-logo">
     </div>
     <div class="login-header">
       <span class="login-kicker">Secure access</span>
@@ -1320,6 +1320,8 @@ function modal(html){document.getElementById('modal-root').innerHTML=`<div class
 function closeModal(){document.getElementById('modal-root').innerHTML='';}
 
 function initializeAccessFlow(){
+  const launchStartedAt=performance.now();
+  const minimumLaunchMs=4000;
   const accessToken = localStorage.getItem('UW_ACCESS_GRANTED');
   const bootScreen = document.getElementById('boot-screen');
   const loginScreen = document.getElementById('login-screen');
@@ -1332,20 +1334,22 @@ function initializeAccessFlow(){
     userField.value = storedUser;
   }
 
-  if (accessToken === '1') {
-    bootScreen.style.display = 'none';
-    loginScreen.classList.add('hidden');
-    startApplication();
-    return;
-  }
-
-  setTimeout(() => {
+  const finishLaunch = () => {
     bootScreen.classList.add('exit');
     setTimeout(() => {
       bootScreen.style.display = 'none';
-      loginScreen.classList.remove('hidden');
+      if (accessToken === '1') {
+        loginScreen.classList.add('hidden');
+        startApplication();
+      } else {
+        loginScreen.classList.remove('hidden');
+      }
     }, 700);
-  }, 1700);
+  };
+
+  setTimeout(finishLaunch, Math.max(0, minimumLaunchMs-(performance.now()-launchStartedAt)));
+
+  if (accessToken === '1') return;
 
   loginForm.addEventListener('submit', event => {
     event.preventDefault();
