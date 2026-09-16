@@ -38,14 +38,18 @@ const normalizeGoogleRedirectUri = (value = '') => {
   return withoutDoubleSlashes.replace(/\/+$/, '');
 };
 
-const getGoogleConfig = () => ({
+const getGoogleConfig = (req) => ({
   clientId: process.env.GOOGLE_CLIENT_ID || '',
   clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-  redirectUri: normalizeGoogleRedirectUri(process.env.GOOGLE_REDIRECT_URI || `http://localhost:${PORT}/api/google-drive/callback`),
+  redirectUri: normalizeGoogleRedirectUri(
+    req && req.get('host') === 'uwwarehouse-2.onrender.com'
+      ? 'https://uwwarehouse-2.onrender.com/api/google-drive/callback'
+      : process.env.GOOGLE_REDIRECT_URI || `http://localhost:${PORT}/api/google-drive/callback`,
+  ),
 });
 
-const makeOAuthClient = () => {
-  const { clientId, clientSecret, redirectUri } = getGoogleConfig();
+const makeOAuthClient = (req) => {
+  const { clientId, clientSecret, redirectUri } = getGoogleConfig(req);
   if (!clientId || !clientSecret) {
     throw new Error('Google OAuth credentials are not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
   }
@@ -54,11 +58,11 @@ const makeOAuthClient = () => {
 
 const escapeDriveQueryValue = (value = '') => String(value).replace(/'/g, "\\'");
 
-const getDriveClient = (tokens = driveState.tokens) => {
+const getDriveClient = (tokens = driveState.tokens, req) => {
   if (!tokens) {
     throw new Error('Google Drive is not connected.');
   }
-  const client = makeOAuthClient();
+  const client = makeOAuthClient(req);
   client.setCredentials(tokens);
   return google.drive({ version: 'v3', auth: client });
 };
@@ -115,18 +119,18 @@ const normalizeBackupData = (payload) => {
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-app.get('/api/health', (_, res) => {
+app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     message: 'UW Accounting server is running',
     timestamp: new Date().toISOString(),
-    googleConfigured: Boolean(getGoogleConfig().clientId && getGoogleConfig().clientSecret),
+    googleConfigured: Boolean(getGoogleConfig(req).clientId && getGoogleConfig(req).clientSecret),
     driveConnected: driveState.connected,
   });
 });
 
-app.get('/api/google-drive/config', (_, res) => {
-  const config = getGoogleConfig();
+app.get('/api/google-drive/config', (req, res) => {
+  const config = getGoogleConfig(req);
   res.json({
     clientConfigured: Boolean(config.clientId && config.clientSecret),
     clientId: config.clientId,
@@ -139,15 +143,15 @@ app.get('/api/google-drive/config', (_, res) => {
   });
 });
 
-app.get('/api/google-drive/auth', (_, res) => {
-  const config = getGoogleConfig();
+app.get('/api/google-drive/auth', (req, res) => {
+  const config = getGoogleConfig(req);
   if (!config.clientId || !config.clientSecret) {
     return res.status(503).json({ error: 'Google OAuth is not configured on the backend.' });
   }
   cleanStateStore();
   const state = crypto.randomBytes(16).toString('hex');
   stateStore.set(state, { createdAt: Date.now() });
-  const oauth2Client = makeOAuthClient();
+  const oauth2Client = makeOAuthClient(req);
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -176,7 +180,7 @@ app.get('/api/google-drive/callback', async (req, res) => {
     }
 
     stateStore.delete(String(state));
-    const oauth2Client = makeOAuthClient();
+    const oauth2Client = makeOAuthClient(req);
     const { tokens } = await oauth2Client.getToken(String(code));
     driveState.tokens = tokens;
     driveState.connected = true;
@@ -235,7 +239,7 @@ app.get('/api/google-drive/status', (_, res) => {
 
 app.post('/api/google-drive/sync', async (req, res) => {
   try {
-    const config = getGoogleConfig();
+    const config = getGoogleConfig(req);
     if (!config.clientId || !config.clientSecret) {
       return res.status(503).json({ error: 'Google OAuth is not configured on the backend.' });
     }
@@ -247,7 +251,7 @@ app.post('/api/google-drive/sync', async (req, res) => {
     const fileName = String(req.body?.fileName || driveState.fileName || 'UW_ACCOUNTING_BACKUP.json');
     const folderId = String(req.body?.folderId || driveState.folderId || '');
   const backupFolderName = String(req.body?.backupFolderName || driveState.backupFolderName || 'UW Accounting Backups');
-  const drive = getDriveClient();
+  const drive = getDriveClient(undefined, req);
 
   const backupFolder = await ensureBackupFolder(drive, backupFolderName);
   const effectiveFolderId = folderId || backupFolder.id || driveState.folderId || '';
@@ -310,7 +314,7 @@ app.post('/api/google-drive/sync', async (req, res) => {
 
 app.post('/api/google-drive/restore', async (req, res) => {
   try {
-    const config = getGoogleConfig();
+    const config = getGoogleConfig(req);
     if (!config.clientId || !config.clientSecret) {
       return res.status(503).json({ error: 'Google OAuth is not configured on the backend.' });
     }
@@ -321,7 +325,7 @@ app.post('/api/google-drive/restore', async (req, res) => {
     const fileName = String(req.body?.fileName || driveState.fileName || 'UW_ACCOUNTING_BACKUP.json');
     const folderId = String(req.body?.folderId || driveState.folderId || '');
     const backupFolderName = String(req.body?.backupFolderName || driveState.backupFolderName || 'UW Accounting Backups');
-    const drive = getDriveClient();
+    const drive = getDriveClient(undefined, req);
     const backupFolder = await ensureBackupFolder(drive, backupFolderName);
     const effectiveFolderId = folderId || backupFolder.id || driveState.folderId || '';
     const q = getDriveFileQuery(fileName, effectiveFolderId);
