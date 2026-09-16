@@ -9,6 +9,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const rootDir = __dirname;
+const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
 const stateStore = new Map();
 const STATE_TTL_MS = 10 * 60 * 1000;
 const driveState = {
@@ -118,6 +119,10 @@ const normalizeBackupData = (payload) => {
 
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use('/api', (_, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  next();
+});
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -361,7 +366,9 @@ app.post('/api/google-drive/restore', async (req, res) => {
 app.get('/__source/*', (req, res) => {
   const relativePath = decodeURIComponent(req.params[0] || '').replace(/\\/g, '/').replace(/^\/+/, '');
   const safePath = relativePath.split('/').filter(Boolean).filter(part => part !== '..' && part !== '.').join('/');
-  const candidate = path.join(rootDir, '__source', safePath);
+  const bundledCandidate = path.join(rootDir, '__source', safePath);
+  const localCandidate = path.join(sourceRoot, safePath);
+  const candidate = fs.existsSync(bundledCandidate) ? bundledCandidate : localCandidate;
 
   if (safePath && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
     return res.sendFile(candidate);

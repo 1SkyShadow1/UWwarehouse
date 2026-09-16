@@ -1,4 +1,4 @@
-const CACHE_NAME = 'uw-accounting-v22';
+const CACHE_NAME = 'uw-accounting-v23';
 const APP_SHELL = ['./', './index.html', './imported-data.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
@@ -17,6 +17,11 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/__source/')) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
       const copy = response.clone();
@@ -25,7 +30,6 @@ self.addEventListener('fetch', event => {
     }).catch(() => caches.match('./index.html')))
   );
 });
-
 
 
 
