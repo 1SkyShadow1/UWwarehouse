@@ -187,6 +187,7 @@ app.get('/api/google-drive/callback', async (req, res) => {
     stateStore.delete(String(state));
     const oauth2Client = makeOAuthClient(req);
     const { tokens } = await oauth2Client.getToken(String(code));
+    oauth2Client.setCredentials(tokens);
     driveState.tokens = tokens;
     driveState.connected = true;
     driveState.lastSync = new Date().toISOString();
@@ -203,14 +204,15 @@ app.get('/api/google-drive/callback', async (req, res) => {
           <p>${driveState.accountEmail || 'Your account is now linked.'}</p>
           <p style="color:#cbd5e1;">This window will close and return you to the application.</p>
           <script>
-            setTimeout(() => {
-              if (window.opener) {
-                window.opener.postMessage({ type: 'google-drive-auth-success', email: ${JSON.stringify(driveState.accountEmail || '')} }, '*');
+            const returnToApp = () => {
+              if (window.opener && !window.opener.closed) {
+                window.opener.postMessage({ type: 'google-drive-auth-success', email: ${JSON.stringify(driveState.accountEmail || '')} }, window.location.origin);
                 window.close();
-              } else {
-                window.location.href = '/';
+                return;
               }
-            }, 1200);
+              window.location.replace('/');
+            };
+            setTimeout(returnToApp, 1200);
           </script>
         </div>
       </body></html>
