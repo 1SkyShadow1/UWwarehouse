@@ -35,6 +35,38 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);colo
 ::-webkit-scrollbar-thumb{background:#3a3a3a;border-radius:6px}
 ::-webkit-scrollbar-track{background:transparent}
 
+.launch-screen,.login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:1000;transition:opacity .7s ease,visibility .7s ease,transform .7s ease}
+.launch-screen{background:radial-gradient(circle at center,#1a1a1a 0%,#0d0d0d 45%,#070707 100%);flex-direction:column;gap:28px}
+.launch-screen.exit{opacity:0;visibility:hidden;transform:scale(1.04)}
+.launch-orbit{position:relative;display:grid;place-items:center;width:320px;height:320px}
+.orbit{position:absolute;border:2px solid rgba(212,175,55,.7);border-radius:50%;box-shadow:0 0 30px rgba(212,175,55,.15)}
+.orbit-one{width:220px;height:220px;animation:spin 8s linear infinite}
+.orbit-two{width:280px;height:280px;border-style:dashed;animation:spinReverse 12s linear infinite}
+.launch-logo{width:180px;height:180px;object-fit:contain;filter:drop-shadow(0 0 22px rgba(212,175,55,.35));animation:logoFloat 2.6s ease-in-out infinite}
+.launch-copy{text-align:center}
+.launch-tag{display:inline-block;margin-bottom:8px;color:var(--gold2);letter-spacing:2px;text-transform:uppercase;font-size:11px;font-weight:700}
+.launch-copy h1{font-size:clamp(1.8rem,3vw,3rem);color:#f8f4e7;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}
+.launch-status{display:inline-flex;align-items:center;gap:10px;font-size:12px;letter-spacing:1.6px;color:var(--muted);text-transform:uppercase}
+.status-pulse{width:8px;height:8px;border-radius:50%;background:var(--gold);display:inline-block;box-shadow:0 0 12px rgba(212,175,55,.9);animation:pulse 1.4s infinite ease-in-out}
+.login-screen{background:rgba(7,7,7,.58);backdrop-filter:blur(10px)}
+.login-screen.hidden{opacity:0;visibility:hidden;pointer-events:none}
+.login-panel{width:min(440px,86vw);background:rgba(18,18,18,.9);border:1px solid rgba(212,175,55,.28);border-radius:24px;padding:34px 30px;box-shadow:0 25px 80px rgba(0,0,0,.34);display:flex;flex-direction:column;align-items:center;gap:18px}
+.login-logo-wrap{width:136px;height:136px;border-radius:50%;background:radial-gradient(circle,#111 0%,#1a1a1a 100%);display:grid;place-items:center;border:2px solid rgba(212,175,55,.5);box-shadow:0 0 22px rgba(212,175,55,.18)}
+.login-logo{width:104px;height:104px;object-fit:contain}
+.login-header{text-align:center}
+.login-kicker{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold2);font-weight:700}
+.login-header h2{font-size:1.8rem;color:#f4efe7;margin-top:6px}
+.login-form{width:100%;display:flex;flex-direction:column;gap:14px;margin-top:10px}
+.login-field{display:flex;flex-direction:column;gap:8px;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase}
+.login-field input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,175,55,.2);color:var(--text);padding:12px 14px;border-radius:12px;font-size:14px;outline:none;transition:border-color .2s ease,box-shadow .2s ease}
+.login-field input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.12)}
+.login-submit{width:100%;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:700}
+.login-note{font-size:11.5px;color:var(--muted);text-align:center;max-width:240px;line-height:1.5}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+@keyframes spinReverse{0%{transform:rotate(360deg)}100%{transform:rotate(0deg)}}
+@keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.35);opacity:.65}}
+
 /* ===== SIDEBAR ===== */
 #sidebar{width:250px;min-width:250px;background:linear-gradient(180deg,#161616,#101010);border-right:1px solid var(--line);display:flex;flex-direction:column;transition:width .25s;overflow:hidden}
 #sidebar.collapsed{width:70px;min-width:70px}
@@ -144,6 +176,43 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 </head>
 <body>
 
+<div id="boot-screen" class="launch-screen">
+  <div class="launch-orbit">
+    <div class="orbit orbit-one"></div>
+    <div class="orbit orbit-two"></div>
+    <img src="uw-official-logo.png" alt="UW loading logo" class="launch-logo">
+  </div>
+  <div class="launch-copy">
+    <span class="launch-tag">Upholstery Warehouse</span>
+    <h1>UW Accounting System</h1>
+    <div class="launch-status"><span class="status-pulse"></span> Initialising workspace…</div>
+  </div>
+</div>
+
+<div id="login-screen" class="login-screen hidden">
+  <div class="login-panel">
+    <div class="login-logo-wrap">
+      <img src="uw-round-logo.png" alt="UW login logo" class="login-logo">
+    </div>
+    <div class="login-header">
+      <span class="login-kicker">Secure access</span>
+      <h2>UW Accounting System</h2>
+    </div>
+    <form id="login-form" class="login-form">
+      <label class="login-field">
+        <span>Operator name</span>
+        <input id="login-user" type="text" placeholder="Brian or Evans" autocomplete="username">
+      </label>
+      <label class="login-field">
+        <span>Access passphrase</span>
+        <input id="login-pass" type="password" placeholder="Enter your passphrase" autocomplete="current-password">
+      </label>
+      <button type="submit" class="btn gold login-submit">Launch system</button>
+    </form>
+    <p class="login-note">This workspace stays local to this device unless Google Drive backup is enabled.</p>
+  </div>
+</div>
+
 <div id="sidebar">
   <div class="brand">
     <div class="logo-badge">UW</div>
@@ -183,6 +252,11 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 const DB_KEY = 'UW_DB_V1';
 const DATA_SOURCE_PATH = 'D:\\UW';
 const today = () => new Date().toISOString().slice(0,10);
+
+const AUTH_USERS = {
+  brian: { name: 'Brian', passphrase: 'LeatherGold2026', role: 'Owner' },
+  evans: { name: 'Evans', passphrase: 'WarehouseSunrise', role: 'Manager' }
+};
 
 const seed = {
   meta:{company:'Upholstery Warehouse',tagline:'ALL THINGS UPHOLSTERY...',phone:'077 412 8367',email:'info@upholsterywarehouse.co.za',address:'4, 5th Avenue, Edenvale',bank:'First National Bank',account:'63173509557',branch:'250655',vatNote:'*Prices are Exclusive of VAT, not charged',fy:'2026',cloud:{url:'',key:'',table:'uw_accounting_data',workspace:'default'}},
@@ -1089,10 +1163,9 @@ function vSuppliers(c){
   c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Suppliers</div><div class="val gold">${(DB.suppliers||[]).length}</div></div><div class="card"><div class="lbl">Catalogued stock sources</div><div class="val">${(DB.stock||[]).length}</div></div></div><div class="grid2"><div class="panel"><h3>Supplier Directory</h3><table><tr><th>Supplier</th><th>Category</th><th class="num">Source files</th><th>Status</th></tr>${(DB.suppliers||[]).map(s=>`<tr><td>${s.name}</td><td>${s.category}</td><td class="num">${s.items}</td><td>${statusBadge(s.status)}</td></tr>`).join('')}</table></div><div class="panel"><h3>Stock & Material Sources</h3><table><tr><th>Item</th><th>Supplier</th><th>Unit</th><th>Qty</th><th>Reorder</th></tr>${(DB.stock||[]).map((s,i)=>`<tr><td>${s.name}</td><td>${s.supplier}</td><td>${s.unit}</td><td><input style="width:65px" type="number" value="${s.quantity}" onchange="DB.stock[${i}].quantity=+this.value;save()"></td><td>${s.reorderLevel}</td></tr>`).join('')}</table></div></div>`;
 }
 function vPayables(c){const all=DB.payables||[],rows=all.filter(p=>docMatches(p,'payables','Supplier payable',p.status));c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Imported supplier documents</div><div class="val gold">${all.length}</div></div><div class="card"><div class="lbl">Showing</div><div class="val">${rows.length}</div></div><div class="card"><div class="lbl">Unreviewed</div><div class="val amber">${all.filter(x=>x.status==='Unreviewed').length}</div></div></div><div class="toolbar">${docFilterHtml('payables',['Supplier payable'],['Unreviewed','Received','Approved','Paid','Disputed'])}</div><div class="panel"><h3>Purchases & Accounts Payable</h3><table><tr><th>Document</th><th>Supplier</th><th>Date</th><th class="num">Amount</th><th>Status</th><th></th></tr>${rows.map(p=>{const i=all.indexOf(p);return `<tr><td>${p.description}</td><td>${p.supplier}</td><td>${p.date||'—'}</td><td class="num">${R(p.amount)}</td><td><select class="search" style="min-width:120px" onchange="DB.payables[${i}].status=this.value;save();render()">${['Unreviewed','Received','Approved','Paid','Disputed'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td><td><button class="btn sm" onclick="toast('Source: ${String(p.document).replace(/'/g,'')}')">Source</button></td></tr>`}).join('')||'<tr><td colspan="6" class="empty">No payable documents match the current filters</td></tr>'}</table></div>`}
-function sourceUrl(path){const p=String(path||'').replace(/^D:\\UW[\\/]?/i,'').replace(/\\/g,'/').split('/').filter(Boolean).map(encodeURIComponent).join('/');return './__source/'+p}
-function viewerControls(target){return `<div class="viewer-tools"><button class="btn sm" onclick="viewerZoom('${target}',-0.1)">−</button><span id="${target}-scale" class="viewer-scale">100%</span><button class="btn sm" onclick="viewerZoom('${target}',0.1)">+</button><button class="btn sm" onclick="viewerZoom('${target}',0,true)">Reset</button><span style="font-size:11px;color:var(--muted)">Scroll to pan</span></div>`}
+function sourceUrl(path){const raw=String(path||'').trim();if(!raw)return '';if(raw.startsWith('data:')||raw.startsWith('blob:')||raw.startsWith('http://')||raw.startsWith('https://'))return raw;const p=raw.replace(/^[A-Za-z]:[\\/]+/i,'').replace(/^UW[\\/]+/i,'').replace(/^[\\/]+/,'').replace(/\\/g,'/').split('/').filter(Boolean).map(encodeURIComponent).join('/');return p?'./__source/'+p:''}function viewerControls(target){return `<div class="viewer-tools"><button class="btn sm" onclick="viewerZoom('${target}',-0.1)">−</button><span id="${target}-scale" class="viewer-scale">100%</span><button class="btn sm" onclick="viewerZoom('${target}',0.1)">+</button><button class="btn sm" onclick="viewerZoom('${target}',0,true)">Reset</button><span style="font-size:11px;color:var(--muted)">Scroll to pan</span></div>`}
 function viewerZoom(target,delta,reset){const el=document.getElementById(target);if(!el)return;const scale=reset?1:Math.max(.4,Math.min(3,(Number(el.dataset.scale)||1)+delta));el.dataset.scale=scale;el.style.transform=`scale(${scale})`;const label=document.getElementById(target+'-scale');if(label)label.textContent=Math.round(scale*100)+'%';}
-function viewDocument(d){const url=d.data||sourceUrl(d.path),ext=String(d.name||d.path||'').split('.').pop().toLowerCase(),safe=String(d.path||'').replace(/</g,'&lt;');let body;if(['png','jpg','jpeg','gif','webp','avif'].includes(ext))body=viewerControls('document-image')+`<div class="doc-viewer"><img id="document-image" data-scale="1" src="${url}" alt="${d.name||'Source document'}" style="background:#111" onerror="this.outerHTML='<p class=\\'empty\\'>Image could not be loaded.</p>'"></div>`;else if(ext==='pdf')body=viewerControls('document-pdf')+`<div class="doc-viewer"><iframe id="document-pdf" src="${url}" title="${d.name||'PDF'}"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;else body=`<div class="kv"><span>Source document</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">This file type is opened by the system application rather than rendered inside the browser.</p><a class="btn gold" href="${url}" target="_blank" rel="noopener">Open / Download document</a>`;modal(`<h3>${d.name||'Source document'}</h3>${body}<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`)}
+function viewDocument(d){const url=d.data||sourceUrl(d.path)||'';const ext=String(d.name||d.path||'').split('.').pop().toLowerCase(),safe=String(d.path||'').replace(/</g,'&lt;');let body;if(['png','jpg','jpeg','gif','webp','avif'].includes(ext))body=viewerControls('document-image')+`<div class="doc-viewer"><img id="document-image" data-scale="1" src="${url||'#'}" alt="${d.name||'Source document'}" style="background:#111"></div>`;else if(ext==='pdf')body=viewerControls('document-pdf')+`<div class="doc-viewer"><iframe id="document-pdf" src="${url||'#'}" title="${d.name||'PDF'}"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;else body=`<div class="kv"><span>Source document</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">This file type is opened by the system application rather than rendered inside the browser.</p><a class="btn gold" href="${url||'#'}" target="_blank" rel="noopener">Open / Download document</a>`;modal(`<h3>${d.name||'Source document'}</h3>${body}<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`) }
 function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
 function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
 function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:''}
@@ -1225,7 +1298,62 @@ function vSettings(c){
 function modal(html){document.getElementById('modal-root').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;}
 function closeModal(){document.getElementById('modal-root').innerHTML='';}
 
-renderNav();render();applyTheme(localStorage.getItem('UW_THEME')||'dark');
+function initializeAccessFlow(){
+  const accessToken = localStorage.getItem('UW_ACCESS_GRANTED');
+  const bootScreen = document.getElementById('boot-screen');
+  const loginScreen = document.getElementById('login-screen');
+  const loginForm = document.getElementById('login-form');
+  const userField = document.getElementById('login-user');
+  const passField = document.getElementById('login-pass');
+
+  const storedUser = localStorage.getItem('UW_ACCESS_USER');
+  if (storedUser) {
+    userField.value = storedUser;
+  }
+
+  if (accessToken === '1') {
+    bootScreen.style.display = 'none';
+    loginScreen.classList.add('hidden');
+    startApplication();
+    return;
+  }
+
+  setTimeout(() => {
+    bootScreen.classList.add('exit');
+    setTimeout(() => {
+      bootScreen.style.display = 'none';
+      loginScreen.classList.remove('hidden');
+    }, 700);
+  }, 1700);
+
+  loginForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const userValue = document.getElementById('login-user').value.trim().toLowerCase();
+    const passValue = document.getElementById('login-pass').value.trim();
+    const selectedUser = Object.keys(AUTH_USERS).find(key => AUTH_USERS[key].name.toLowerCase() === userValue || key === userValue);
+    const validUser = selectedUser && AUTH_USERS[selectedUser].passphrase === passValue;
+
+    if (!validUser) {
+      alert('Access denied. Only Brian and Evans may enter this system.');
+      passField.value = '';
+      return;
+    }
+
+    localStorage.setItem('UW_ACCESS_GRANTED', '1');
+    localStorage.setItem('UW_ACCESS_USER', AUTH_USERS[selectedUser].name);
+    loginScreen.classList.add('hidden');
+    startApplication();
+  });
+}
+
+function startApplication(){
+  renderNav();
+  render();
+  applyTheme(localStorage.getItem('UW_THEME')||'dark');
+  document.body.classList.add('app-ready');
+}
+
+initializeAccessFlow();
 
 let deferredInstallPrompt;
 window.addEventListener('beforeinstallprompt', event=>{

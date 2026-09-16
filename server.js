@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { google } = require('googleapis');
@@ -346,6 +347,41 @@ app.post('/api/google-drive/restore', async (req, res) => {
       error: error.message || 'Google Drive restore failed.',
     });
   }
+});
+
+app.get('/__source/*', (req, res) => {
+  const relativePath = decodeURIComponent(req.params[0] || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const safePath = relativePath.split('/').filter(Boolean).filter(part => part !== '..' && part !== '.').join('/');
+  const candidate = path.join(rootDir, '__source', safePath);
+
+  if (safePath && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+    return res.sendFile(candidate);
+  }
+
+  const fileName = safePath.split('/').pop() || 'document';
+  return res.type('html').send(`<!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${fileName}</title>
+        <style>
+          body { font-family: sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; min-height: 100vh; display: grid; place-items: center; }
+          .card { width: min(560px, 92vw); background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+          .badge { display: inline-block; background: #fbbf24; color: #111827; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 14px; }
+          a { color: #fbbf24; }
+          p { color: #cbd5e1; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="badge">Document preview</div>
+          <h2 style="margin-top:0">${fileName}</h2>
+          <p>This file is not available in the deployed app or it was not bundled into the static source tree.</p>
+          <p>Use the original copy from the local system or upload the file into the app to render it here. The application keeps the document record in the local database, but the browser cannot access a machine-local D:\UW path from a hosted deployment.</p>
+          <a href="/">Return to the UW Accounting system</a>
+        </div>
+      </body>
+    </html>`);
 });
 
 app.use(express.static(rootDir, { index: 'index.html' }));
