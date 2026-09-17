@@ -24,6 +24,8 @@ Optional Supabase cloud backup is available under Settings. Use **Save to Cloud*
 
 Google Drive backup is now implemented through a secure backend-first OAuth flow. Configure a Google Web OAuth client in Google Cloud Console and add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your environment before using **Sign in with Google Drive**. The app keeps the browser app offline-first, but the durable Google Drive connection is managed through the backend so the system is ready for safe deployment. The app still supports a local advanced token fallback until the backend credentials are configured.
 
+Optional Gemini assistance is also backend-only. Set `GEMINI_API_KEY` and, optionally, `GEMINI_MODEL` in the local `.env` or deployment secret settings. The **AI Business Assistant → Ask Gemini** action sends only the prompt entered by the user; the Gemini key is never sent to the browser or committed to the repository. Revoke any key that has been pasted into chat, source control, logs, or other exposed locations and replace it with a newly generated secret.
+
 ## Run locally on Windows
 
 1. Install the app dependencies with `npm install`.

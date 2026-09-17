@@ -124,6 +124,51 @@ app.use('/api', (_, res, next) => {
   next();
 });
 
+app.get('/api/gemini/config', (_, res) => {
+  res.json({
+    configured: Boolean(process.env.GEMINI_API_KEY),
+    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+  });
+});
+
+app.post('/api/gemini/generate', async (req, res) => {
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'Gemini is not configured. Set GEMINI_API_KEY on the server.' });
+  }
+  const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+  if (!prompt) return res.status(400).json({ error: 'A prompt is required.' });
+  if (prompt.length > 20000) return res.status(413).json({ error: 'Prompt is too long.' });
+
+  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+        }),
+      },
+    );
+    const payload = await response.json();
+    if (!response.ok) {
+      const message = payload?.error?.message || 'Gemini request failed.';
+      return res.status(response.status >= 400 && response.status < 500 ? response.status : 502).json({ error: message });
+    }
+    const text = (payload.candidates || [])
+      .flatMap(candidate => candidate.content?.parts || [])
+      .map(part => part.text || '')
+      .join('')
+      .trim();
+    if (!text) return res.status(502).json({ error: 'Gemini returned no text.' });
+    return res.json({ text, model });
+  } catch (error) {
+    return res.status(502).json({ error: `Gemini request failed: ${error.message}` });
+  }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
