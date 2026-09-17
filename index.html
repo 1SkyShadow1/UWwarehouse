@@ -166,6 +166,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .quote-reference{display:grid;grid-template-columns:290px 1fr;border-top:1px solid #222;border-bottom:1px solid #222;min-height:30px;font-size:13px}.quote-reference b,.quote-reference span{padding:6px 8px}.quote-reference b{border-right:1px solid #222}.quote-introduction{border-bottom:1px solid #222;padding-bottom:10px;font-size:13px;line-height:1.55;white-space:pre-line}
 .doc-viewer{max-height:68vh;overflow:auto;background:var(--bg);border:1px solid var(--border);padding:10px}.doc-viewer img{display:block;max-width:none;transform-origin:top left}.doc-viewer iframe{display:block;min-width:100%;min-height:65vh}.viewer-tools{display:flex;gap:6px;align-items:center;margin:8px 0}.viewer-tools .btn{min-width:42px}.viewer-scale{font-size:12px;color:var(--muted);min-width:54px;text-align:center}
 .review-needed{background:rgba(220,70,70,.12)!important;color:#ffb0a8!important}.review-approved{background:rgba(50,180,100,.1)!important;color:#9be7b0!important}
+.quote-top-header{display:grid;grid-template-columns:minmax(0,2fr) minmax(220px,1fr);align-items:center;gap:28px;margin-bottom:8px}
+.quote-top-header .template-logo{width:100%;height:116px;margin:0;object-fit:contain;object-position:left center}
+.quote-top-header .company-details{margin:0;text-align:right;font-size:13px;line-height:1.55}
+.quote-doc-heading{display:block;text-align:center;border-bottom:1px solid #222;padding:8px 0 10px;margin-bottom:14px}
+.quote-doc-heading h1{font-size:25px;text-decoration:underline;margin:0 0 4px;letter-spacing:1px;color:#111}
+.quote-doc-heading .doc-number{font-size:10px;line-height:1.45}
+@media(max-width:680px){.quote-top-header{grid-template-columns:1fr;gap:8px}.quote-top-header .template-logo{height:88px}.quote-top-header .company-details{text-align:left}}
 @media print{.template-doc{box-shadow:none;max-width:none;padding:12mm 14mm}.template-doc .template-logo{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .g-item{background:var(--bg2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
@@ -911,9 +918,9 @@ function viewInvoice(id){
 }
 function viewQuote(id){
   const q=DB.quotes.find(x=>x.id===id),m=DB.meta,t=q.items.reduce((s,i)=>s+i.qty*i.price,0);
-  modal(`<h3>Quotation ${q.id}</h3>${viewerControls('quote-preview')}<div class="doc-viewer"><div class="template-doc" id="quote-preview" data-scale="1"><img class="template-logo" src="uw-official-logo.png" alt="Upholstery Warehouse">
-    <div class="doc-heading"><h1>QUOTATION</h1><div class="doc-number"><b>Quote number:</b> ${q.id}<br><b>Date generated:</b> ${q.date}<br><b>Expiry date:</b> ${q.expiry||''}</div></div>
-    <div class="company-details"><b>Upholstery Warehouse (Pty) Ltd</b><br>077 412 8367<br>4, 5th Avenue, Edenvale, Johannesburg.<br>info@upholsterywarehouse.co.za</div>
+  modal(`<h3>Quotation ${q.id}</h3>${viewerControls('quote-preview')}<div class="doc-viewer"><div class="template-doc" id="quote-preview" data-scale="1">
+    <div class="quote-top-header"><img class="template-logo" src="uw-official-logo.png" alt="Upholstery Warehouse"><div class="company-details"><b>Upholstery Warehouse (Pty) Ltd</b><br>077 412 8367<br>4, 5th Avenue, Edenvale,<br>Johannesburg.<br>info@upholsterywarehouse.co.za</div></div>
+    <div class="quote-doc-heading"><h1>QUOTATION</h1><div class="doc-number"><b>Quote number:</b> ${q.id} &nbsp; <b>Date generated:</b> ${q.date} &nbsp; <b>Expiry date:</b> ${q.expiry||''}</div></div>
     <div class="field-grid"><div class="field"><b>Client account name:</b> ${q.customer||''}</div><div class="field"><b>Prepared by:</b> ${q.preparedBy||'Brian Raymond'}</div><div class="field"><b>Client contact name:</b> ${q.contact||''}</div><div class="field"><b>Contact mobile:</b> ${q.phone||''}</div><div class="field"><b>Client telephone:</b> ${q.phone||''}</div><div class="field"><b>Contact email:</b> ${q.email||'info@upholsterywarehouse.co.za'}</div><div class="field"><b>Client email:</b> ${q.email||''}</div></div>
     <div class="quote-reference"><b>Project Reference</b><span>${q.projectReference||''}</span><b>Work type</b><span>${q.workType||'Reupholster'}</span><b>Material / fabric</b><span>${q.material||'—'}</span><b>Colour</b><span>${q.colour||'—'}</span></div>
     <div class="template-section">Introduction, notes and specifications</div><div class="quote-introduction">${q.introduction||q.notes||''}</div><div class="template-section">Quote line items</div>
