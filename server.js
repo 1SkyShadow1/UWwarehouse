@@ -55,6 +55,7 @@ const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').t
 const supabaseWorkspace = String(process.env.SUPABASE_WORKSPACE || 'default').trim() || 'default';
 const supabaseStateTable = String(process.env.SUPABASE_STATE_TABLE || 'uw_accounting_data').trim() || 'uw_accounting_data';
 const supabaseDocumentBucket = String(process.env.SUPABASE_DOCUMENT_BUCKET || 'uw-documents').trim() || 'uw-documents';
+const remoteStorageCache = { expiresAt: 0, files: [] };
 const stateVersion = 1;
 const maxDocumentBytes = Number(process.env.UW_MAX_DOCUMENT_BYTES || 25 * 1024 * 1024);
 const allowedDocumentTypes = new Set((process.env.UW_DOCUMENT_MIME_TYPES || [
@@ -176,7 +177,8 @@ const restoreSnapshotFromSupabase = async () => {
 };
 const syncDocumentToSupabase = async (id, file) => {
   if (!supabaseConfigured()) return '';
-  const storagePath = `${supabaseWorkspace}/${id}.bin`;
+  const safeName = path.basename(file.originalname || 'document').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 140) || 'document';
+  const storagePath = `UW/${id}-${safeName}`;
   const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(supabaseDocumentBucket)}/${storagePath}`, {
     method: 'POST',
     headers: { ...supabaseHeaders(), 'Content-Type': file.mimetype, 'x-upsert': 'true' },
@@ -185,6 +187,45 @@ const syncDocumentToSupabase = async (id, file) => {
   });
   if (!response.ok) throw new Error(`Supabase document upload failed (${response.status}).`);
   return storagePath;
+};
+const listSupabaseStorage = async () => {
+  if (!supabaseConfigured()) return [];
+  if (remoteStorageCache.expiresAt > Date.now()) return remoteStorageCache.files;
+  const files = [];
+  const folderNames = ['UW', 'UW INVOICES-RECEIPTS & EXPENSES', 'UW INVOICES-RECEIPTS & EXPENSES 2 B', 'UW INVOICES-RECIEPTS & EXPENSES', 'UW INVOICES-RECIEPTS & EXPENSES 2 B'];
+  const folders = [...new Set(folderNames.flatMap(folder => [folder, `UW/${folder}`]))];
+  const walk = async prefix => {
+    let offset = 0;
+    while (offset < 10000) {
+      const response = await fetch(`${supabaseUrl}/storage/v1/object/list/${encodeURIComponent(supabaseDocumentBucket)}`, {
+        method: 'POST',
+        headers: { ...supabaseHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix, limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok) return;
+      const entries = await response.json();
+      if (!Array.isArray(entries) || !entries.length) return;
+      for (const entry of entries) {
+        const entryPath = `${prefix.replace(/\/+$/, '')}/${entry.name}`.replace(/^\/+/, '');
+        if (entry.id) {
+          files.push({
+            storagePath: entryPath,
+            name: entry.name,
+            mimeType: entry.metadata?.mimetype || entry.metadata?.mimeType || mimeForFile(entry.name),
+          });
+        } else {
+          await walk(`${entryPath}/`);
+        }
+      }
+      if (entries.length < 1000) return;
+      offset += entries.length;
+    }
+  };
+  for (const folder of folders) await walk(`${folder}/`);
+  remoteStorageCache.files = files;
+  remoteStorageCache.expiresAt = Date.now() + 60 * 1000;
+  return files;
 };
 const loadDocumentFromSupabase = async storagePath => {
   if (!supabaseConfigured() || !storagePath) return null;
@@ -238,9 +279,17 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
     if (!response.ok) return null;
     [metadata] = await response.json();
   }
-  if (!metadata?.storage_path) return null;
-  const buffer = await loadDocumentFromSupabase(metadata.storage_path);
-  return buffer ? { buffer, mimeType: metadata.mime_type || 'application/octet-stream', name: metadata.name || name } : null;
+  if (metadata?.storage_path) {
+    const buffer = await loadDocumentFromSupabase(metadata.storage_path);
+    if (buffer) return { buffer, mimeType: metadata.mime_type || 'application/octet-stream', name: metadata.name || name };
+  }
+  const remoteFiles = await listSupabaseStorage();
+  const requestedStem = name.toLowerCase().replace(/\.[^.]+$/, '');
+  const remote = remoteFiles.find(file => file.name.toLowerCase() === name.toLowerCase())
+    || remoteFiles.find(file => file.name.toLowerCase().replace(/\.[^.]+$/, '') === requestedStem);
+  if (!remote) return null;
+  const remoteBuffer = await loadDocumentFromSupabase(remote.storagePath);
+  return remoteBuffer ? { buffer: remoteBuffer, mimeType: remote.mimeType, name: remote.name } : null;
 };
 const apiKeyIsValid = (req) => {
   const expected = String(process.env.UW_API_KEY || '').trim();
