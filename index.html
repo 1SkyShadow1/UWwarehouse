@@ -1345,26 +1345,29 @@ function sourceUrl(path,name=''){
   const raw=String(path||'').trim();
   if(!raw){
     const sourceName=String(name||'').trim();
-    return sourceName?`./__source/${encodeURIComponent(sourceName)}`:'';
+    return sourceName?`/api/source-file?name=${encodeURIComponent(sourceName)}`:'';
   }
   if(raw.startsWith('data:')||raw.startsWith('blob:')||raw.startsWith('http://')||raw.startsWith('https://')||raw.startsWith('/api/')||raw.startsWith('./')||raw.startsWith('/__source/'))return raw;
   if(!/\.[a-z0-9]{2,5}$/i.test(raw)){
     const sourceName=String(name||'').trim();
-    return sourceName?`./__source/${encodeURIComponent(sourceName)}`:'';
+    return sourceName?`/api/source-file?name=${encodeURIComponent(sourceName)}`:'';
   }
-  const p=raw.replace(/^[A-Za-z]:[\\/]+/i,'').replace(/^UW[\\/]+/i,'').replace(/^[\\/]+/,'').replace(/\\/g,'/').split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  return p?`./__source/${p}`:'';
+  return `/api/source-file?path=${encodeURIComponent(raw)}&name=${encodeURIComponent(String(name||raw).split(/[\\/]/).pop())}`;
 }
 function documentUrl(document){
   const direct=String(document?.url||document?.data||'').trim();
   return direct||sourceUrl(document?.path,document?.name);
+}
+function sourceLabel(document){
+  const url=String(document?.url||'').trim();
+  return url.startsWith('/api/documents/')?'Managed document storage':'Managed source resolver';
 }
 function viewerControls(target){return `<div class="viewer-tools"><button class="btn sm" onclick="viewerZoom('${target}',-0.1)">−</button><span id="${target}-scale" class="viewer-scale">100%</span><button class="btn sm" onclick="viewerZoom('${target}',0.1)">+</button><button class="btn sm" onclick="viewerZoom('${target}',0,true)">Reset</button><span style="font-size:11px;color:var(--muted)">Scroll to pan</span></div>`}
 function viewerZoom(target,delta,reset){const el=document.getElementById(target);if(!el)return;const scale=reset?1:Math.max(.4,Math.min(3,(Number(el.dataset.scale)||1)+delta));el.dataset.scale=scale;el.style.transform=`scale(${scale})`;const label=document.getElementById(target+'-scale');if(label)label.textContent=Math.round(scale*100)+'%';}
 function viewDocument(d){
   const url=documentUrl(d),name=String(d.name||d.path||'Source document'),ext=name.split('.').pop().toLowerCase(),safe=String(d.path||'Source unavailable').replace(/</g,'&lt;'),title=name.replace(/"/g,'&quot;');
   let body;
-  if(!url) body=`<div class="empty">A viewable source file is not available for this record.</div><div class="kv"><span>Registered source</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">The record is preserved, but the original file must be uploaded or bundled before it can be displayed.</p>`;
+  if(!url) body=`<div class="empty">A viewable source file is not available for this record.</div><div class="kv"><span>Source status</span><b>Not uploaded to managed storage</b></div><p style="color:var(--muted);font-size:12px">This record is preserved, but its original file must be uploaded to the managed document store before it can be displayed.</p>`;
   else if(['png','jpg','jpeg','gif','webp','avif'].includes(ext)) body=viewerControls('document-image')+`<div class="doc-viewer"><img id="document-image" data-scale="1" src="${url}" alt="${title}" style="background:#111" onerror="this.hidden=true;document.getElementById('document-view-error').hidden=false"></div><p id="document-view-error" hidden class="empty">This image could not be loaded from its managed source.</p>`;
   else if(ext==='pdf') body=viewerControls('document-pdf')+`<div class="doc-viewer"><iframe id="document-pdf" src="${url}" title="${title}"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;
   else body=`<div class="kv"><span>Source document</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">This file type opens in a new browser tab or downloads from its managed source.</p><a class="btn gold" href="${url}" target="_blank" rel="noopener">Open / Download document</a>`;
@@ -1417,7 +1420,7 @@ function vScanned(c){
     const approved=d.reviewStatus==='Approved',reviewed=d.reviewStatus==='FNB reviewed',candidate=fnbReviewCandidate(d),payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');
     const action=approved?'':reviewed?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review with FNB</button>`;
     const merchant=d.merchant||d.store||d.business||d.vendor||'—',amount=d.amount===undefined||d.amount===null?'—':R(d.amount);
-    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${d.category}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${d.aiReview?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview.confidence||0)*100)}%</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||d.path}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button> <button class="btn sm gold" onclick='aiReviewDocument(${payload})'>AI review</button>${action}</td></tr>`;
+    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${d.category}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${d.aiReview?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview.confidence||0)*100)}%</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button> <button class="btn sm gold" onclick='aiReviewDocument(${payload})'>AI review</button>${action}</td></tr>`;
   }).join('');
   c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan'],['Needs review','FNB reviewed','Approved'])}<label class="btn gold">＋ Upload scans<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">FNB review links a scan to a statement period only. Approval requires explicit confirmation and does not invent an amount or transaction.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
 }

@@ -212,6 +212,36 @@ const recordDocumentInSupabase = async metadata => {
   });
   if (!response.ok) throw new Error(`Supabase document metadata sync failed (${response.status}).`);
 };
+const loadSourceFromSupabase = async (requestedPath, requestedName) => {
+  if (!supabaseConfigured()) return null;
+  const name = path.basename(String(requestedName || requestedPath || '').replace(/\\/g, '/')).trim();
+  if (!name) return null;
+  const baseParams = {
+    workspace_id: `eq.${supabaseWorkspace}`,
+    select: 'name,mime_type,storage_path,size_bytes',
+    limit: '1',
+  };
+  const exactParams = new URLSearchParams({ ...baseParams, name: `eq.${name}` });
+  let response = await fetch(`${supabaseUrl}/rest/v1/uw_documents?${exactParams.toString()}`, {
+    headers: supabaseHeaders(),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) return null;
+  let [metadata] = await response.json();
+  if (!metadata) {
+    const stem = name.replace(/\.[^.]+$/, '');
+    const stemParams = new URLSearchParams({ ...baseParams, name: `ilike.${stem}%` });
+    response = await fetch(`${supabaseUrl}/rest/v1/uw_documents?${stemParams.toString()}`, {
+      headers: supabaseHeaders(),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) return null;
+    [metadata] = await response.json();
+  }
+  if (!metadata?.storage_path) return null;
+  const buffer = await loadDocumentFromSupabase(metadata.storage_path);
+  return buffer ? { buffer, mimeType: metadata.mime_type || 'application/octet-stream', name: metadata.name || name } : null;
+};
 const apiKeyIsValid = (req) => {
   const expected = String(process.env.UW_API_KEY || '').trim();
   if (!expected) return true;
@@ -1177,8 +1207,16 @@ app.post('/api/google-drive/restore', async (req, res) => {
 
 app.get('/api/source-file', requireApiKey, (req, res) => {
   const file = findSourceFile(req.query.path, req.query.name);
-  if (!file) return res.status(404).json({ error: 'Source file is not available on this machine.' });
-  return res.sendFile(file);
+  if (file) return res.sendFile(file);
+  loadSourceFromSupabase(req.query.path, req.query.name).then(remote => {
+    if (!remote) return res.status(404).json({ error: 'Document is not available in local sources or managed cloud storage.' });
+    res.type(remote.mimeType);
+    res.set('Content-Disposition', `inline; filename="${String(remote.name).replace(/["\r\n]/g, '_')}"`);
+    return res.send(remote.buffer);
+  }).catch(error => {
+    console.error('Remote source lookup failed:', error.message);
+    return res.status(502).json({ error: 'Managed document storage could not be reached.' });
+  });
 });
 
 app.get('/__source/*', (req, res) => {
