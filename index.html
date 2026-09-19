@@ -1377,6 +1377,36 @@ function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.in
 function fnbReviewCandidate(d){const date=d.scanDate||scannedDate(d);if(!date)return null;return (DB.fnbStatements||[]).find(s=>String(s.statementDate||'')>=date)||null}
 function reviewAgainstFnb(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path),statement=found&&fnbReviewCandidate(found);if(!found||!statement){toast('No matching FNB statement period was found; the scan remains unapproved');return}found.fnbReview={statementId:statement.id,statementName:statement.name,reviewedAt:new Date().toISOString(),status:'Reviewed against FNB statement period'};found.reviewStatus='FNB reviewed';found.includedInTotals=false;save();render();toast('Matched to '+statement.name+' — confirm the transaction before approving')}
 function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
+async function aiReviewDocument(doc){
+  const resultHost=`ai-review-${String(doc.id||Date.now()).replace(/[^a-z0-9]/gi,'')}`;
+  modal(`<h3>Gemini document review</h3><p style="color:var(--muted)">Reading <b>${escapeHtml(doc.name||'document')}</b> and extracting only visible facts. Nothing will be saved until you confirm.</p><pre id="${resultHost}" class="ai-result">Working…</pre><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+  try{
+    const response=await fetch('/api/ai/review-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:doc.id,name:doc.name,path:doc.path})});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(result.error||'Gemini review failed');
+    const host=document.getElementById(resultHost);
+    if(!host)return;
+    host.textContent=`Date: ${result.documentDate||'Not found'}\nStore / business: ${result.merchant||'Not found'}\nAmount paid: ${result.amountPaid===null||result.amountPaid===undefined?'Not found':`${result.currency||'R'} ${Number(result.amountPaid).toFixed(2)}`}\nType: ${result.documentType||'other'}\nConfidence: ${Math.round((result.confidence||0)*100)}%\nNotes: ${result.notes||'None'}`;
+    const safeId=String(doc.id||'').replace(/'/g,'&#39;');
+    host.insertAdjacentHTML('afterend',`<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Discard</button><button class="btn gold" onclick="applyAiReview('${safeId}',${JSON.stringify(result).replace(/</g,'\\u003c')})">Save extracted fields</button></div>`);
+  }catch(error){
+    const host=document.getElementById(resultHost);
+    if(host)host.textContent=error.message;
+    toast(error.message);
+  }
+}
+function applyAiReview(id,result){
+  const found=(DB.scannedDocuments||[]).find(x=>String(x.id)===String(id));
+  if(!found){toast('Scanned document record was not found');return}
+  found.aiReview={provider:result.provider,model:result.model,reviewedAt:new Date().toISOString(),confidence:result.confidence||0,notes:result.notes||''};
+  if(result.documentDate)found.scanDate=result.documentDate;
+  if(result.merchant)found.merchant=result.merchant;
+  if(result.amountPaid!==null&&result.amountPaid!==undefined)found.amount=Number(result.amountPaid);
+  if(result.currency)found.currency=result.currency;
+  if(result.documentType)found.documentType=result.documentType;
+  found.reviewStatus='AI reviewed';
+  save();closeModal();render();toast('Gemini extraction saved for '+found.name);
+}
 function uploadScannedDocuments(e){[...e.target.files].forEach(async file=>{try{const managed=await uploadManagedDocument(file);const hash='managed-'+managed.id;DB.scannedDocuments.push({id:managed.id,name:managed.name,path:managed.url,data:null,url:managed.url,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false});save();render();}catch(error){const r=new FileReader();r.onload=()=>{DB.scannedDocuments.push({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash:'local-'+Date.now()+'-'+file.size,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false});save();render();};r.readAsDataURL(file);toast(error.message+' Using offline storage.');}});e.target.value='';}
 function uploadSourceDocuments(e){[...e.target.files].forEach(async file=>{try{const managed=await uploadManagedDocument(file);DB.documents.unshift({id:managed.id,name:managed.name,path:managed.url,url:managed.url,data:null,extension:'.'+file.name.split('.').pop().toLowerCase(),bytes:file.size,category:'Uploaded source document',reviewStatus:'Needs review'});save();render();}catch(error){const r=new FileReader();r.onload=()=>{DB.documents.unshift({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),bytes:file.size,category:'Uploaded source document',reviewStatus:'Needs review'});save();render();};r.readAsDataURL(file);toast(error.message+' Using offline storage.');}});e.target.value='';}
 function vScanned(c){
@@ -1386,7 +1416,8 @@ function vScanned(c){
   const body=rows.map(d=>{
     const approved=d.reviewStatus==='Approved',reviewed=d.reviewStatus==='FNB reviewed',candidate=fnbReviewCandidate(d),payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');
     const action=approved?'':reviewed?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review with FNB</button>`;
-    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${d.category}</td><td>—</td><td>—</td><td>${d.scanDate}</td><td><b>${d.reviewStatus}</b></td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||d.path}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${action}</td></tr>`;
+    const merchant=d.merchant||d.store||d.business||d.vendor||'—',amount=d.amount===undefined||d.amount===null?'—':R(d.amount);
+    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${d.category}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${d.aiReview?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview.confidence||0)*100)}%</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||d.path}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button> <button class="btn sm gold" onclick='aiReviewDocument(${payload})'>AI review</button>${action}</td></tr>`;
   }).join('');
   c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan'],['Needs review','FNB reviewed','Approved'])}<label class="btn gold">＋ Upload scans<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">FNB review links a scan to a statement period only. Approval requires explicit confirmation and does not invent an amount or transaction.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
 }

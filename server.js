@@ -491,6 +491,37 @@ app.get('/api/documents/:id', requireApiKey, async (req, res) => {
   return res.send(remote);
 });
 
+app.post('/api/ai/review-document', async (req, res) => {
+  if (!allowAiRequest(req)) return res.status(429).json({ error: 'AI request limit reached. Please try again later.' });
+  const id = String(req.body?.id || '').trim();
+  const name = String(req.body?.name || '').trim();
+  const requestedPath = String(req.body?.path || '').trim();
+  let filePath = '';
+  let fileName = name || path.basename(requestedPath);
+  if (safeDocumentId(id)) {
+    const metadata = (ensureStorage().data.documents || []).find(doc => doc.id === id);
+    if (metadata) {
+      filePath = safeDocumentPath(id);
+      fileName = metadata.name || fileName;
+    }
+  }
+  if (!filePath || !fs.existsSync(filePath)) filePath = findSourceFile(requestedPath, fileName);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'The source document is not available to Gemini on this machine.' });
+  const stat = fs.statSync(filePath);
+  if (!stat.isFile()) return res.status(400).json({ error: 'The source path is not a file.' });
+  if (stat.size > 15 * 1024 * 1024) return res.status(413).json({ error: 'This document is too large for AI review. Open it manually or upload a smaller scan.' });
+  const mimeType = mimeForFile(filePath);
+  if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'].includes(mimeType)) {
+    return res.status(415).json({ error: 'Gemini review supports PDF and image receipts/scans.' });
+  }
+  try {
+    const result = await callGeminiDocumentReview({ buffer: fs.readFileSync(filePath), mimeType, name: fileName || path.basename(filePath) });
+    return res.json({ ...result, sourceName: path.basename(filePath) });
+  } catch (error) {
+    return res.status(error.statusCode || 502).json({ error: error.message || 'Gemini document review failed.' });
+  }
+});
+
 const getAiProvider = () => {
   const configuredProvider = String(process.env.AI_PROVIDER || '').trim().toLowerCase();
   if (configuredProvider) return configuredProvider;
@@ -550,6 +581,17 @@ const extractAiText = (payload, provider) => {
     .trim();
 };
 
+const parseJsonObject = text => {
+  const cleaned = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (_) {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Gemini returned an invalid extraction response.');
+    return JSON.parse(match[0]);
+  }
+};
+
 const callGeminiChat = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -601,6 +643,86 @@ const callGeminiChat = async (prompt) => {
   }
 
   throw lastError || new Error('Gemini request failed.');
+};
+
+const mimeForFile = file => {
+  const extension = path.extname(file).toLowerCase();
+  return ({
+    '.pdf': 'application/pdf',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.avif': 'image/avif',
+    '.gif': 'image/gif',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })[extension] || 'application/octet-stream';
+};
+
+const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('Gemini is not configured. Set GEMINI_API_KEY on the server.');
+  const prompt = [
+    'You are reviewing one business receipt or invoice for UW Upholstery Warehouse.',
+    'Extract only what is visibly supported by the document. Never guess or invent missing values.',
+    'Return exactly one JSON object with these keys:',
+    '{"documentDate":"YYYY-MM-DD or null","merchant":"string or null","amountPaid":number or null,"currency":"string or null","documentType":"receipt|invoice|other","invoiceNumber":"string or null","confidence":number from 0 to 1,"notes":"short string"}',
+    `Filename: ${name}`,
+    'amountPaid must be the total amount paid/charged shown on the document, not a line-item amount. If the document is unreadable, use null and explain in notes.',
+  ].join('\n');
+  const modelAttempts = getGeminiModelAttempts(getAiModel('gemini'));
+  let lastError;
+  for (const model of modelAttempts) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(60000),
+          body: JSON.stringify({
+            contents: [{
+              role: 'user',
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: mimeType, data: buffer.toString('base64') } },
+              ],
+            }],
+            generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(payload?.error?.message || 'Gemini document review failed.');
+        if (/not found|no longer available|404|model/i.test(error.message) && model !== modelAttempts[modelAttempts.length - 1]) {
+          lastError = error;
+          continue;
+        }
+        error.statusCode = response.status >= 400 && response.status < 500 ? response.status : 502;
+        throw error;
+      }
+      const text = extractAiText(payload, 'gemini');
+      const extraction = parseJsonObject(text);
+      return {
+        documentDate: /^\d{4}-\d{2}-\d{2}$/.test(String(extraction.documentDate || '')) ? extraction.documentDate : null,
+        merchant: extraction.merchant ? String(extraction.merchant).trim().slice(0, 200) : null,
+        amountPaid: Number.isFinite(Number(extraction.amountPaid)) ? Number(extraction.amountPaid) : null,
+        currency: extraction.currency ? String(extraction.currency).trim().slice(0, 12) : null,
+        documentType: ['receipt', 'invoice', 'other'].includes(extraction.documentType) ? extraction.documentType : 'other',
+        invoiceNumber: extraction.invoiceNumber ? String(extraction.invoiceNumber).trim().slice(0, 100) : null,
+        confidence: Math.max(0, Math.min(1, Number(extraction.confidence) || 0)),
+        notes: extraction.notes ? String(extraction.notes).trim().slice(0, 500) : '',
+        provider: 'gemini',
+        model,
+      };
+    } catch (error) {
+      lastError = error;
+      if (!/not found|no longer available|404|model/i.test(String(error.message || '')) || model === modelAttempts[modelAttempts.length - 1]) throw error;
+    }
+  }
+  throw lastError || new Error('Gemini document review failed.');
 };
 
 const callTypesafeChat = async (prompt) => {
