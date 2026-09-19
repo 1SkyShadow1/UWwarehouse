@@ -79,6 +79,8 @@ Historical records may contain old Windows paths such as `D:\UW\...`; those path
 
 The deployed resolver also indexes the existing `uw-documents/UW/`, `UW INVOICES-RECEIPTS & EXPENSES/`, `UW INVOICES-RECIEPTS & EXPENSES/`, and corresponding `... 2 B` folders directly from Supabase Storage. This supports files that were placed in the bucket before an application metadata row was created. New managed uploads are saved under `uw-documents/UW/<generated-id>-<filename>` and recorded in `uw_documents`, so future viewing uses the same durable bucket namespace.
 
+At startup, the browser requests `/api/documents/catalog`; the server recursively inventories the private bucket and associates matching filenames with the imported document register and scanned records. This keeps the local register and deployed viewer on the same Supabase-backed source of truth. If the catalog is empty in production, verify that `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_DOCUMENT_BUCKET=uw-documents` are set on Render and that the service-role can list/read the private bucket.
+
 The browser retains a local cache for offline use. Use **Export Backup** regularly and keep the JSON file somewhere safe; **Restore Backup** imports the complete database. Server backups should be made from `/api/state/backup` or the configured data directory.
 
 The **Income & Receipts** page is the payment register. Issued receipts use `BBYYYY/MM/DD01` or `SSYYYY/MM/DD01` numbering and increment independently by prefix/date. Paid invoices are highlighted green, while outstanding invoices remain visible with their current balance. Each receipt can be opened and printed as a customer-facing proof of payment.

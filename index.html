@@ -362,6 +362,7 @@ let serverRevision = null;
 let serverSyncTimer;
 let serverSyncInFlight = false;
 let serverSyncAvailable = false;
+let remoteDocumentCatalog=[];
 async function initializeServerSync(){
   try{
     const response=await fetch('/api/state',{headers:{Accept:'application/json'}});
@@ -376,10 +377,32 @@ async function initializeServerSync(){
     }else{
       queueServerStateSave();
     }
+    await synchronizeRemoteDocuments();
   }catch(error){
     serverSyncAvailable=false;
     console.warn('Server persistence unavailable; continuing offline.',error);
   }
+}
+async function synchronizeRemoteDocuments(){
+  try{
+    const response=await fetch('/api/documents/catalog',{headers:{Accept:'application/json'}});
+    if(!response.ok)return;
+    const catalog=await response.json();
+    remoteDocumentCatalog=Array.isArray(catalog.files)?catalog.files:[];
+    const byName=new Map(remoteDocumentCatalog.map(file=>[String(file.name||'').toLowerCase(),file]));
+    const records=[...(DB.documents||[]),...(DB.scannedDocuments||[]),...(DB.fnbStatements||[])];
+    let changed=false;
+    records.forEach(record=>{
+      const name=String(record.name||record.fileName||'').split(/[\\/]/).pop().toLowerCase();
+      const remote=byName.get(name);
+      if(remote&&record.storagePath!==remote.storagePath){
+        record.storagePath=remote.storagePath;
+        record.url=remote.url;
+        changed=true;
+      }
+    });
+    if(changed){localStorage.setItem(DB_KEY,JSON.stringify(DB));queueServerStateSave();}
+  }catch(error){console.warn('Remote document catalog unavailable; source resolver remains active.',error);}
 }
 function queueServerStateSave(){
   if(!serverSyncAvailable||serverSyncInFlight)return;
@@ -1356,7 +1379,7 @@ function sourceUrl(path,name=''){
 }
 function documentUrl(document){
   const direct=String(document?.url||document?.data||'').trim();
-  return direct||sourceUrl(document?.path,document?.name);
+  return direct||((document?.storagePath&&document?.name)?`/api/source-file?path=${encodeURIComponent(document.storagePath)}&name=${encodeURIComponent(document.name)}`:sourceUrl(document?.path,document?.name));
 }
 function sourceLabel(document){
   const url=String(document?.url||'').trim();

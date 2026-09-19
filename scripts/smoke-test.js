@@ -96,11 +96,14 @@ const run = async () => {
   expect(upload.status === 201 && uploadJson.id && uploadJson.url, `Managed document upload failed (${upload.status}): ${uploadJson.error || 'unknown error'}.`);
   const document = await fetch(`${base}${uploadJson.url}`);
   expect(document.status === 200 && (await document.text()) === 'UW smoke document', 'Managed document serving failed.');
+  const catalog = await fetch(`${base}/api/documents/catalog`);
+  const catalogJson = await catalog.json();
+  expect(catalog.status === 200 && typeof catalogJson.configured === 'boolean' && Array.isArray(catalogJson.files), 'Document catalog response is malformed.');
 
   console.log(JSON.stringify({
     ok: true,
     port,
-    checks: ['health', 'security headers', 'readiness', 'AI config', 'AI validation', 'Drive status', 'Supabase status', 'state persistence', 'revision conflicts', 'document upload/serve'],
+    checks: ['health', 'security headers', 'readiness', 'AI config', 'AI validation', 'Drive status', 'Supabase status', 'state persistence', 'revision conflicts', 'document upload/serve', 'document catalog'],
   }, null, 2));
 };
 

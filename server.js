@@ -186,14 +186,14 @@ const syncDocumentToSupabase = async (id, file) => {
     signal: AbortSignal.timeout(30000),
   });
   if (!response.ok) throw new Error(`Supabase document upload failed (${response.status}).`);
+  remoteStorageCache.expiresAt = 0;
   return storagePath;
 };
 const listSupabaseStorage = async () => {
   if (!supabaseConfigured()) return [];
   if (remoteStorageCache.expiresAt > Date.now()) return remoteStorageCache.files;
   const files = [];
-  const folderNames = ['UW', 'UW INVOICES-RECEIPTS & EXPENSES', 'UW INVOICES-RECEIPTS & EXPENSES 2 B', 'UW INVOICES-RECIEPTS & EXPENSES', 'UW INVOICES-RECIEPTS & EXPENSES 2 B'];
-  const folders = [...new Set(folderNames.flatMap(folder => [folder, `UW/${folder}`]))];
+  const folders = [''];
   const walk = async prefix => {
     let offset = 0;
     while (offset < 10000) {
@@ -203,7 +203,10 @@ const listSupabaseStorage = async () => {
         body: JSON.stringify({ prefix, limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
         signal: AbortSignal.timeout(30000),
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        console.warn(`Supabase Storage inventory failed for "${prefix}" (${response.status}).`);
+        return;
+      }
       const entries = await response.json();
       if (!Array.isArray(entries) || !entries.length) return;
       for (const entry of entries) {
@@ -267,8 +270,7 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
     headers: supabaseHeaders(),
     signal: AbortSignal.timeout(15000),
   });
-  if (!response.ok) return null;
-  let [metadata] = await response.json();
+  let [metadata] = response.ok ? await response.json() : [];
   if (!metadata) {
     const stem = name.replace(/\.[^.]+$/, '');
     const stemParams = new URLSearchParams({ ...baseParams, name: `ilike.${stem}%` });
@@ -276,8 +278,7 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
       headers: supabaseHeaders(),
       signal: AbortSignal.timeout(15000),
     });
-    if (!response.ok) return null;
-    [metadata] = await response.json();
+    [metadata] = response.ok ? await response.json() : [];
   }
   if (metadata?.storage_path) {
     const buffer = await loadDocumentFromSupabase(metadata.storage_path);
@@ -285,8 +286,18 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
   }
   const remoteFiles = await listSupabaseStorage();
   const requestedStem = name.toLowerCase().replace(/\.[^.]+$/, '');
-  const remote = remoteFiles.find(file => file.name.toLowerCase() === name.toLowerCase())
-    || remoteFiles.find(file => file.name.toLowerCase().replace(/\.[^.]+$/, '') === requestedStem);
+  const requestedLower = String(requestedPath || '').toLowerCase().replace(/\\/g, '/');
+  const pathScore = file => {
+    const remoteLower = file.storagePath.toLowerCase();
+    let score = 0;
+    if (requestedLower.includes('invoices-receipts') && remoteLower.includes('invoices-receipts')) score += 4;
+    if (requestedLower.includes('invoices-reciepts') && remoteLower.includes('invoices-reciepts')) score += 4;
+    if (requestedLower.includes('2 b') && remoteLower.includes('2 b')) score += 2;
+    return score;
+  };
+  const exactRemote = remoteFiles.filter(file => file.name.toLowerCase() === name.toLowerCase()).sort((a, b) => pathScore(b) - pathScore(a))[0];
+  const stemRemote = remoteFiles.filter(file => file.name.toLowerCase().replace(/\.[^.]+$/, '') === requestedStem).sort((a, b) => pathScore(b) - pathScore(a))[0];
+  const remote = exactRemote || stemRemote;
   if (!remote) return null;
   const remoteBuffer = await loadDocumentFromSupabase(remote.storagePath);
   return remoteBuffer ? { buffer: remoteBuffer, mimeType: remote.mimeType, name: remote.name } : null;
@@ -576,6 +587,23 @@ app.post('/api/documents', requireApiKey, (req, res) => {
 
 app.get('/api/documents', requireApiKey, (req, res) => {
   res.json((ensureStorage().data.documents || []).map(doc => ({ ...doc, url: `/api/documents/${doc.id}` })));
+});
+
+app.get('/api/documents/catalog', requireApiKey, async (req, res) => {
+  try {
+    const local = ensureStorage().data.documents || [];
+    const remote = await listSupabaseStorage();
+    return res.json({
+      configured: supabaseConfigured(),
+      bucket: supabaseDocumentBucket,
+      files: remote.map(file => ({ ...file, url: `/api/source-file?name=${encodeURIComponent(file.name)}` })),
+      localCount: local.length,
+      remoteCount: remote.length,
+    });
+  } catch (error) {
+    console.error('Document catalog sync failed:', error.message);
+    return res.status(502).json({ error: 'Document storage catalog could not be loaded.' });
+  }
 });
 
 app.get('/api/documents/:id', requireApiKey, async (req, res) => {
