@@ -275,6 +275,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <div id="modal-root"></div>
 
 <script src="imported-data.js"></script>
+<script src="income-2026.js"></script>
 <script src="operations-data.js"></script>
 <script src="scanned-data.js"></script>
 <script src="bank-statements.js"></script>
@@ -451,9 +452,10 @@ function normalizeQuoteFields(db){
 function load(){
   const imported=window.UW_IMPORTED||{};
   const operations=window.UW_OPERATIONS||{};
+  const income2026=window.UW_INCOME_2026||{};
   const scanned=window.UW_SCANNED||{};
   const fnb=window.UW_FNB_STATEMENTS||{};
-  const base={...JSON.parse(JSON.stringify(seed)),...imported,...operations,scannedDocuments:scanned.documents||[],fnbStatements:fnb.statements||[],meta:{...seed.meta,...(imported.meta||{}),...(operations.meta||{}),scannedVersion:scanned.version||'',fnbVersion:fnb.version||''}};
+  const base={...JSON.parse(JSON.stringify(seed)),...imported,...operations,...(income2026.invoices?.length?{invoices:[...(imported.invoices||[]),...income2026.invoices],receipts:[...(imported.receipts||[]),...(income2026.receipts||[])]}:{}),scannedDocuments:scanned.documents||[],fnbStatements:fnb.statements||[],meta:{...seed.meta,...(imported.meta||{}),...(operations.meta||{}),income2026Version:income2026.version||'',scannedVersion:scanned.version||'',fnbVersion:fnb.version||''}};
   base.meta.googleDrive={clientId:'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',backupFolderName:'UW Accounting Backups',autoBackup:false,...(base.meta.googleDrive||{})};
   try{
     const raw=localStorage.getItem(DB_KEY);
@@ -471,6 +473,14 @@ function load(){
         merged.priceBook=imported.priceBook||merged.priceBook;
         merged.fabrics=imported.fabrics||merged.fabrics;
         merged.meta.importVersion=(imported.meta||{}).importVersion;
+        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+      }
+      const incomeNeedsRefresh=merged.meta.income2026Version!==(income2026.version||'');
+      if(incomeNeedsRefresh&&income2026.invoices?.length){
+        const retained=merged.invoices.filter(x=>!String(x.sourceWorkbook||'').includes('INCOME 2026 O.xlsx')&&!String(x.id||'').startsWith('INC26'));
+        merged.invoices=[...retained,...income2026.invoices];
+        merged.receipts=[...(merged.receipts||[]).filter(x=>!String(x.sourceWorkbook||'').includes('INCOME 2026 O.xlsx')),...(income2026.receipts||[])];
+        merged.meta.income2026Version=income2026.version||'';
         localStorage.setItem(DB_KEY,JSON.stringify(merged));
       }
       const operationsNeedRefresh=merged.meta.sourceVersion!==(operations.meta||{}).sourceVersion
