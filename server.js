@@ -4,14 +4,36 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { google } = require('googleapis');
+const multer = require('multer');
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const rootDir = __dirname;
 const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
+const dataRoot = process.env.UW_DATA_DIR || path.join(rootDir, 'data');
+const stateFile = process.env.UW_DB_FILE || path.join(dataRoot, 'uw-state.json');
+const documentsRoot = process.env.UW_DOCUMENTS_DIR || path.join(dataRoot, 'documents');
+const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+const supabaseWorkspace = String(process.env.SUPABASE_WORKSPACE || 'default').trim() || 'default';
+const supabaseStateTable = String(process.env.SUPABASE_STATE_TABLE || 'uw_accounting_data').trim() || 'uw_accounting_data';
+const supabaseDocumentBucket = String(process.env.SUPABASE_DOCUMENT_BUCKET || 'uw-documents').trim() || 'uw-documents';
+const stateVersion = 1;
+const maxDocumentBytes = Number(process.env.UW_MAX_DOCUMENT_BYTES || 25 * 1024 * 1024);
+const allowedDocumentTypes = new Set((process.env.UW_DOCUMENT_MIME_TYPES || [
+  'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain',
+].join(',')).split(',').map(x => x.trim()).filter(Boolean));
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction) app.set('trust proxy', 1);
 const stateStore = new Map();
+const aiRateStore = new Map();
 const STATE_TTL_MS = 10 * 60 * 1000;
+const AI_RATE_WINDOW_MS = 15 * 60 * 1000;
+const AI_RATE_LIMIT = 20;
 const driveState = {
   tokens: null,
   connected: false,
@@ -23,6 +45,151 @@ const driveState = {
   lastSync: null,
 };
 
+let stateSnapshot;
+let stateWrite = Promise.resolve();
+const ensureStorage = () => {
+  fs.mkdirSync(dataRoot, { recursive: true });
+  fs.mkdirSync(documentsRoot, { recursive: true });
+  if (!stateSnapshot) {
+    if (fs.existsSync(stateFile)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        if (!parsed || parsed.version !== stateVersion || typeof parsed.revision !== 'number' || !parsed.data || typeof parsed.data !== 'object') throw new Error('Unsupported datastore format');
+        stateSnapshot = parsed;
+      } catch (error) {
+        const corrupt = `${stateFile}.corrupt-${Date.now()}`;
+        fs.renameSync(stateFile, corrupt);
+        console.warn(`Datastore was invalid and was moved to ${corrupt}: ${error.message}`);
+      }
+    }
+    stateSnapshot = stateSnapshot || { version: stateVersion, revision: 0, updatedAt: new Date().toISOString(), data: {} };
+    atomicWrite(stateSnapshot);
+  }
+  return stateSnapshot;
+};
+const atomicWrite = (snapshot) => {
+  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+  const temp = `${stateFile}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  if (fs.existsSync(stateFile)) fs.copyFileSync(stateFile, `${stateFile}.bak`);
+  fs.writeFileSync(temp, JSON.stringify(snapshot, null, 2), { encoding: 'utf8', flag: 'wx' });
+  fs.renameSync(temp, stateFile);
+};
+const queueStateWrite = (next) => {
+  stateWrite = stateWrite.then(() => {
+    atomicWrite(next);
+    stateSnapshot = next;
+    return syncSnapshotToSupabase(next).catch(error => {
+      console.error(error.message);
+      return next;
+    });
+  });
+  return stateWrite;
+};
+const supabaseConfigured = () => Boolean(supabaseUrl && supabaseServiceKey);
+const supabaseHeaders = () => ({
+  apikey: supabaseServiceKey,
+  Authorization: `Bearer ${supabaseServiceKey}`,
+  'Content-Type': 'application/json',
+});
+const syncSnapshotToSupabase = async snapshot => {
+  if (!supabaseConfigured()) return snapshot;
+  const response = await fetch(`${supabaseUrl}/rest/v1/${encodeURIComponent(supabaseStateTable)}?on_conflict=workspace_id`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      workspace_id: supabaseWorkspace,
+      version: snapshot.version,
+      revision: snapshot.revision,
+      data: snapshot.data,
+      updated_at: snapshot.updatedAt,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`Supabase state sync failed (${response.status}).`);
+  return snapshot;
+};
+const restoreSnapshotFromSupabase = async () => {
+  if (!supabaseConfigured()) return;
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/${encodeURIComponent(supabaseStateTable)}?workspace_id=eq.${encodeURIComponent(supabaseWorkspace)}&select=workspace_id,version,revision,data,updated_at&limit=1`,
+    { headers: supabaseHeaders(), signal: AbortSignal.timeout(15000) },
+  );
+  if (!response.ok) throw new Error(`Supabase state load failed (${response.status}).`);
+  const rows = await response.json();
+  const remote = rows[0];
+  if (!remote || !remote.data || remote.version !== stateVersion) {
+    if (remote) console.warn('Supabase state row has an unsupported version; local state was preserved.');
+    return;
+  }
+  const local = ensureStorage();
+  const remoteUpdated = Date.parse(remote.updated_at || '');
+  const localUpdated = Date.parse(local.updatedAt || '');
+  if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && Number(remote.revision) > local.revision)) {
+    stateSnapshot = {
+      version: stateVersion,
+      revision: Number(remote.revision) || 0,
+      updatedAt: remote.updated_at || new Date().toISOString(),
+      data: remote.data,
+    };
+    atomicWrite(stateSnapshot);
+    return;
+  }
+  if (local.revision > Number(remote.revision || 0) || localUpdated > remoteUpdated) {
+    await syncSnapshotToSupabase(local);
+  }
+};
+const syncDocumentToSupabase = async (id, file) => {
+  if (!supabaseConfigured()) return '';
+  const storagePath = `${supabaseWorkspace}/${id}.bin`;
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(supabaseDocumentBucket)}/${storagePath}`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), 'Content-Type': file.mimetype, 'x-upsert': 'true' },
+    body: file.buffer,
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw new Error(`Supabase document upload failed (${response.status}).`);
+  return storagePath;
+};
+const loadDocumentFromSupabase = async storagePath => {
+  if (!supabaseConfigured() || !storagePath) return null;
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(supabaseDocumentBucket)}/${storagePath}`, {
+    headers: supabaseHeaders(),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) return null;
+  return Buffer.from(await response.arrayBuffer());
+};
+const recordDocumentInSupabase = async metadata => {
+  if (!supabaseConfigured() || !metadata.storagePath) return;
+  const response = await fetch(`${supabaseUrl}/rest/v1/uw_documents`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      id: metadata.id,
+      workspace_id: supabaseWorkspace,
+      storage_path: metadata.storagePath,
+      name: metadata.name,
+      mime_type: metadata.mimeType,
+      size_bytes: metadata.size,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`Supabase document metadata sync failed (${response.status}).`);
+};
+const apiKeyIsValid = (req) => {
+  const expected = String(process.env.UW_API_KEY || '').trim();
+  if (!expected) return true;
+  const supplied = String(req.get('x-api-key') || '').trim() || String(req.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (supplied === expected) return true;
+  const origin = String(req.get('origin') || '');
+  const referer = String(req.get('referer') || '');
+  const requestOrigin = `${req.protocol}://${req.get('host')}`;
+  return origin === requestOrigin || referer.startsWith(`${requestOrigin}/`);
+};
+const requireApiKey = (req, res, next) => apiKeyIsValid(req) ? next() : res.status(401).json({ error: 'Authentication required.' });
+const safeDocumentId = id => /^[a-f0-9]{32}$/.test(String(id || ''));
+const safeDocumentPath = id => path.join(documentsRoot, `${id}.bin`);
+
 const cleanStateStore = () => {
   const now = Date.now();
   for (const [key, payload] of stateStore.entries()) {
@@ -30,6 +197,22 @@ const cleanStateStore = () => {
       stateStore.delete(key);
     }
   }
+};
+
+const allowAiRequest = (req) => {
+  const now = Date.now();
+  for (const [key, entry] of aiRateStore.entries()) {
+    if (now - entry.startedAt >= AI_RATE_WINDOW_MS) aiRateStore.delete(key);
+  }
+  const key = String(req.ip || req.socket?.remoteAddress || 'unknown');
+  const current = aiRateStore.get(key);
+  if (!current || now - current.startedAt >= AI_RATE_WINDOW_MS) {
+    aiRateStore.set(key, { startedAt: now, count: 1 });
+    return true;
+  }
+  if (current.count >= AI_RATE_LIMIT) return false;
+  current.count += 1;
+  return true;
 };
 
 const normalizeGoogleRedirectUri = (value = '') => {
@@ -119,53 +302,373 @@ const normalizeBackupData = (payload) => {
 
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  });
+  if (isProduction) {
+    res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 app.use('/api', (_, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   next();
 });
 
-app.get('/api/gemini/config', (_, res) => {
-  res.json({
-    configured: Boolean(process.env.GEMINI_API_KEY),
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+ensureStorage();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: maxDocumentBytes, files: 1 },
+});
+
+app.get('/api/state', requireApiKey, (req, res) => {
+  const snapshot = ensureStorage();
+  res.json(snapshot);
+});
+
+app.put('/api/state', requireApiKey, async (req, res) => {
+  const current = ensureStorage();
+  const expectedRevision = req.body && req.body.revision !== undefined ? Number(req.body.revision) : current.revision;
+  if (!Number.isInteger(expectedRevision) || expectedRevision !== current.revision) {
+    return res.status(409).json({ error: 'State revision conflict.', snapshot: current });
+  }
+  const data = req.body && Object.prototype.hasOwnProperty.call(req.body, 'data') ? req.body.data : req.body;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return res.status(400).json({ error: 'State data must be an object.' });
+  try {
+    const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data };
+    await queueStateWrite(next);
+    res.json(next);
+  } catch (error) {
+    console.error('State write failed:', error);
+    res.status(500).json({ error: 'State could not be saved.' });
+  }
+});
+
+app.get('/api/state/backup', requireApiKey, (req, res) => {
+  res.download(stateFile, 'uw-state-backup.json');
+});
+
+app.post('/api/state/restore', requireApiKey, async (req, res) => {
+  const current = ensureStorage();
+  const incoming = req.body && req.body.snapshot ? req.body.snapshot : req.body;
+  if (!incoming || incoming.version !== stateVersion || !incoming.data || typeof incoming.data !== 'object') {
+    return res.status(400).json({ error: 'A valid versioned state snapshot is required.' });
+  }
+  if (req.body.revision !== undefined && Number(req.body.revision) !== current.revision) {
+    return res.status(409).json({ error: 'State revision conflict.', snapshot: current });
+  }
+  try {
+    const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data: incoming.data };
+    await queueStateWrite(next);
+    res.json(next);
+  } catch (error) {
+    res.status(500).json({ error: 'State restore failed.' });
+  }
+});
+
+app.post('/api/documents', requireApiKey, (req, res) => {
+  upload.single('file')(req, res, async error => {
+    if (error) {
+      const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return res.status(status).json({ error: status === 413 ? 'Document is too large.' : error.message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'A file is required.' });
+    if (!allowedDocumentTypes.has(req.file.mimetype)) return res.status(415).json({ error: 'Unsupported document type.' });
+    const id = crypto.randomBytes(16).toString('hex');
+    const metadata = { id, name: path.basename(req.file.originalname || 'document'), size: req.file.size, mimeType: req.file.mimetype, createdAt: new Date().toISOString(), url: `/api/documents/${id}` };
+    try {
+      fs.writeFileSync(safeDocumentPath(id), req.file.buffer, { flag: 'wx' });
+      const storagePath = await syncDocumentToSupabase(id, req.file);
+      if (storagePath) metadata.storagePath = storagePath;
+      await recordDocumentInSupabase(metadata);
+      await stateWrite;
+      const latest = ensureStorage();
+      await queueStateWrite({
+        version: stateVersion,
+        revision: latest.revision + 1,
+        updatedAt: new Date().toISOString(),
+        data: { ...latest.data, documents: [...(latest.data.documents || []), metadata] },
+      });
+      res.status(201).json(metadata);
+    } catch (writeError) {
+      try { fs.rmSync(safeDocumentPath(id), { force: true }); } catch (_) {}
+      console.error('Document upload failed:', writeError);
+      res.status(500).json({ error: 'Document could not be stored.' });
+    }
   });
 });
 
-app.post('/api/gemini/generate', async (req, res) => {
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(503).json({ error: 'Gemini is not configured. Set GEMINI_API_KEY on the server.' });
+app.get('/api/documents', requireApiKey, (req, res) => {
+  res.json((ensureStorage().data.documents || []).map(doc => ({ ...doc, url: `/api/documents/${doc.id}` })));
+});
+
+app.get('/api/documents/:id', requireApiKey, async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!safeDocumentId(id)) return res.status(400).json({ error: 'Invalid document id.' });
+  const metadata = (ensureStorage().data.documents || []).find(doc => doc.id === id);
+  const file = safeDocumentPath(id);
+  if (!metadata) return res.status(404).json({ error: 'Document not found.' });
+  res.type(metadata.mimeType || 'application/octet-stream');
+  res.set('Content-Disposition', `inline; filename="${String(metadata.name).replace(/["\r\n]/g, '_')}"`);
+  if (fs.existsSync(file)) return res.sendFile(file);
+  const remote = await loadDocumentFromSupabase(metadata.storagePath);
+  if (!remote) return res.status(404).json({ error: 'Document content is not available.' });
+  return res.send(remote);
+});
+
+const getAiProvider = () => {
+  const configuredProvider = String(process.env.AI_PROVIDER || '').trim().toLowerCase();
+  if (configuredProvider) return configuredProvider;
+  if (process.env.GEMINI_API_KEY) return 'gemini';
+  if (process.env.TYPESAFE_API_KEY) return 'typesafe';
+  return 'gemini';
+};
+
+const getAiModel = (providerOverride) => {
+  const provider = String(providerOverride || getAiProvider()).trim().toLowerCase();
+  if (provider === 'typesafe') return process.env.TYPESAFE_MODEL || process.env.AI_MODEL || 'gpt-4o-mini';
+  const configured = process.env.GEMINI_MODEL || process.env.AI_MODEL || 'gemini-3.6-flash';
+  return configured;
+};
+
+const getGeminiModelAttempts = (configuredModel) => {
+  const attempts = [];
+  const preferred = String(configuredModel || '').trim();
+  const validFallbacks = [
+    'gemini-3.6-flash',
+    'gemini-flash-latest',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+  ];
+
+  if (preferred) attempts.push(preferred);
+  for (const candidate of validFallbacks) {
+    if (candidate !== preferred) attempts.push(candidate);
+  }
+
+  if (!attempts.length) attempts.push('gemini-3.6-flash');
+  return [...new Set(attempts)];
+};
+
+const extractAiText = (payload, provider) => {
+  if (provider === 'typesafe') {
+    const candidates = payload?.choices || payload?.output || [];
+    const firstMessage = candidates?.[0]?.message?.content || candidates?.[0]?.content || '';
+    if (Array.isArray(firstMessage)) {
+      return firstMessage.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim();
+    }
+    if (typeof firstMessage === 'string') return firstMessage.trim();
+    if (payload?.output && Array.isArray(payload.output)) {
+      return payload.output
+        .map(block => block?.content || [])
+        .flat()
+        .map(part => typeof part === 'string' ? part : part?.text || '')
+        .join('')
+        .trim();
+    }
+  }
+
+  return (payload?.candidates || [])
+    .flatMap(candidate => candidate.content?.parts || [])
+    .map(part => part.text || '')
+    .join('')
+    .trim();
+};
+
+const callGeminiChat = async (prompt) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('Gemini is not configured. Set GEMINI_API_KEY on the server.');
+  }
+
+  const modelAttempts = getGeminiModelAttempts(getAiModel('gemini'));
+  let lastError = null;
+
+  for (const model of modelAttempts) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(30000),
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+          }),
+        },
+      );
+
+      const payload = await response.json();
+      if (!response.ok) {
+        const message = payload?.error?.message || 'Gemini request failed.';
+        const isRetiredModelError = /no longer available|not found|404|Model not found/i.test(message);
+        if (isRetiredModelError && model !== modelAttempts[modelAttempts.length - 1]) {
+          lastError = new Error(message);
+          continue;
+        }
+        const error = new Error(message);
+        error.statusCode = response.status >= 400 && response.status < 500 ? response.status : 502;
+        throw error;
+      }
+
+      const text = extractAiText(payload, 'gemini');
+      if (!text) throw new Error('Gemini returned no text.');
+      return { text, provider: 'gemini', model };
+    } catch (error) {
+      lastError = error;
+      const shouldRetry = error?.message && /no longer available|not found|404|Model not found/i.test(error.message);
+      if (shouldRetry && model !== modelAttempts[modelAttempts.length - 1]) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError || new Error('Gemini request failed.');
+};
+
+const callTypesafeChat = async (prompt) => {
+  const apiKey = process.env.TYPESAFE_API_KEY;
+  if (!apiKey) {
+    throw new Error('TypeSafe is not configured. Set TYPESAFE_API_KEY on the server.');
+  }
+
+  const model = getAiModel('typesafe');
+  const candidateUrls = [
+    process.env.TYPESAFE_API_URL,
+    'https://api.typesafe.ai/v1/chat/completions',
+    'https://typesafe.ai/api/v1/chat/completions',
+    'https://api.type-safe.ai/v1/chat/completions',
+  ].filter(Boolean);
+
+  let lastHttpError = null;
+  let lastNetworkError = null;
+  for (const url of [...new Set(candidateUrls)]) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        signal: AbortSignal.timeout(30000),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.2,
+          max_tokens: 2048,
+          stream: false,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        const message = payload?.error?.message || payload?.message || payload?.detail || `TypeSafe request failed (${response.status}).`;
+        lastHttpError = new Error(message);
+        lastHttpError.statusCode = response.status >= 400 && response.status < 500 ? response.status : 502;
+        continue;
+      }
+
+      const text = extractAiText(payload, 'typesafe');
+      if (!text) {
+        const err = new Error('TypeSafe returned no text.');
+        err.statusCode = 502;
+        throw err;
+      }
+
+      return { text, provider: 'typesafe', model };
+    } catch (error) {
+      if (!lastHttpError) {
+        lastNetworkError = error;
+      }
+    }
+  }
+
+  if (lastHttpError) {
+    throw lastHttpError;
+  }
+  if (lastNetworkError) {
+    throw lastNetworkError;
+  }
+
+  throw new Error('TypeSafe request failed.');
+};
+
+const normalizeProviderOverride = (value) => {
+  const provider = String(value || '').trim().toLowerCase();
+  if (provider && !['gemini', 'typesafe'].includes(provider)) {
+    throw new Error('Unsupported AI provider. Use "gemini" or "typesafe".');
+  }
+  return provider || getAiProvider();
+};
+
+const generateAiText = async (prompt, providerOverride) => {
+  const provider = normalizeProviderOverride(providerOverride);
+  if (provider === 'typesafe') return callTypesafeChat(prompt);
+  return callGeminiChat(prompt);
+};
+
+app.get('/api/ai/config', (_, res) => {
+  const provider = getAiProvider();
+  const configured = Boolean(process.env.GEMINI_API_KEY || process.env.TYPESAFE_API_KEY);
+  res.json({
+    configured,
+    provider,
+    model: getAiModel(),
+    providers: {
+      gemini: Boolean(process.env.GEMINI_API_KEY),
+      typesafe: Boolean(process.env.TYPESAFE_API_KEY),
+    },
+  });
+});
+
+app.get('/api/gemini/config', (_, res) => {
+  const provider = getAiProvider();
+  res.json({
+    configured: Boolean(process.env.GEMINI_API_KEY || process.env.TYPESAFE_API_KEY),
+    provider,
+    model: getAiModel(),
+  });
+});
+
+app.post('/api/ai/generate', async (req, res) => {
+  if (!allowAiRequest(req)) {
+    return res.status(429).json({ error: 'AI request limit reached. Please try again later.' });
   }
   const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+  const provider = req.body?.provider;
   if (!prompt) return res.status(400).json({ error: 'A prompt is required.' });
   if (prompt.length > 20000) return res.status(413).json({ error: 'Prompt is too long.' });
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
-        }),
-      },
-    );
-    const payload = await response.json();
-    if (!response.ok) {
-      const message = payload?.error?.message || 'Gemini request failed.';
-      return res.status(response.status >= 400 && response.status < 500 ? response.status : 502).json({ error: message });
-    }
-    const text = (payload.candidates || [])
-      .flatMap(candidate => candidate.content?.parts || [])
-      .map(part => part.text || '')
-      .join('')
-      .trim();
-    if (!text) return res.status(502).json({ error: 'Gemini returned no text.' });
-    return res.json({ text, model });
+    const result = await generateAiText(prompt, provider);
+    return res.json(result);
   } catch (error) {
-    return res.status(502).json({ error: `Gemini request failed: ${error.message}` });
+    return res.status(error.statusCode || 502).json({ error: error.message || 'AI request failed.' });
+  }
+});
+
+app.post('/api/gemini/generate', async (req, res) => {
+  if (!allowAiRequest(req)) {
+    return res.status(429).json({ error: 'AI request limit reached. Please try again later.' });
+  }
+  const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+  const provider = req.body?.provider;
+  if (!prompt) return res.status(400).json({ error: 'A prompt is required.' });
+  if (prompt.length > 20000) return res.status(413).json({ error: 'Prompt is too long.' });
+
+  try {
+    const result = await generateAiText(prompt, provider);
+    return res.json(result);
+  } catch (error) {
+    return res.status(error.statusCode || 502).json({ error: error.message || 'AI request failed.' });
   }
 });
 
@@ -176,6 +679,54 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     googleConfigured: Boolean(getGoogleConfig(req).clientId && getGoogleConfig(req).clientSecret),
     driveConnected: driveState.connected,
+    durableStore: Boolean(stateSnapshot),
+    documentsDir: documentsRoot,
+    supabaseConfigured: supabaseConfigured(),
+  });
+});
+
+app.get('/api/supabase/status', requireApiKey, async (_, res) => {
+  if (!supabaseConfigured()) return res.status(503).json({ configured: false, connected: false, error: 'Supabase is not configured on the server.' });
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/${encodeURIComponent(supabaseStateTable)}?select=workspace_id&workspace_id=eq.${encodeURIComponent(supabaseWorkspace)}&limit=1`,
+      { headers: supabaseHeaders(), signal: AbortSignal.timeout(10000) },
+    );
+    if (!response.ok) return res.status(502).json({ configured: true, connected: false, error: `Supabase returned ${response.status}.` });
+    return res.json({ configured: true, connected: true, workspace: supabaseWorkspace, stateTable: supabaseStateTable, documentBucket: supabaseDocumentBucket });
+  } catch (error) {
+    return res.status(502).json({ configured: true, connected: false, error: error.message || 'Supabase connection failed.' });
+  }
+});
+
+app.get('/api/ready', (req, res) => {
+  const google = getGoogleConfig(req);
+  const checks = {
+    server: true,
+    googleOAuth: Boolean(google.clientId && google.clientSecret && google.redirectUri),
+    aiProvider: Boolean(process.env.GEMINI_API_KEY || process.env.TYPESAFE_API_KEY),
+    sourceStorage: fs.existsSync(sourceRoot) || fs.existsSync(path.join(rootDir, '__source')) || fs.existsSync(documentsRoot),
+    serverAuth: Boolean(process.env.UW_API_KEY),
+    durableStore: Boolean(stateSnapshot && fs.existsSync(stateFile)),
+    documentStorage: fs.existsSync(documentsRoot),
+    apiAuth: !isProduction || Boolean(process.env.UW_API_KEY),
+    supabase: !isProduction || supabaseConfigured(),
+  };
+  const ready = checks.server && (!isProduction || (
+    checks.googleOAuth &&
+    checks.sourceStorage &&
+    checks.apiAuth &&
+    checks.durableStore &&
+    checks.documentStorage &&
+    checks.supabase
+  ));
+  return res.status(ready ? 200 : 503).json({
+    ready,
+    environment: process.env.NODE_ENV || 'development',
+    checks,
+    message: ready
+      ? 'UW Accounting server is ready for application traffic.'
+      : 'Production configuration is incomplete. Review the failed readiness checks.',
   });
 });
 
@@ -453,7 +1004,25 @@ app.get('*', (_, res) => {
   res.sendFile(path.join(rootDir, 'index.html'));
 });
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`UW Accounting app and API running at http://${HOST}:${PORT}`);
   console.log('Google OAuth backend status:', getGoogleConfig().clientId && getGoogleConfig().clientSecret ? 'configured' : 'missing env vars');
+  if (supabaseConfigured()) {
+    restoreSnapshotFromSupabase().then(() => {
+      console.log('Supabase state sync: configured');
+    }).catch(error => {
+      console.error('Supabase state bootstrap failed:', error.message);
+    });
+  } else {
+    console.log('Supabase state sync: not configured');
+  }
 });
+
+const shutdown = (signal) => {
+  console.log(`Received ${signal}; shutting down.`);
+  process.exit(0);
+};
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+module.exports = { app, server, ensureStorage, stateFile, documentsRoot };

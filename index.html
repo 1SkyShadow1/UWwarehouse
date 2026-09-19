@@ -29,6 +29,30 @@ body.light td{color:#25251f}
 body.light .sidebar-foot,body.light .footer-note{color:#6c6a60}
 body.light .fld input,body.light .fld select,body.light .fld textarea,body.light .search{color:#25251f;background:#fffdf7}
 body.light .btn,body.light .tb-btn{color:#25251f}
+.ai-shell{padding:18px 18px 14px!important;border:1px solid rgba(212,175,55,.2)!important;background:linear-gradient(180deg,rgba(212,175,55,.06),rgba(18,18,18,.8))!important}
+.ai-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 18px;border:1px solid rgba(212,175,55,.24);border-radius:16px;background:radial-gradient(circle at top left,rgba(212,175,55,.24),transparent 42%), linear-gradient(135deg,rgba(255,255,255,.04),rgba(212,175,55,.08));margin-bottom:14px}
+.ai-hero-badge{display:flex;flex-direction:column;gap:6px}
+.ai-eyebrow{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold2);font-weight:700}
+.ai-hero h3{margin:0!important;font-size:clamp(1.2rem,2vw,1.8rem);color:var(--text)!important}
+.ai-copy{font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.6}
+.ai-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+.ai-stat{background:rgba(255,255,255,.02);border:1px solid rgba(212,175,55,.12);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.ai-stat .label{font-size:11px;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+.ai-stat .value{font-size:1.5rem;font-weight:800;color:var(--gold2);font-variant-numeric:tabular-nums}
+.ai-actions{margin-top:10px!important;padding-top:12px;border-top:1px solid rgba(212,175,55,.18)}
+.ai-modal{display:flex;flex-direction:column;gap:16px}
+.ai-modal-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid rgba(212,175,55,.22)}
+.ai-modal-header h3{margin:0!important;font-size:1.25rem;color:var(--gold2)!important}
+.ai-modal-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(212,175,55,.18);border-radius:12px;background:rgba(255,255,255,.02)}
+.ai-provider{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.ai-provider select{min-width:140px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px 10px}
+.ai-prompt-box{border:1px solid rgba(212,175,55,.2);background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(212,175,55,.04));border-radius:16px;padding:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.ai-prompt-input{width:100%;min-height:150px;background:rgba(10,10,10,.48);border:1px solid rgba(212,175,55,.16);border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.6;color:var(--text);resize:vertical;outline:none;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.ai-prompt-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.12)}
+.ai-prompt-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:12px}
+.ai-tip{font-size:11px;color:var(--muted);line-height:1.5}
+.ai-result{margin:0;white-space:pre-wrap;max-height:280px;overflow:auto;padding:14px 16px;border-radius:12px;background:rgba(9,11,14,.72);border:1px solid rgba(212,175,55,.14);color:var(--text);font-size:13px;line-height:1.6}
+.ai-result:empty{display:none}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
 ::-webkit-scrollbar{width:10px;height:10px}
@@ -331,6 +355,61 @@ const seed = {
 };
 
 let DB = load();
+let serverRevision = null;
+let serverSyncTimer;
+let serverSyncInFlight = false;
+let serverSyncAvailable = false;
+async function initializeServerSync(){
+  try{
+    const response=await fetch('/api/state',{headers:{Accept:'application/json'}});
+    if(!response.ok) throw new Error('server state unavailable');
+    const snapshot=await response.json();
+    serverRevision=Number(snapshot.revision||0);
+    serverSyncAvailable=true;
+    if(snapshot.data&&Object.keys(snapshot.data).length){
+      DB={...DB,...snapshot.data,meta:{...DB.meta,...(snapshot.data.meta||{})}};
+      localStorage.setItem(DB_KEY,JSON.stringify(DB));
+      render();
+    }else{
+      queueServerStateSave();
+    }
+  }catch(error){
+    serverSyncAvailable=false;
+    console.warn('Server persistence unavailable; continuing offline.',error);
+  }
+}
+function queueServerStateSave(){
+  if(!serverSyncAvailable||serverSyncInFlight)return;
+  clearTimeout(serverSyncTimer);
+  serverSyncTimer=setTimeout(syncServerState,900);
+}
+async function syncServerState(){
+  if(!serverSyncAvailable||serverSyncInFlight)return;
+  serverSyncInFlight=true;
+  try{
+    const response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision,data:DB})});
+    const payload=await response.json().catch(()=>({}));
+    if(response.status===409&&payload.snapshot){
+      serverRevision=payload.snapshot.revision;
+      DB={...DB,...(payload.snapshot.data||{}),meta:{...DB.meta,...(payload.snapshot.data?.meta||{})}};
+      localStorage.setItem(DB_KEY,JSON.stringify(DB));
+      toast('Server data changed elsewhere; latest version loaded');
+    }else if(!response.ok) throw new Error(payload.error||'Server save failed');
+    else serverRevision=payload.revision;
+  }catch(error){
+    serverSyncAvailable=false;
+    console.warn('Server save failed; offline fallback enabled.',error);
+    toast('Saved locally; server sync is unavailable');
+  }finally{serverSyncInFlight=false;}
+}
+async function uploadManagedDocument(file){
+  const form=new FormData(); form.append('file',file);
+  const response=await fetch('/api/documents',{method:'POST',body:form});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(payload.error||'Document upload failed');
+  return payload;
+}
+initializeServerSync();
 function normalizeQuoteFields(db){
   (db.quotes||[]).forEach(q=>{
     if(q.projectReference===undefined) q.projectReference='';
@@ -407,6 +486,7 @@ function refreshBundledData(){
 }
 function save(){
   localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  queueServerStateSave();
   clearTimeout(cloudSyncTimer);
   if(DB.meta.cloud&&DB.meta.cloud.url&&DB.meta.cloud.key) cloudSyncTimer=setTimeout(()=>cloudSync('push'),1200);
   clearTimeout(driveSyncTimer);
@@ -415,21 +495,20 @@ function save(){
 }
 function cloudConfig(){return DB.meta.cloud||{};}
 async function cloudSync(direction){
-  const cfg=cloudConfig(); if(!cfg.url||!cfg.key){toast('Configure cloud sync in Settings first');return;}
-  const base=cfg.url.replace(/\/+$/,'')+'/rest/v1/'+encodeURIComponent(cfg.table||'uw_accounting_data');
-  const headers={'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   try{
     if(direction==='push'){
-      const response=await fetch(base,{method:'POST',headers,body:JSON.stringify({id:cfg.workspace||'default',data:DB,updated_at:new Date().toISOString()})});
-      if(!response.ok) throw new Error('Cloud save failed ('+response.status+')');
-      toast('Cloud backup saved');
+      const response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision===null?0:serverRevision,data:DB})});
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(payload.error||'Cloud save failed');
+      serverRevision=Number(payload.revision||serverRevision||0);
+      toast('Supabase-backed cloud state saved');
     }else{
-      const response=await fetch(base+'?id=eq.'+encodeURIComponent(cfg.workspace||'default'),{headers});
-      if(!response.ok) throw new Error('Cloud load failed ('+response.status+')');
-      const rows=await response.json();
-      if(!rows.length){toast('No cloud backup found');return;}
+      const response=await fetch('/api/state',{headers:{Accept:'application/json'}});
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(payload.error||'Cloud load failed');
+      if(!payload.data){toast('No cloud backup found');return;}
       if(!confirm('Replace local data with the cloud backup?')) return;
-      DB=rows[0].data; save(); render(); toast('Cloud backup restored');
+      DB=payload.data; serverRevision=Number(payload.revision||0); localStorage.setItem(DB_KEY,JSON.stringify(DB)); render(); toast('Supabase-backed cloud state restored');
     }
   }catch(err){console.error(err);toast(err.message||'Cloud sync failed');}
 }
@@ -440,6 +519,16 @@ async function googleDriveBackendStatus(){
     const data=await response.json();
     return data.clientConfigured ? data : null;
   }catch(err){return null;}
+}
+async function supabaseStatus(){
+  try{
+    const response=await fetch('/api/supabase/status',{headers:{Accept:'application/json'}});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error||`Supabase connection failed (${response.status})`);
+    toast(`Supabase connected · ${data.stateTable} · workspace ${data.workspace}`);
+    render();
+    return data;
+  }catch(error){toast(error.message||'Supabase connection failed');return null;}
 }
 async function googleDriveBackendRequest(path,options={}){
   const requestOptions={headers:{'Content-Type':'application/json'},...options};
@@ -611,7 +700,7 @@ const NAV=[
  {sec:'SALES'},
  {id:'invoices',ico:'▣',lbl:'Income & Invoices'},
  {id:'quotes',ico:'✎',lbl:'Quotes & Orders'},
- {id:'receipts',ico:'✓',lbl:'Client Receipts'},
+ {id:'receipts',ico:'✓',lbl:'Income & Receipts'},
  {sec:'OPERATIONS'},
  {id:'expenses',ico:'▼',lbl:'Expenses & Budget'},
  {id:'loans',ico:'⇄',lbl:'Loan Tracker'},
@@ -756,6 +845,17 @@ function nextInvoiceNo(date=today(),prefix='BB'){
   const sequence=(used.length?Math.max(...used):0)+1;
   return p+key+String(sequence).padStart(2,'0');
 }
+function nextReceiptNo(date=today(),prefix='BB'){
+  const p=/^(BB|SS)$/.test(prefix)?prefix:'BB',key=invoiceDateKey(date);
+  const re=new RegExp('^'+p+key.replaceAll('/','\\/')+'(\\d+)$');
+  const used=(DB.receipts||[]).map(r=>String(r.receiptNo||r.id||'').match(re)).filter(Boolean).map(m=>Number(m[1])||0);
+  const sequence=(used.length?Math.max(...used):0)+1;
+  return p+key+String(sequence).padStart(2,'0');
+}
+function validReceiptNo(id,date){
+  return /^(BB|SS)\d{4}\/\d{2}\/\d{2}\d{2}$/.test(String(id||'')) &&
+    String(id).slice(2,12)===invoiceDateKey(date);
+}
 function validInvoiceNo(id,date){
   return /^(BB|EE)\d{4}\/\d{2}\/\d{2}\d{2}$/.test(String(id||'')) &&
     String(id).slice(2,12)===invoiceDateKey(date);
@@ -824,6 +924,7 @@ function recordPayment(id){
   modal(`<h3>Record Payment — ${id}</h3>
   <div class="frm">
     <div class="fld"><label>Date</label><input id="p-date" type="date" value="${today()}"></div>
+    <div class="fld"><label>Receipt initials</label><select id="p-prefix"><option value="BB">BB</option><option value="SS">SS</option></select></div>
     <div class="fld"><label>Amount (balance ${R(bal)})</label><input id="p-amt" type="number" value="${bal.toFixed(2)}"></div>
     <div class="fld"><label>Method</label><select id="p-m"><option>EFT</option><option>Cash</option><option>Card</option></select></div>
   </div>
@@ -833,9 +934,11 @@ function recordPayment(id){
 function savePay(id){
   const inv=DB.invoices.find(i=>i.id===id);
   const amt=+document.getElementById('p-amt').value||0;
+  const date=document.getElementById('p-date').value;
+  const receiptNo=nextReceiptNo(date,document.getElementById('p-prefix').value);
   inv.paid=(inv.paid||0)+amt; inv.deposit=0;
   inv.status=invBalance(inv)<=0.005?'Paid':'Pending';
-  DB.receipts.push({id:++DB.counters.receipt,date:document.getElementById('p-date').value,customer:inv.customer,invoiceId:id,amount:amt,method:document.getElementById('p-m').value,fy:DB.meta.fy});
+  DB.receipts.push({id:++DB.counters.receipt,receiptNo,date,customer:inv.customer,invoiceId:id,amount:amt,method:document.getElementById('p-m').value,fy:DB.meta.fy});
   save();closeModal();toast('Payment recorded');render();
 }
 function viewInvoiceLegacy(id){
@@ -968,15 +1071,22 @@ function undoQuoteInvoice(invoiceId){
 /* ---------- RECEIPTS ---------- */
 function vReceipts(c){
   const rows=DB.receipts.filter(r=>docMatches(r,'receipts','Client receipt',r.method));
-  c.innerHTML=`<div class="toolbar">${docFilterHtml('receipts',['Client receipt'],['EFT','Cash','Card'])}<button class="btn gold" onclick="newReceipt()">+ Log Receipt</button></div>
-  <div class="panel"><p style="font-size:11px;color:var(--muted);margin-bottom:10px">${rows.length} receipt document(s) match the current filters.</p><table><tr><th>Date</th><th>Customer</th><th>Invoice</th><th class="num">Amount</th><th>Method</th><th></th></tr>
-  ${rows.map(r=>`<tr><td>${r.date}</td><td>${r.customer}</td><td style="color:var(--gold2)">${r.invoiceId}</td><td class="num">${R(r.amount)}</td><td>${r.method}</td>
-  <td><button class="btn sm danger" onclick="DB.receipts=DB.receipts.filter(x=>x.id!==${r.id});save();render()">✕</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">No receipts logged</td></tr>'}
+  const invoices=DB.invoices.filter(i=>docMatches(i,'income', 'Sales invoice', i.status));
+  const paid=invoices.filter(i=>invBalance(i)<=0.005), unpaid=invoices.filter(i=>invBalance(i)>0.005);
+  c.innerHTML=`<div class="toolbar">${docFilterHtml('receipts',['Client receipt'],['EFT','Cash','Card'])}<button class="btn gold" onclick="newReceipt()">+ Issue Receipt</button></div>
+  <div class="cards"><div class="card"><div class="lbl">Collected income</div><div class="val green">${R(invoices.reduce((s,i)=>s+(i.paid||0)+(i.deposit||0),0))}</div><div class="sub">${paid.length} paid invoice(s)</div></div><div class="card"><div class="lbl">Outstanding income</div><div class="val amber">${R(unpaid.reduce((s,i)=>s+invBalance(i),0))}</div><div class="sub">${unpaid.length} invoice(s) still due</div></div><div class="card"><div class="lbl">Receipts issued</div><div class="val gold">${rows.length}</div><div class="sub">BB / SS numbered receipts</div></div></div>
+  <div class="panel"><h3>Income status</h3><table><tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th>Status</th><th></th></tr>
+  ${invoices.map(i=>{const isPaid=invBalance(i)<=0.005;return `<tr style="${isPaid?'background:rgba(34,197,94,.14);':''}"><td style="color:var(--gold2)">${i.id}</td><td>${i.date}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R((i.paid||0)+(i.deposit||0))}</td><td class="num">${R(invBalance(i))}</td><td><span class="tag ${isPaid?'paid':'quote'}">${isPaid?'Paid':'Outstanding'}</span></td><td><button class="btn sm" onclick="recordPayment('${i.id}')">Pay</button></td></tr>`}).join('')||'<tr><td colspan="8" class="empty">No invoices match the current filters</td></tr>'}
+  </table></div>
+  <div class="panel"><h3>Issued receipts</h3><table><tr><th>Receipt No</th><th>Date</th><th>Customer</th><th>Invoice</th><th class="num">Amount</th><th>Method</th><th></th></tr>
+  ${rows.map(r=>`<tr><td style="color:var(--gold2)">${r.receiptNo||r.id}</td><td>${r.date}</td><td>${r.customer}</td><td>${r.invoiceId}</td><td class="num">${R(r.amount)}</td><td>${r.method}</td><td><button class="btn sm" onclick="viewReceipt('${r.receiptNo||r.id}')">View / Print</button><button class="btn sm danger" onclick="DB.receipts=DB.receipts.filter(x=>x.id!==${typeof r.id==='number'?r.id:`'${r.id}'`});save();render()">✕</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No receipts logged</td></tr>'}
   </table></div>`;
 }
 function newReceipt(){
   modal(`<h3>Log Client Receipt</h3><div class="frm">
-    <div class="fld"><label>Date</label><input id="r-date" type="date" value="${today()}"></div>
+    <div class="fld"><label>Date</label><input id="r-date" type="date" value="${today()}" onchange="document.getElementById('r-no').value=nextReceiptNo(this.value,document.getElementById('r-prefix').value)"></div>
+    <div class="fld"><label>Receipt initials</label><select id="r-prefix" onchange="document.getElementById('r-no').value=nextReceiptNo(document.getElementById('r-date').value,this.value)"><option value="BB">BB</option><option value="SS">SS</option></select></div>
+    <div class="fld"><label>Receipt No</label><input id="r-no" value="${nextReceiptNo(today(),'BB')}" readonly></div>
     <div class="fld"><label>Customer</label><input id="r-cust"></div>
     <div class="fld"><label>Invoice</label><select id="r-inv">${DB.invoices.map(i=>`<option>${i.id}</option>`).join('')}</select></div>
     <div class="fld"><label>Amount</label><input id="r-amt" type="number"></div>
@@ -986,11 +1096,19 @@ function newReceipt(){
   <button class="btn gold" onclick="saveReceipt()">Save</button></div>`);
 }
 function saveReceipt(){
-  const r={id:++DB.counters.receipt,date:document.getElementById('r-date').value,customer:document.getElementById('r-cust').value,invoiceId:document.getElementById('r-inv').value,amount:+document.getElementById('r-amt').value||0,method:document.getElementById('r-m').value,fy:DB.meta.fy};
+  const date=document.getElementById('r-date').value,receiptNo=document.getElementById('r-no').value;
+  const r={id:++DB.counters.receipt,receiptNo,date,customer:document.getElementById('r-cust').value,invoiceId:document.getElementById('r-inv').value,amount:+document.getElementById('r-amt').value||0,method:document.getElementById('r-m').value,fy:DB.meta.fy};
+  if(!validReceiptNo(receiptNo,date)){toast('Receipt number must use BB or SS + YYYY/MM/DD + two-digit sequence');return;}
+  if(!r.customer||!r.invoiceId||r.amount<=0){toast('Enter customer, invoice and a receipt amount');return;}
   DB.receipts.push(r);
   const inv=DB.invoices.find(i=>i.id===r.invoiceId);
   if(inv){inv.paid=(inv.paid||0)+r.amount;inv.deposit=0;inv.status=invBalance(inv)<=0.005?'Paid':'Pending';}
   save();closeModal();toast('Receipt logged');render();
+}
+function viewReceipt(receiptNo){
+  const r=DB.receipts.find(x=>(x.receiptNo||String(x.id))===receiptNo);if(!r)return;
+  const inv=DB.invoices.find(i=>i.id===r.invoiceId),m=DB.meta;
+  modal(`<h3>Receipt ${r.receiptNo||r.id}</h3><div class="doc-preview" id="print-area"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px"><div><b style="font-size:17px;letter-spacing:2px">UPHOLSTERY WAREHOUSE</b><br><i>ALL THINGS UPHOLSTERY...</i><br>${m.address}<br>${m.phone} · ${m.email}</div><div style="text-align:right"><b>RECEIPT</b><br>No: ${r.receiptNo||r.id}<br>Date: ${r.date}</div></div><p style="margin:18px 0"><b>Received from:</b> ${r.customer}<br><b>For invoice:</b> ${r.invoiceId}<br><b>Payment method:</b> ${r.method}</p><h2 style="text-align:right">Amount received: ${R(r.amount)}</h2><p>Thank you for your payment. This receipt confirms the amount recorded against the invoice above.</p></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
 }
 
 /* ---------- EXPENSES ---------- */
@@ -1205,7 +1323,7 @@ function vSuppliers(c){
 function vPayables(c){const all=DB.payables||[],rows=all.filter(p=>docMatches(p,'payables','Supplier payable',p.status));c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Imported supplier documents</div><div class="val gold">${all.length}</div></div><div class="card"><div class="lbl">Showing</div><div class="val">${rows.length}</div></div><div class="card"><div class="lbl">Unreviewed</div><div class="val amber">${all.filter(x=>x.status==='Unreviewed').length}</div></div></div><div class="toolbar">${docFilterHtml('payables',['Supplier payable'],['Unreviewed','Received','Approved','Paid','Disputed'])}</div><div class="panel"><h3>Purchases & Accounts Payable</h3><table><tr><th>Document</th><th>Supplier</th><th>Date</th><th class="num">Amount</th><th>Status</th><th></th></tr>${rows.map(p=>{const i=all.indexOf(p);return `<tr><td>${p.description}</td><td>${p.supplier}</td><td>${p.date||'—'}</td><td class="num">${R(p.amount)}</td><td><select class="search" style="min-width:120px" onchange="DB.payables[${i}].status=this.value;save();render()">${['Unreviewed','Received','Approved','Paid','Disputed'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td><td><button class="btn sm" onclick="toast('Source: ${String(p.document).replace(/'/g,'')}')">Source</button></td></tr>`}).join('')||'<tr><td colspan="6" class="empty">No payable documents match the current filters</td></tr>'}</table></div>`}
 function sourceUrl(path){const raw=String(path||'').trim();if(!raw)return '';if(raw.startsWith('data:')||raw.startsWith('blob:')||raw.startsWith('http://')||raw.startsWith('https://'))return raw;const p=raw.replace(/^[A-Za-z]:[\\/]+/i,'').replace(/^UW[\\/]+/i,'').replace(/^[\\/]+/,'').replace(/\\/g,'/').split('/').filter(Boolean).map(encodeURIComponent).join('/');return p?'./__source/'+p:''}function viewerControls(target){return `<div class="viewer-tools"><button class="btn sm" onclick="viewerZoom('${target}',-0.1)">−</button><span id="${target}-scale" class="viewer-scale">100%</span><button class="btn sm" onclick="viewerZoom('${target}',0.1)">+</button><button class="btn sm" onclick="viewerZoom('${target}',0,true)">Reset</button><span style="font-size:11px;color:var(--muted)">Scroll to pan</span></div>`}
 function viewerZoom(target,delta,reset){const el=document.getElementById(target);if(!el)return;const scale=reset?1:Math.max(.4,Math.min(3,(Number(el.dataset.scale)||1)+delta));el.dataset.scale=scale;el.style.transform=`scale(${scale})`;const label=document.getElementById(target+'-scale');if(label)label.textContent=Math.round(scale*100)+'%';}
-function viewDocument(d){const url=d.data||sourceUrl(d.path)||'';const ext=String(d.name||d.path||'').split('.').pop().toLowerCase(),safe=String(d.path||'').replace(/</g,'&lt;');let body;if(['png','jpg','jpeg','gif','webp','avif'].includes(ext))body=viewerControls('document-image')+`<div class="doc-viewer"><img id="document-image" data-scale="1" src="${url||'#'}" alt="${d.name||'Source document'}" style="background:#111"></div>`;else if(ext==='pdf')body=viewerControls('document-pdf')+`<div class="doc-viewer"><iframe id="document-pdf" src="${url||'#'}" title="${d.name||'PDF'}"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;else body=`<div class="kv"><span>Source document</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">This file type is opened by the system application rather than rendered inside the browser.</p><a class="btn gold" href="${url||'#'}" target="_blank" rel="noopener">Open / Download document</a>`;modal(`<h3>${d.name||'Source document'}</h3>${body}<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`) }
+function viewDocument(d){const url=d.url||d.data||sourceUrl(d.path)||'';const ext=String(d.name||d.path||'').split('.').pop().toLowerCase(),safe=String(d.path||'').replace(/</g,'&lt;');let body;if(['png','jpg','jpeg','gif','webp','avif'].includes(ext))body=viewerControls('document-image')+`<div class="doc-viewer"><img id="document-image" data-scale="1" src="${url||'#'}" alt="${d.name||'Source document'}" style="background:#111"></div>`;else if(ext==='pdf')body=viewerControls('document-pdf')+`<div class="doc-viewer"><iframe id="document-pdf" src="${url||'#'}" title="${d.name||'PDF'}"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;else body=`<div class="kv"><span>Source document</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">This file type is opened by the system application rather than rendered inside the browser.</p><a class="btn gold" href="${url||'#'}" target="_blank" rel="noopener">Open / Download document</a>`;modal(`<h3>${d.name||'Source document'}</h3>${body}<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`) }
 function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
 function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
 function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:''}
@@ -1213,8 +1331,8 @@ function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.in
 function fnbReviewCandidate(d){const date=d.scanDate||scannedDate(d);if(!date)return null;return (DB.fnbStatements||[]).find(s=>String(s.statementDate||'')>=date)||null}
 function reviewAgainstFnb(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path),statement=found&&fnbReviewCandidate(found);if(!found||!statement){toast('No matching FNB statement period was found; the scan remains unapproved');return}found.fnbReview={statementId:statement.id,statementName:statement.name,reviewedAt:new Date().toISOString(),status:'Reviewed against FNB statement period'};found.reviewStatus='FNB reviewed';found.includedInTotals=false;save();render();toast('Matched to '+statement.name+' — confirm the transaction before approving')}
 function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
-function uploadScannedDocuments(e){[...e.target.files].forEach(file=>{const r=new FileReader();r.onload=()=>{const hash='local-'+Date.now()+'-'+file.size;DB.scannedDocuments.push({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false});save();render();};r.readAsDataURL(file)});e.target.value='';}
-function uploadSourceDocuments(e){[...e.target.files].forEach(file=>{const r=new FileReader();r.onload=()=>{DB.documents.unshift({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),bytes:file.size,category:'Uploaded source document',reviewStatus:'Needs review'});save();render();};r.readAsDataURL(file)});e.target.value='';}
+function uploadScannedDocuments(e){[...e.target.files].forEach(async file=>{try{const managed=await uploadManagedDocument(file);const hash='managed-'+managed.id;DB.scannedDocuments.push({id:managed.id,name:managed.name,path:managed.url,data:null,url:managed.url,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false});save();render();}catch(error){const r=new FileReader();r.onload=()=>{DB.scannedDocuments.push({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash:'local-'+Date.now()+'-'+file.size,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false});save();render();};r.readAsDataURL(file);toast(error.message+' Using offline storage.');}});e.target.value='';}
+function uploadSourceDocuments(e){[...e.target.files].forEach(async file=>{try{const managed=await uploadManagedDocument(file);DB.documents.unshift({id:managed.id,name:managed.name,path:managed.url,url:managed.url,data:null,extension:'.'+file.name.split('.').pop().toLowerCase(),bytes:file.size,category:'Uploaded source document',reviewStatus:'Needs review'});save();render();}catch(error){const r=new FileReader();r.onload=()=>{DB.documents.unshift({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),bytes:file.size,category:'Uploaded source document',reviewStatus:'Needs review'});save();render();};r.readAsDataURL(file);toast(error.message+' Using offline storage.');}});e.target.value='';}
 function vScanned(c){
   const f=docFilterState('scanned');
   const rows=scannedRows().map(d=>({...d,scanDate:d.scanDate||scannedDate(d),category:d.category&&d.category!=='Scanned receipt/invoice image'?d.category:scannedCategory(d)})).filter(d=>docMatches(d,'scanned',d.category,d.reviewStatus,'scanDate'));
@@ -1233,15 +1351,99 @@ function vAssistant(c){
   const category={};DB.expenses.forEach(e=>category[e.category]=(category[e.category]||0)+e.amount);const top=Object.entries(category).sort((a,b)=>b[1]-a[1])[0];
   const insights=[`Collected income is ${R(inc)} against ${R(exp)} recorded expenses, a calculated net of ${R(inc-exp)}.`,`There are ${unpaid.length} unpaid invoices with ${R(outstanding)} outstanding.`,`The largest recorded expense category is ${top?top[0]:'not available'} at ${R(top?top[1]:0)}.`,`There are ${(DB.jobs||[]).filter(j=>j.stage!=='Closed').length} active production jobs and ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length} supplier documents awaiting review.`];
   const sourceGaps=(DB.payables||[]).filter(p=>!p.amount||p.amount===0).length+(DB.stock||[]).filter(s=>!s.quantity).length;const audit=DB.filesystemAudit||{};
-  c.innerHTML=`<div class="panel"><h3>Local AI Business Assistant <span class="tag paid">No cloud/API required</span></h3><p style="color:var(--muted);font-size:12px;margin-bottom:14px">This explainable assistant analyses the complete locally stored D:\\UW snapshot. It never invents amounts and flags records requiring source review.</p>${insights.map(x=>`<div class="kv"><span>${x}</span><b>✓</b></div>`).join('')}<div class="kv"><span>Source records needing amount/quantity verification</span><b>${sourceGaps}</b></div><div class="kv"><span>Filesystem evidence indexed for review</span><b>${audit.files||0}</b></div><div class="kv"><span>Backup/copy files excluded from primary accounting totals</span><b>${audit.backupOrCopy||0}</b></div><div class="toolbar" style="margin-top:14px"><button class="btn gold" onclick="askGemini()">Ask Gemini</button><button class="btn" onclick="exportAssistantReport()">Export AI Review</button><button class="btn" onclick="go('documents')">View Source Documents</button><button class="btn" onclick="go('jobs')">Open Jobs</button><button class="btn" onclick="go('payables')">Review Payables</button></div></div><div class="panel"><h3>Suggested next actions</h3><div class="kv"><span>Review unpaid invoices and allocate receipts</span><b>${unpaid.length}</b></div><div class="kv"><span>Review imported supplier documents</span><b>${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}</b></div><div class="kv"><span>Update stock quantities and reorder levels</span><b>${(DB.stock||[]).length}</b></div></div>`;
+  c.innerHTML=`<div class="panel ai-shell">
+    <div class="ai-hero">
+      <div class="ai-hero-badge">
+        <span class="ai-eyebrow">UW intelligence</span>
+        <h3>Local AI Business Assistant</h3>
+      </div>
+      <span class="tag paid">No cloud/API required</span>
+    </div>
+    <p class="ai-copy">This explainable assistant analyses the complete locally stored D:\UW snapshot. It never invents amounts and flags records requiring source review.</p>
+    <div class="ai-stats">
+      ${insights.map(x=>`<div class="ai-stat"><span class="label">Signal</span><span class="value">?</span><div style="font-size:12px;color:var(--muted)">${x}</div></div>`).join('')}
+      <div class="ai-stat"><span class="label">Source gaps</span><span class="value">${sourceGaps}</span><div style="font-size:12px;color:var(--muted)">Need amount/qty verification</div></div>
+      <div class="ai-stat"><span class="label">Indexed files</span><span class="value">${audit.files||0}</span><div style="font-size:12px;color:var(--muted)">Filesystem evidence</div></div>
+      <div class="ai-stat"><span class="label">Excluded copies</span><span class="value">${audit.backupOrCopy||0}</span><div style="font-size:12px;color:var(--muted)">Backup copies held out</div></div>
+    </div>
+    <div class="toolbar ai-actions">
+      <button class="btn gold" onclick="askGemini()">Ask AI</button>
+      <button class="btn" onclick="runAiTask('cashflow')">Audit cash flow</button>
+      <button class="btn" onclick="runAiTask('fnb')">Review FNB / scanned docs</button>
+      <button class="btn" onclick="runAiTask('followup')">Draft client follow-up</button>
+      <button class="btn" onclick="exportAssistantReport()">Export AI Review</button>
+      <button class="btn" onclick="go('documents')">View Source Documents</button>
+      <button class="btn" onclick="go('jobs')">Open Jobs</button>
+      <button class="btn" onclick="go('payables')">Review Payables</button>
+    </div>
+  </div>
+  <div class="panel"><h3>Suggested next actions</h3><div class="kv"><span>Review unpaid invoices and allocate receipts</span><b>${unpaid.length}</b></div><div class="kv"><span>Review imported supplier documents</span><b>${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}</b></div><div class="kv"><span>Update stock quantities and reorder levels</span><b>${(DB.stock||[]).length}</b></div></div>`;
+}function buildAiPrompt(task='custom'){
+  const outstanding=DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0);
+  const unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
+  const payablesUnreviewed=(DB.payables||[]).filter(p=>p.status==='Unreviewed').length;
+  const jobsOpen=(DB.jobs||[]).filter(j=>j.stage!=='Closed').length;
+  const scannedNeedsReview=(DB.scannedDocuments||[]).filter(d=>d.reviewStatus!=='Approved').length;
+  const fy=DB.meta.fy||new Date().getFullYear();
+  const base=[
+    'You are acting as an operations and financial review assistant for UW Upholstery Warehouse.',
+    'Use only the locally stored database and source evidence in this system. Never invent totals, invoices, or bank entries.',
+    `Current FY: ${fy}.`,
+    `Outstanding receivables: ${R(outstanding)} across ${unpaid.length} unpaid invoice(s).`,
+    `Unreviewed payables: ${payablesUnreviewed}.`,
+    `Open jobs: ${jobsOpen}.`,
+    `Scanned documents still awaiting review: ${scannedNeedsReview}.`,
+    'When you give a recommendation, separate facts from assumptions and flag any record that needs source validation.'
+  ].join('\n');
+  if(task==='cashflow') return `${base}\n\nTask: Produce a practical cash-flow and collections review for the business. Identify the top unpaid invoices, explain where receipts need matching, and prioritise the three actions that will improve collections without inventing financial data.`;
+  if(task==='fnb') return `${base}\n\nTask: Review the FNB statement reconciliation and scanned receipts/invoices. Highlight the matching risks, note which scanned items should be approved or rejected, and give a concise evidence-driven plan for reconciling the bank ledger to source documents.`;
+  if(task==='followup') return `${base}\n\nTask: Draft a professional customer follow-up for an overdue or pending upholstery job. Include a clear call to action, acknowledgement of the current work status, and a short, credible payment or delivery reminder without making unsupported claims.`;
+  return `${base}\n\nTask: ${task || 'Provide a practical operational recommendation based on the current UW data set.'}`;
 }
-function askGemini(){
-  modal(`<h3>Ask Gemini</h3><p style="font-size:12px;color:var(--muted)">Ask for a business, quote, document, or workflow task. Only the prompt you submit is sent to Gemini.</p><textarea id="gemini-prompt" rows="6" style="width:100%;margin:10px 0" placeholder="e.g. Draft a professional follow-up message for an overdue upholstery invoice."></textarea><pre id="gemini-result" style="white-space:pre-wrap;max-height:260px;overflow:auto"></pre><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="runGemini()">Send to Gemini</button></div>`);
+function escapeHtml(value=''){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
+function askGemini(prefill=''){
+  modal(`<div class="ai-modal">
+    <div class="ai-modal-header">
+      <div>
+        <span class="ai-eyebrow">UW AI Studio</span>
+        <h3>Ask the warehouse assistant</h3>
+      </div>
+      <button class="btn sm" onclick="closeModal()">Close</button>
+    </div>
+    <div class="ai-modal-meta">
+      <div class="ai-provider">
+        <span>Provider</span>
+        <select id="ai-provider">
+          <option value="auto">Auto</option>
+          <option value="gemini">Gemini</option>
+          <option value="typesafe">TypeSafe</option>
+        </select>
+      </div>
+      <span style="font-size:11px;color:var(--muted)">Complex prompts work best for reviews, reconciliation, and client follow-ups.</span>
+    </div>
+    <div class="ai-prompt-box">
+      <textarea id="gemini-prompt" class="ai-prompt-input" rows="6" placeholder="e.g. Draft a professional follow-up message for an overdue upholstery invoice.">${escapeHtml(prefill)}</textarea>
+      <div class="ai-prompt-actions">
+        <span class="ai-tip">Use local data and source records only for factual recommendations.</span>
+        <button class="btn gold" onclick="runGemini()">Send to AI</button>
+      </div>
+    </div>
+    <pre id="gemini-result" class="ai-result"></pre>
+  </div>`);
+}async function runAiTask(task){
+  const prompt = buildAiPrompt(task);
+  askGemini(prompt);
+  setTimeout(() => {
+    const ta = document.getElementById('gemini-prompt');
+    if (ta) ta.value = prompt;
+  }, 0);
 }
 async function runGemini(){
   const prompt=fa('gemini-prompt');if(!prompt){toast('Enter a prompt first');return}
   const result=document.getElementById('gemini-result');result.textContent='Working…';
-  try{const response=await fetch('/api/gemini/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Gemini request failed');result.textContent=payload.text||'No response returned.'}catch(error){result.textContent=error.message;toast('Gemini request failed')}
+  const providerEl=document.getElementById('ai-provider');
+  const provider=providerEl ? providerEl.value : 'auto';
+  try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=payload.text||'No response returned.'}catch(error){result.textContent=error.message;toast('AI request failed')}
 }
 function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(DB.expenses.reduce((s,e)=>s+e.amount,0))}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
 
@@ -1296,7 +1498,7 @@ function vGallery(c){
   </div>`;
 }
 function addPhotos(e){
-  [...e.target.files].forEach(f=>{const r=new FileReader();r.onload=()=>{DB.gallery.push({id:Date.now(),label:f.name,data:r.result});save();render();};r.readAsDataURL(f);});
+  [...e.target.files].forEach(async f=>{try{const managed=await uploadManagedDocument(f);DB.gallery.push({id:managed.id,label:f.name,data:null,url:managed.url});save();render();}catch(error){const r=new FileReader();r.onload=()=>{DB.gallery.push({id:Date.now(),label:f.name,data:r.result});save();render();};r.readAsDataURL(f);toast(error.message+' Using offline storage.');}});
   e.target.value='';
 }
 
@@ -1345,6 +1547,14 @@ function vSettings(c){
       <span style="font-size:12px;color:${drive.connected?'var(--green)':'var(--muted)'}">${drive.connected?'Connected':'Not connected'}${drive.account?' · '+drive.account:''}${drive.lastSync?' · Last sync '+new Date(drive.lastSync).toLocaleString():''}</span>
     </div>
 
+    <h3 style="margin-top:22px">Supabase database</h3>
+    <div class="toolbar">
+      <button class="btn gold" onclick="supabaseStatus()">Test Supabase connection</button>
+      <button class="btn" onclick="cloudSync('push')">Save state now</button>
+      <button class="btn" onclick="cloudSync('pull')">Restore state</button>
+      <span style="font-size:12px;color:var(--muted)">Server-controlled sync · workspace default</span>
+    </div>
+
     <h3 style="margin-top:22px">Operational intelligence</h3>
     <div class="toolbar">
       <button class="btn gold" onclick="go('assistant')">Open AI assistant</button>
@@ -1352,7 +1562,7 @@ function vSettings(c){
       <button class="btn" onclick="go('bank')">Open bank reconciliation</button>
     </div>
 
-    <p style="font-size:11.5px;color:var(--muted);margin-top:14px">The app keeps local storage as the primary database and uses Google Drive as an optional secure backup layer. Use the secure backend OAuth flow for production, and keep the token field only as a local fallback while testing. Financial year filter: <b style="color:var(--gold2)">${DB.meta.fy}</b>.</p>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:14px">The app keeps a local offline cache and syncs authoritative state through the protected server to Supabase. Google Drive remains an optional backup layer. Financial year filter: <b style="color:var(--gold2)">${DB.meta.fy}</b>.</p>
   </div>`;
 }
 

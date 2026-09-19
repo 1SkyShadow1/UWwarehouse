@@ -1,6 +1,6 @@
 # UW Accounting System
 
-This is a locally runnable, installable Progressive Web App. It works offline and stores records in the browser's local database (`localStorage`). The optional Supabase integration can synchronize the database to a cloud workspace.
+This is a locally runnable, installable Progressive Web App. It works offline and keeps a browser cache for fallback, while the Node server provides the authoritative versioned JSON datastore and managed document storage.
 
 The imported operational modules include jobs and production stages, suppliers and stock-source catalogues, purchase/payable document review, a document register, and a local AI business assistant. The AI assistant is deliberately rule-based and explainable: it analyses locally stored totals, outstanding invoices, jobs, expense categories, and unreviewed supplier documents without sending business data to an external AI service.
 
@@ -20,11 +20,11 @@ The **FNB Reconciliation** page now uses the 12 attached `GOLD_BUSINESS_ACCOUNT_
 
 All document-facing pages (invoices, quotes, receipts, expenses, payables, the full document register, scanned documents, and the media gallery) provide consistent search, category, status, and date filtering where applicable. Filters update the displayed rows immediately and show the matching count.
 
-Optional Supabase cloud backup is available under Settings. Use **Save to Cloud** for an encrypted-in-transit JSON backup and **Restore from Cloud** to pull the selected workspace back into local storage after device loss or replacement. Configure Row Level Security and use a publishable/anonymous key only; never place a service-role key in the browser.
+Supabase-backed cloud persistence is available through the application server. Use **Save to Cloud** for an encrypted-in-transit state sync and **Restore from Cloud** to pull the selected workspace back into local storage after device loss or replacement. The browser does not connect with a service-role key; the server performs the privileged Supabase operation.
 
 Google Drive backup is now implemented through a secure backend-first OAuth flow. Configure a Google Web OAuth client in Google Cloud Console and add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your environment before using **Sign in with Google Drive**. The app keeps the browser app offline-first, but the durable Google Drive connection is managed through the backend so the system is ready for safe deployment. The app still supports a local advanced token fallback until the backend credentials are configured.
 
-Optional Gemini assistance is also backend-only. Set `GEMINI_API_KEY` and, optionally, `GEMINI_MODEL` in the local `.env` or deployment secret settings. The **AI Business Assistant → Ask Gemini** action sends only the prompt entered by the user; the Gemini key is never sent to the browser or committed to the repository. Revoke any key that has been pasted into chat, source control, logs, or other exposed locations and replace it with a newly generated secret.
+Optional AI assistance is backend-only. Set either `GEMINI_API_KEY` / `GEMINI_MODEL` or `TYPESAFE_API_KEY` / `TYPESAFE_MODEL` in the local `.env` or deployment secret settings, and use `AI_PROVIDER=typesafe` or `AI_PROVIDER=gemini` to choose the active backend provider. The **AI Business Assistant → Ask AI** action sends only the prompt entered by the user; the API key is never sent to the browser or committed to the repository. Revoke any key that has been pasted into chat, source control, logs, or other exposed locations and replace it with a newly generated secret.
 
 ## Run locally on Windows
 
@@ -38,6 +38,8 @@ Do not open `index.html` directly with `file://` when you need installability or
 
 ## Production deployment checklist
 
+- Run `npm test` before every deployment. This starts a disposable server and verifies health, security headers, readiness reporting, AI validation, and Drive status responses.
+- Check `GET /api/ready` after deployment. A `503` response means the deployment is not ready for production traffic. In production it intentionally remains blocked until server authentication, durable persistence, and source-document storage are implemented and enabled.
 - Create a Google Cloud **Web OAuth client** for the deployed domain.
 - Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your deployment environment.
 - Ensure the OAuth redirect URI matches the deployed backend route exactly, without duplicate slashes.
@@ -62,20 +64,24 @@ will reject the request unless the current origin is registered as an Authorized
 - Keep the app offline-first for local use, but run Google Drive sync through the backend in production.
 - Store secrets only in environment variables or a secure secret manager; never embed them in the browser bundle.
 
-## Data and backups
+### Current release blockers
 
-Local data is retained in the browser profile on that computer. Use **Export Backup** regularly and keep the JSON file somewhere safe. **Restore Backup** imports the complete database.
+The browser login remains a client-side convenience; production deployments must put the server behind an authenticated network or configure `UW_API_KEY` (or an upstream identity-aware proxy). The backend smoke test and readiness endpoint provide deployment diagnostics; they do not replace organizational access controls or tested restore procedures.
 
-## Optional Supabase cloud sync
+## Data, persistence, and managed documents
 
-Create this table in Supabase:
+The server stores `uw-state.json` under `UW_DATA_DIR` (or `UW_DB_FILE`) and creates a `.bak` before every atomic replacement. Each snapshot has `version`, `revision`, `updatedAt`, and `data`; state writes use optimistic revision checks and return `409` on conflicts. `GET/PUT /api/state`, `/api/state/backup`, and `/api/state/restore` support application sync and safe operator backups. Set `UW_API_KEY` for any shared or production deployment; requests use `x-api-key` or a Bearer token.
 
-```sql
-create table uw_accounting_data (
-  id text primary key,
-  data jsonb not null,
-  updated_at timestamptz not null
-);
-```
+Uploaded files are kept outside the JSON in `UW_DOCUMENTS_DIR` and replicated to the private `SUPABASE_DOCUMENT_BUCKET` when Supabase is configured. They are accessed through `/api/documents`, `/api/documents/:id`; if the local file is unavailable after an instance replacement, the server retrieves the private Supabase Storage copy. Uploads are size/type checked and use random IDs, so filenames cannot escape the managed directory. The UI uses these URLs when the server is available and falls back to browser data URLs offline.
 
-Configure the project URL and publishable/anon key in **Settings → Optional Cloud Sync**. Configure Row Level Security policies for the users who should read and write the selected workspace. The browser only receives the publishable key; never put a Supabase service-role key in this app.
+The browser retains a local cache for offline use. Use **Export Backup** regularly and keep the JSON file somewhere safe; **Restore Backup** imports the complete database. Server backups should be made from `/api/state/backup` or the configured data directory.
+
+The **Income & Receipts** page is the payment register. Issued receipts use `BBYYYY/MM/DD01` or `SSYYYY/MM/DD01` numbering and increment independently by prefix/date. Paid invoices are highlighted green, while outstanding invoices remain visible with their current balance. Each receipt can be opened and printed as a customer-facing proof of payment.
+
+## Supabase durable sync and documents
+
+Run `supabase/migrations/001_uw_accounting.sql` and then `supabase/migrations/002_document_id_text.sql` in the Supabase SQL Editor before enabling production sync. The second migration is required if the first migration was already run: it converts document metadata IDs from UUID to the app's safe 32-character document IDs. Together they create the versioned `uw_accounting_data` table, document metadata table, private `uw-documents` bucket, and restrictive RLS policies. The migration intentionally grants no direct table or bucket access to `anon` or `authenticated`; the server uses the service-role secret after the application request has passed its server authorization layer.
+
+Configure the deployment with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_WORKSPACE`, and `SUPABASE_STATE_TABLE`. The service-role secret must exist only in Render/server environment secrets and must never be placed in `index.html`, browser localStorage, or the public repository. Server state writes remain local-first and are asynchronously replicated to Supabase; startup selects the newer valid snapshot by timestamp/revision. The browser continues to use localStorage as an offline cache and calls the application API for cloud save/restore.
+
+The supplied publishable/anon key is not required for the server-controlled sync path. Do not use the service-role secret or API secret in browser code. Rotate any credential that has been exposed outside the Supabase/Render secret stores.
