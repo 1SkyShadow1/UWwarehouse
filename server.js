@@ -11,9 +11,16 @@ const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const rootDir = __dirname;
 const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
+const sourceRoots = [...new Set([
+  sourceRoot,
+  path.join(rootDir, '__source'),
+  path.join(rootDir, 'documents'),
+  path.join(rootDir, 'newstatements'),
+])];
 const dataRoot = process.env.UW_DATA_DIR || path.join(rootDir, 'data');
 const stateFile = process.env.UW_DB_FILE || path.join(dataRoot, 'uw-state.json');
 const documentsRoot = process.env.UW_DOCUMENTS_DIR || path.join(dataRoot, 'documents');
+const sourceSearchCache = new Map();
 const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const supabaseWorkspace = String(process.env.SUPABASE_WORKSPACE || 'default').trim() || 'default';
@@ -189,6 +196,46 @@ const apiKeyIsValid = (req) => {
 const requireApiKey = (req, res, next) => apiKeyIsValid(req) ? next() : res.status(401).json({ error: 'Authentication required.' });
 const safeDocumentId = id => /^[a-f0-9]{32}$/.test(String(id || ''));
 const safeDocumentPath = id => path.join(documentsRoot, `${id}.bin`);
+const sourcePathWithin = candidate => {
+  const resolved = path.resolve(candidate);
+  const roots = sourceRoots.map(root => path.resolve(root));
+  return roots.some(root => resolved === root || resolved.startsWith(`${root}${path.sep}`));
+};
+const findSourceFile = (requestedPath, requestedName = '') => {
+  const rawPath = String(requestedPath || '').trim();
+  const name = path.basename(String(requestedName || rawPath).replace(/\\/g, '/'));
+  const cacheKey = `${rawPath}\n${name}`;
+  if (sourceSearchCache.has(cacheKey)) return sourceSearchCache.get(cacheKey);
+  const candidates = [];
+  if (rawPath && !/^attached statement$/i.test(rawPath)) {
+    const relative = rawPath.replace(/^[A-Za-z]:[\\/]+/i, '').replace(/^UW[\\/]+/i, '').replace(/\\/g, '/').replace(/^\/+/, '');
+    sourceRoots.forEach(root => candidates.push(path.join(root, relative)));
+  }
+  if (name && /\.[a-z0-9]{2,5}$/i.test(name)) {
+    sourceRoots.forEach(root => candidates.push(path.join(root, name)));
+  }
+  const direct = candidates.find(candidate => sourcePathWithin(candidate) && fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+  if (direct) {
+    sourceSearchCache.set(cacheKey, direct);
+    return direct;
+  }
+  if (name) {
+    const stack = sourceRoots.filter(root => fs.existsSync(root));
+    while (stack.length) {
+      const directory = stack.pop();
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const candidate = path.join(directory, entry.name);
+        if (entry.isDirectory()) stack.push(candidate);
+        else if (entry.isFile() && entry.name.toLowerCase() === name.toLowerCase()) {
+          sourceSearchCache.set(cacheKey, candidate);
+          return candidate;
+        }
+      }
+    }
+  }
+  sourceSearchCache.set(cacheKey, '');
+  return '';
+};
 
 const cleanStateStore = () => {
   const now = Date.now();
@@ -705,7 +752,7 @@ app.get('/api/ready', (req, res) => {
     server: true,
     googleOAuth: Boolean(google.clientId && google.clientSecret && google.redirectUri),
     aiProvider: Boolean(process.env.GEMINI_API_KEY || process.env.TYPESAFE_API_KEY),
-    sourceStorage: fs.existsSync(sourceRoot) || fs.existsSync(path.join(rootDir, '__source')) || fs.existsSync(documentsRoot),
+    sourceStorage: sourceRoots.some(root => fs.existsSync(root)) || fs.existsSync(documentsRoot),
     serverAuth: Boolean(process.env.UW_API_KEY),
     durableStore: Boolean(stateSnapshot && fs.existsSync(stateFile)),
     documentStorage: fs.existsSync(documentsRoot),
@@ -961,12 +1008,18 @@ app.post('/api/google-drive/restore', async (req, res) => {
   }
 });
 
+app.get('/api/source-file', requireApiKey, (req, res) => {
+  const file = findSourceFile(req.query.path, req.query.name);
+  if (!file) return res.status(404).json({ error: 'Source file is not available on this machine.' });
+  return res.sendFile(file);
+});
+
 app.get('/__source/*', (req, res) => {
   const relativePath = decodeURIComponent(req.params[0] || '').replace(/\\/g, '/').replace(/^\/+/, '');
   const safePath = relativePath.split('/').filter(Boolean).filter(part => part !== '..' && part !== '.').join('/');
   const bundledCandidate = path.join(rootDir, '__source', safePath);
   const localCandidate = path.join(sourceRoot, safePath);
-  const candidate = fs.existsSync(bundledCandidate) ? bundledCandidate : localCandidate;
+  const candidate = fs.existsSync(bundledCandidate) ? bundledCandidate : (fs.existsSync(localCandidate) ? localCandidate : findSourceFile('', path.basename(safePath)));
 
   if (safePath && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
     return res.sendFile(candidate);

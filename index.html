@@ -1341,17 +1341,23 @@ function vSuppliers(c){
   c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Suppliers</div><div class="val gold">${(DB.suppliers||[]).length}</div></div><div class="card"><div class="lbl">Catalogued stock sources</div><div class="val">${(DB.stock||[]).length}</div></div></div><div class="grid2"><div class="panel"><h3>Supplier Directory</h3><table><tr><th>Supplier</th><th>Category</th><th class="num">Source files</th><th>Status</th></tr>${(DB.suppliers||[]).map(s=>`<tr><td>${s.name}</td><td>${s.category}</td><td class="num">${s.items}</td><td>${statusBadge(s.status)}</td></tr>`).join('')}</table></div><div class="panel"><h3>Stock & Material Sources</h3><table><tr><th>Item</th><th>Supplier</th><th>Unit</th><th>Qty</th><th>Reorder</th></tr>${(DB.stock||[]).map((s,i)=>`<tr><td>${s.name}</td><td>${s.supplier}</td><td>${s.unit}</td><td><input style="width:65px" type="number" value="${s.quantity}" onchange="DB.stock[${i}].quantity=+this.value;save()"></td><td>${s.reorderLevel}</td></tr>`).join('')}</table></div></div>`;
 }
 function vPayables(c){const all=DB.payables||[],rows=all.filter(p=>docMatches(p,'payables','Supplier payable',p.status));c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Imported supplier documents</div><div class="val gold">${all.length}</div></div><div class="card"><div class="lbl">Showing</div><div class="val">${rows.length}</div></div><div class="card"><div class="lbl">Unreviewed</div><div class="val amber">${all.filter(x=>x.status==='Unreviewed').length}</div></div></div><div class="toolbar">${docFilterHtml('payables',['Supplier payable'],['Unreviewed','Received','Approved','Paid','Disputed'])}</div><div class="panel"><h3>Purchases & Accounts Payable</h3><table><tr><th>Document</th><th>Supplier</th><th>Date</th><th class="num">Amount</th><th>Status</th><th></th></tr>${rows.map(p=>{const i=all.indexOf(p);return `<tr><td>${p.description}</td><td>${p.supplier}</td><td>${p.date||'—'}</td><td class="num">${R(p.amount)}</td><td><select class="search" style="min-width:120px" onchange="DB.payables[${i}].status=this.value;save();render()">${['Unreviewed','Received','Approved','Paid','Disputed'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td><td><button class="btn sm" onclick="toast('Source: ${String(p.document).replace(/'/g,'')}')">Source</button></td></tr>`}).join('')||'<tr><td colspan="6" class="empty">No payable documents match the current filters</td></tr>'}</table></div>`}
-function sourceUrl(path){
+function sourceUrl(path,name=''){
   const raw=String(path||'').trim();
-  if(!raw)return '';
+  if(!raw){
+    const sourceName=String(name||'').trim();
+    return sourceName?`./__source/${encodeURIComponent(sourceName)}`:'';
+  }
   if(raw.startsWith('data:')||raw.startsWith('blob:')||raw.startsWith('http://')||raw.startsWith('https://')||raw.startsWith('/api/')||raw.startsWith('./')||raw.startsWith('/__source/'))return raw;
-  if(!/\.[a-z0-9]{2,5}$/i.test(raw))return '';
+  if(!/\.[a-z0-9]{2,5}$/i.test(raw)){
+    const sourceName=String(name||'').trim();
+    return sourceName?`./__source/${encodeURIComponent(sourceName)}`:'';
+  }
   const p=raw.replace(/^[A-Za-z]:[\\/]+/i,'').replace(/^UW[\\/]+/i,'').replace(/^[\\/]+/,'').replace(/\\/g,'/').split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  return p?'./__source/'+p:'';
+  return p?`./__source/${p}`:'';
 }
 function documentUrl(document){
   const direct=String(document?.url||document?.data||'').trim();
-  return direct||sourceUrl(document?.path);
+  return direct||sourceUrl(document?.path,document?.name);
 }
 function viewerControls(target){return `<div class="viewer-tools"><button class="btn sm" onclick="viewerZoom('${target}',-0.1)">−</button><span id="${target}-scale" class="viewer-scale">100%</span><button class="btn sm" onclick="viewerZoom('${target}',0.1)">+</button><button class="btn sm" onclick="viewerZoom('${target}',0,true)">Reset</button><span style="font-size:11px;color:var(--muted)">Scroll to pan</span></div>`}
 function viewerZoom(target,delta,reset){const el=document.getElementById(target);if(!el)return;const scale=reset?1:Math.max(.4,Math.min(3,(Number(el.dataset.scale)||1)+delta));el.dataset.scale=scale;el.style.transform=`scale(${scale})`;const label=document.getElementById(target+'-scale');if(label)label.textContent=Math.round(scale*100)+'%';}
