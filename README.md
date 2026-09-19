@@ -44,6 +44,7 @@ Do not open `index.html` directly with `file://` when you need installability or
 - Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` to your deployment environment.
 - Ensure the OAuth redirect URI matches the deployed backend route exactly, without duplicate slashes.
 - Use `https://uwwarehouse-2.onrender.com/api/google-drive/callback` as the production URL for this specific deployment.
+- If Render reports `EACCES: permission denied, mkdir '/var/lib/uw-accounting'`, remove or replace the old `UW_DATA_DIR` and `UW_DOCUMENTS_DIR` values. Render persistent disks should use a mount path such as `/var/data`; set `UW_DATA_DIR=/var/data/uw-accounting` and `UW_DOCUMENTS_DIR=/var/data/uw-accounting/documents`, attach the disk at `/var/data`, then redeploy. The server now falls back to its writable application `data` directory instead of crashing when an invalid path is configured, but that fallback is ephemeral and must not be used as the durable production store.
 
 ### OAuth redirect mismatch troubleshooting
 

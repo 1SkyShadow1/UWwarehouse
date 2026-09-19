@@ -22,9 +22,31 @@ const sourceRoots = [...new Set([
   path.join(rootDir, 'documents'),
   path.join(rootDir, 'newstatements'),
 ])];
-const dataRoot = process.env.UW_DATA_DIR || path.join(rootDir, 'data');
-const stateFile = process.env.UW_DB_FILE || path.join(dataRoot, 'uw-state.json');
-const documentsRoot = process.env.UW_DOCUMENTS_DIR || path.join(dataRoot, 'documents');
+const defaultDataRoot = path.join(rootDir, 'data');
+const configuredDataRoot = process.env.UW_DATA_DIR || defaultDataRoot;
+const canUseDirectory = candidate => {
+  try {
+    fs.mkdirSync(candidate, { recursive: true });
+    const probe = path.join(candidate, `.write-check-${process.pid}`);
+    fs.writeFileSync(probe, 'ok', { flag: 'wx' });
+    fs.rmSync(probe, { force: true });
+    return true;
+  } catch (_) {
+    return false;
+  }
+};
+const dataRoot = canUseDirectory(configuredDataRoot)
+  ? configuredDataRoot
+  : (console.warn(`UW_DATA_DIR is not writable: ${configuredDataRoot}. Falling back to ${defaultDataRoot}. Configure a writable Render disk path such as /var/data/uw-accounting.`), defaultDataRoot);
+const defaultStateFile = path.join(dataRoot, 'uw-state.json');
+const configuredStateFile = process.env.UW_DB_FILE || defaultStateFile;
+const stateFile = canUseDirectory(path.dirname(configuredStateFile))
+  ? configuredStateFile
+  : (console.warn(`UW_DB_FILE is not writable: ${configuredStateFile}. Falling back to ${defaultStateFile}.`), defaultStateFile);
+const configuredDocumentsRoot = process.env.UW_DOCUMENTS_DIR || path.join(dataRoot, 'documents');
+const documentsRoot = canUseDirectory(configuredDocumentsRoot)
+  ? configuredDocumentsRoot
+  : (console.warn(`UW_DOCUMENTS_DIR is not writable: ${configuredDocumentsRoot}. Falling back to ${path.join(dataRoot, 'documents')}.`), path.join(dataRoot, 'documents'));
 const sourceSearchCache = new Map();
 let sourceFileIndex;
 let sourceStemIndex;
