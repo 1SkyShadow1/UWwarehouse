@@ -362,6 +362,7 @@ let serverRevision = null;
 let serverSyncTimer;
 let serverSyncInFlight = false;
 let serverSyncAvailable = false;
+let pendingAiReview=null;
 let remoteDocumentCatalog=[];
 async function initializeServerSync(){
   try{
@@ -1414,13 +1415,19 @@ async function aiReviewDocument(doc){
     const host=document.getElementById(resultHost);
     if(!host)return;
     host.textContent=`Date: ${result.documentDate||'Not found'}\nStore / business: ${result.merchant||'Not found'}\nAmount paid: ${result.amountPaid===null||result.amountPaid===undefined?'Not found':`${result.currency||'R'} ${Number(result.amountPaid).toFixed(2)}`}\nType: ${result.documentType||'other'}\nConfidence: ${Math.round((result.confidence||0)*100)}%\nNotes: ${result.notes||'None'}`;
-    const safeId=String(doc.id||'').replace(/'/g,'&#39;');
-    host.insertAdjacentHTML('afterend',`<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Discard</button><button class="btn gold" onclick="applyAiReview('${safeId}',${JSON.stringify(result).replace(/</g,'\\u003c')})">Save extracted fields</button></div>`);
+    pendingAiReview={id:String(doc.id||''),result};
+    host.insertAdjacentHTML('afterend','<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Discard</button><button class="btn gold" onclick="applyPendingAiReview()">Save extracted fields</button></div>');
   }catch(error){
     const host=document.getElementById(resultHost);
     if(host)host.textContent=error.message;
     toast(error.message);
   }
+}
+function applyPendingAiReview(){
+  if(!pendingAiReview){toast('There is no pending AI review to save');return}
+  const review=pendingAiReview;
+  pendingAiReview=null;
+  applyAiReview(review.id,review.result);
 }
 function applyAiReview(id,result){
   const found=(DB.scannedDocuments||[]).find(x=>String(x.id)===String(id));
