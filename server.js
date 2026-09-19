@@ -11,8 +11,13 @@ const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const rootDir = __dirname;
 const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
+const adjacentSourceRoot = path.resolve(rootDir, '..', '..', '..', 'UWwarehouse');
 const sourceRoots = [...new Set([
   sourceRoot,
+  adjacentSourceRoot,
+  path.join(adjacentSourceRoot, 'UW'),
+  path.join(adjacentSourceRoot, 'UW INVOICES-RECEIPTS&EXPENSES'),
+  path.join(adjacentSourceRoot, 'UW INVOICES-RECEIPTS& EXPENSES 2 B'),
   path.join(rootDir, '__source'),
   path.join(rootDir, 'documents'),
   path.join(rootDir, 'newstatements'),
@@ -21,6 +26,8 @@ const dataRoot = process.env.UW_DATA_DIR || path.join(rootDir, 'data');
 const stateFile = process.env.UW_DB_FILE || path.join(dataRoot, 'uw-state.json');
 const documentsRoot = process.env.UW_DOCUMENTS_DIR || path.join(dataRoot, 'documents');
 const sourceSearchCache = new Map();
+let sourceFileIndex;
+let sourceStemIndex;
 const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const supabaseWorkspace = String(process.env.SUPABASE_WORKSPACE || 'default').trim() || 'default';
@@ -220,17 +227,33 @@ const findSourceFile = (requestedPath, requestedName = '') => {
     return direct;
   }
   if (name) {
-    const stack = sourceRoots.filter(root => fs.existsSync(root));
-    while (stack.length) {
-      const directory = stack.pop();
-      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-        const candidate = path.join(directory, entry.name);
-        if (entry.isDirectory()) stack.push(candidate);
-        else if (entry.isFile() && entry.name.toLowerCase() === name.toLowerCase()) {
-          sourceSearchCache.set(cacheKey, candidate);
-          return candidate;
+    if (!sourceFileIndex) {
+      sourceFileIndex = new Map();
+      sourceStemIndex = new Map();
+      const stack = sourceRoots.filter(root => fs.existsSync(root));
+      while (stack.length) {
+        const directory = stack.pop();
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+          const candidate = path.join(directory, entry.name);
+          if (entry.isDirectory()) stack.push(candidate);
+          else if (entry.isFile()) {
+            const key = entry.name.toLowerCase();
+            if (!sourceFileIndex.has(key)) sourceFileIndex.set(key, candidate);
+            const stem = key.replace(/\.[^.]+$/, '');
+            if (!sourceStemIndex.has(stem)) sourceStemIndex.set(stem, candidate);
+          }
         }
       }
+    }
+    const indexed = sourceFileIndex.get(name.toLowerCase());
+    if (indexed) {
+      sourceSearchCache.set(cacheKey, indexed);
+      return indexed;
+    }
+    const stemmed = sourceStemIndex.get(name.toLowerCase().replace(/\.[^.]+$/, ''));
+    if (stemmed) {
+      sourceSearchCache.set(cacheKey, stemmed);
+      return stemmed;
     }
   }
   sourceSearchCache.set(cacheKey, '');
