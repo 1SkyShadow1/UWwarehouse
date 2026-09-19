@@ -179,7 +179,7 @@ const syncDocumentToSupabase = async (id, file) => {
   if (!supabaseConfigured()) return '';
   const safeName = path.basename(file.originalname || 'document').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 140) || 'document';
   const storagePath = `UW/${id}-${safeName}`;
-  const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(supabaseDocumentBucket)}/${storagePath}`, {
+  const response = await fetch(supabaseObjectUrl(storagePath), {
     method: 'POST',
     headers: { ...supabaseHeaders(), 'Content-Type': file.mimetype, 'x-upsert': 'true' },
     body: file.buffer,
@@ -188,6 +188,10 @@ const syncDocumentToSupabase = async (id, file) => {
   if (!response.ok) throw new Error(`Supabase document upload failed (${response.status}).`);
   remoteStorageCache.expiresAt = 0;
   return storagePath;
+};
+const supabaseObjectUrl = storagePath => {
+  const encodedPath = String(storagePath || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  return `${supabaseUrl}/storage/v1/object/${encodeURIComponent(supabaseDocumentBucket)}/${encodedPath}`;
 };
 const listSupabaseStorage = async () => {
   if (!supabaseConfigured()) return [];
@@ -234,7 +238,7 @@ const listSupabaseStorage = async () => {
 };
 const loadDocumentFromSupabase = async storagePath => {
   if (!supabaseConfigured() || !storagePath) return null;
-  const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(supabaseDocumentBucket)}/${storagePath}`, {
+  const response = await fetch(supabaseObjectUrl(storagePath), {
     headers: supabaseHeaders(),
     signal: AbortSignal.timeout(30000),
   });
