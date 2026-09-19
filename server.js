@@ -55,7 +55,7 @@ const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').t
 const supabaseWorkspace = String(process.env.SUPABASE_WORKSPACE || 'default').trim() || 'default';
 const supabaseStateTable = String(process.env.SUPABASE_STATE_TABLE || 'uw_accounting_data').trim() || 'uw_accounting_data';
 const supabaseDocumentBucket = String(process.env.SUPABASE_DOCUMENT_BUCKET || 'uw-documents').trim() || 'uw-documents';
-const remoteStorageCache = { expiresAt: 0, files: [] };
+const remoteStorageCache = { expiresAt: 0, files: [], error: '' };
 const stateVersion = 1;
 const maxDocumentBytes = Number(process.env.UW_MAX_DOCUMENT_BYTES || 25 * 1024 * 1024);
 const allowedDocumentTypes = new Set((process.env.UW_DOCUMENT_MIME_TYPES || [
@@ -204,13 +204,14 @@ const listSupabaseStorage = async () => {
         signal: AbortSignal.timeout(30000),
       });
       if (!response.ok) {
+        remoteStorageCache.error = `Storage inventory failed (${response.status})`;
         console.warn(`Supabase Storage inventory failed for "${prefix}" (${response.status}).`);
         return;
       }
       const entries = await response.json();
       if (!Array.isArray(entries) || !entries.length) return;
       for (const entry of entries) {
-        const entryPath = `${prefix.replace(/\/+$/, '')}/${entry.name}`.replace(/^\/+/, '');
+        const entryPath = `${prefix ? `${prefix.replace(/\/+$/, '')}/` : ''}${entry.name}`.replace(/^\/+/, '');
         if (entry.id) {
           files.push({
             storagePath: entryPath,
@@ -227,6 +228,7 @@ const listSupabaseStorage = async () => {
   };
   for (const folder of folders) await walk(`${folder}/`);
   remoteStorageCache.files = files;
+  remoteStorageCache.error = '';
   remoteStorageCache.expiresAt = Date.now() + 60 * 1000;
   return files;
 };
@@ -238,6 +240,40 @@ const loadDocumentFromSupabase = async storagePath => {
   });
   if (!response.ok) return null;
   return Buffer.from(await response.arrayBuffer());
+};
+const normalizeDocumentName = value => String(value || '')
+  .toLowerCase()
+  .replace(/reciepts/g, 'receipts')
+  .replace(/[^a-z0-9]+/g, '');
+const loadSourceObjectFromSupabase = async (requestedPath, requestedName) => {
+  if (!supabaseConfigured()) return null;
+  const name = path.basename(String(requestedName || requestedPath || '').replace(/\\/g, '/')).trim();
+  if (!name) return null;
+  const folderCandidates = [
+    '',
+    'UW',
+    'UW/UW',
+    'UW INVOICES-RECEIPTS & EXPENSES',
+    'UW INVOICES-RECEIPTS & EXPENSES 2 B',
+    'UW INVOICES-RECIEPTS & EXPENSES',
+    'UW INVOICES-RECIEPTS & EXPENSES 2 B',
+    'UW/UW INVOICES-RECEIPTS & EXPENSES',
+    'UW/UW INVOICES-RECEIPTS & EXPENSES 2 B',
+    'UW/UW INVOICES-RECIEPTS & EXPENSES',
+    'UW/UW INVOICES-RECIEPTS & EXPENSES 2 B',
+  ];
+  const requestedLower = String(requestedPath || '').toLowerCase().replace(/\\/g, '/');
+  const orderedFolders = [...folderCandidates].sort((a, b) => {
+    const aScore = requestedLower.includes(a.toLowerCase()) ? 2 : 0;
+    const bScore = requestedLower.includes(b.toLowerCase()) ? 2 : 0;
+    return bScore - aScore;
+  });
+  for (const folder of orderedFolders) {
+    const storagePath = `${folder ? `${folder}/` : ''}${name}`;
+    const buffer = await loadDocumentFromSupabase(storagePath);
+    if (buffer) return { buffer, mimeType: mimeForFile(name), name };
+  }
+  return null;
 };
 const recordDocumentInSupabase = async metadata => {
   if (!supabaseConfigured() || !metadata.storagePath) return;
@@ -284,8 +320,10 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
     const buffer = await loadDocumentFromSupabase(metadata.storage_path);
     if (buffer) return { buffer, mimeType: metadata.mime_type || 'application/octet-stream', name: metadata.name || name };
   }
+  const direct = await loadSourceObjectFromSupabase(requestedPath, name);
+  if (direct) return direct;
   const remoteFiles = await listSupabaseStorage();
-  const requestedStem = name.toLowerCase().replace(/\.[^.]+$/, '');
+  const requestedStem = normalizeDocumentName(name.replace(/\.[^.]+$/, ''));
   const requestedLower = String(requestedPath || '').toLowerCase().replace(/\\/g, '/');
   const pathScore = file => {
     const remoteLower = file.storagePath.toLowerCase();
@@ -295,8 +333,8 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
     if (requestedLower.includes('2 b') && remoteLower.includes('2 b')) score += 2;
     return score;
   };
-  const exactRemote = remoteFiles.filter(file => file.name.toLowerCase() === name.toLowerCase()).sort((a, b) => pathScore(b) - pathScore(a))[0];
-  const stemRemote = remoteFiles.filter(file => file.name.toLowerCase().replace(/\.[^.]+$/, '') === requestedStem).sort((a, b) => pathScore(b) - pathScore(a))[0];
+  const exactRemote = remoteFiles.filter(file => normalizeDocumentName(file.name) === normalizeDocumentName(name)).sort((a, b) => pathScore(b) - pathScore(a))[0];
+  const stemRemote = remoteFiles.filter(file => normalizeDocumentName(file.name.replace(/\.[^.]+$/, '')) === requestedStem).sort((a, b) => pathScore(b) - pathScore(a))[0];
   const remote = exactRemote || stemRemote;
   if (!remote) return null;
   const remoteBuffer = await loadDocumentFromSupabase(remote.storagePath);
@@ -599,6 +637,7 @@ app.get('/api/documents/catalog', requireApiKey, async (req, res) => {
       files: remote.map(file => ({ ...file, url: `/api/source-file?name=${encodeURIComponent(file.name)}` })),
       localCount: local.length,
       remoteCount: remote.length,
+      storageError: remoteStorageCache.error || null,
     });
   } catch (error) {
     console.error('Document catalog sync failed:', error.message);
