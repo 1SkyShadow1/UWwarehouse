@@ -672,6 +672,7 @@ app.post('/api/ai/review-document', async (req, res) => {
   const name = String(req.body?.name || '').trim();
   const requestedPath = String(req.body?.path || '').trim();
   let filePath = '';
+  let remoteDocument = null;
   let fileName = name || path.basename(requestedPath);
   if (safeDocumentId(id)) {
     const metadata = (ensureStorage().data.documents || []).find(doc => doc.id === id);
@@ -681,20 +682,27 @@ app.post('/api/ai/review-document', async (req, res) => {
     }
   }
   if (!filePath || !fs.existsSync(filePath)) filePath = findSourceFile(requestedPath, fileName);
-  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'The source document is not available to Gemini on this machine.' });
-  const stat = fs.statSync(filePath);
-  if (!stat.isFile()) return res.status(400).json({ error: 'The source path is not a file.' });
-  if (stat.size > 15 * 1024 * 1024) return res.status(413).json({ error: 'This document is too large for AI review. Open it manually or upload a smaller scan.' });
-  const mimeType = mimeForFile(filePath);
+  if (!filePath || !fs.existsSync(filePath)) remoteDocument = await loadSourceFromSupabase(requestedPath, fileName);
+  if (!filePath && !remoteDocument) return res.status(404).json({ error: 'The source document is not available in local sources or Supabase Storage.' });
+  const stat = filePath ? fs.statSync(filePath) : null;
+  if (stat && !stat.isFile()) return res.status(400).json({ error: 'The source path is not a file.' });
+  const documentSize = stat ? stat.size : remoteDocument.buffer.length;
+  if (documentSize > 15 * 1024 * 1024) return res.status(413).json({ error: 'This document is too large for AI review. Open it manually or upload a smaller scan.' });
+  const mimeType = filePath ? mimeForFile(filePath) : remoteDocument.mimeType;
   if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'].includes(mimeType)) {
     return res.status(415).json({ error: 'Gemini review supports PDF and image receipts/scans.' });
   }
   try {
-    const result = await callGeminiDocumentReview({ buffer: fs.readFileSync(filePath), mimeType, name: fileName || path.basename(filePath) });
-    return res.json({ ...result, sourceName: path.basename(filePath) });
+    const result = await callGeminiDocumentReview({ buffer: filePath ? fs.readFileSync(filePath) : remoteDocument.buffer, mimeType, name: fileName || path.basename(filePath || remoteDocument.name) });
+    return res.json({ ...result, sourceName: path.basename(filePath || remoteDocument.name) });
   } catch (error) {
     return res.status(error.statusCode || 502).json({ error: error.message || 'Gemini document review failed.' });
   }
+});
+
+app.post('/api/gemini/review-document', (req, res, next) => {
+  req.url = '/api/ai/review-document';
+  return app._router.handle(req, res, next);
 });
 
 const getAiProvider = () => {
