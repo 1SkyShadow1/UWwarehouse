@@ -230,7 +230,7 @@ const listSupabaseStorage = async () => {
       offset += entries.length;
     }
   };
-  for (const folder of folders) await walk(`${folder}/`);
+  for (const folder of folders) await walk(folder);
   remoteStorageCache.files = files;
   remoteStorageCache.error = '';
   remoteStorageCache.expiresAt = Date.now() + 60 * 1000;
@@ -253,6 +253,9 @@ const loadSourceObjectFromSupabase = async (requestedPath, requestedName) => {
   if (!supabaseConfigured()) return null;
   const name = path.basename(String(requestedName || requestedPath || '').replace(/\\/g, '/')).trim();
   if (!name) return null;
+  const rawPath = String(requestedPath || '').trim().replace(/\\/g, '/');
+  const relativePath = rawPath.replace(/^[A-Za-z]:\/+/i, '').replace(/^\/+/, '').replace(/^UW\//i, '');
+  const pathCandidates = relativePath && relativePath !== name ? [`UW/${relativePath}`, relativePath] : [];
   const folderCandidates = [
     '',
     'UW',
@@ -272,8 +275,8 @@ const loadSourceObjectFromSupabase = async (requestedPath, requestedName) => {
     const bScore = requestedLower.includes(b.toLowerCase()) ? 2 : 0;
     return bScore - aScore;
   });
-  for (const folder of orderedFolders) {
-    const storagePath = `${folder ? `${folder}/` : ''}${name}`;
+  for (const candidate of [...pathCandidates, ...orderedFolders.map(folder => `${folder ? `${folder}/` : ''}${name}`)]) {
+    const storagePath = candidate;
     const buffer = await loadDocumentFromSupabase(storagePath);
     if (buffer) return { buffer, mimeType: mimeForFile(name), name };
   }
