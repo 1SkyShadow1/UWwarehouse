@@ -930,7 +930,7 @@ function newInvoice(mode='invoice'){
     <div class="fld"><label>Contact / Phone</label><input id="f-contact"></div>
     <div class="fld"><label>Email</label><input id="f-email"></div>
     <div class="fld"><label>${mode==='quote'?'Project Reference':'Project'}</label><input id="f-project" value="${mode==='quote'?'':'Re-Upholstery'}"></div>
-    ${mode==='quote'?`<div class="fld"><label>Quote item preset</label><select id="f-preset" onchange="applyQuotePreset(this.value)"><option value="">Choose size/type/material preset…</option>${DB.priceBook.map((p,i)=>`<option value="${i}">${p.code} — ${p.desc}</option>`).join('')}</select></div>
+    ${mode==='quote'?`<div class="fld"><label>Quote item preset</label><select id="f-preset" onchange="applyQuotePreset(this.value, this)"><option value="">Choose size/type/material preset…</option>${(Array.isArray(DB.priceBook)?DB.priceBook:[]).map((p,i)=>`<option value="${i}">${p.code||'Preset '+(i+1)} — ${p.desc||'Priced item'}</option>`).join('')}</select></div>
     <div class="fld"><label>Work type</label><select id="f-work-type"><option>Manufacturing</option><option>Repair</option><option>Reupholster</option></select></div>
     <div class="fld"><label>Colour</label><input id="f-colour" placeholder="e.g. Stone, Charcoal, Navy"></div>`:''}
   </div>
@@ -944,7 +944,31 @@ function newInvoice(mode='invoice'){
   </div>`);
   addItemRow();
 }
-function applyQuotePreset(index){const p=DB.priceBook[+index];if(!p)return;const row=document.querySelector('#f-items tr:last-child');if(!row)return;row.querySelector('.i-code').value=p.code;row.querySelector('.i-desc').value=p.desc;row.querySelector('.i-qty').value=1;row.querySelector('.i-price').value=priceCalc(p,1,p.fabCost,p.mtr,1,p.matCost,1,400,p.labHr,20,0).sell.toFixed(2);}
+function applyQuotePreset(index,select){
+  const presets=Array.isArray(DB.priceBook)?DB.priceBook:[];
+  const presetIndex=Number.parseInt(index,10);
+  if(!Number.isInteger(presetIndex)||presetIndex<0||presetIndex>=presets.length)return;
+  const preset=presets[presetIndex];
+  const row=document.querySelector('#f-items tbody tr:last-child')||document.querySelector('#f-items tr:last-child');
+  const code=row?.querySelector('.i-code'),desc=row?.querySelector('.i-desc'),qty=row?.querySelector('.i-qty'),price=row?.querySelector('.i-price');
+  if(!code||!desc||!qty||!price){toast('The quote line is not ready yet. Please add a line and try again.');return;}
+  const calculated=priceCalc(
+    preset,
+    1, Number(preset.fabCost)||0, Number(preset.mtr)||0,
+    1, Number(preset.matCost)||0,
+    1, 400, Number(preset.labHr)||0, 20, 0
+  );
+  code.value=String(preset.code||'');
+  desc.value=String(preset.desc||'');
+  qty.value='1';
+  price.value=Number.isFinite(calculated.sell)?calculated.sell.toFixed(2):'0.00';
+  const item=row.querySelector('.i-item');
+  if(item){
+    const option=[...item.options].find(option=>option.value===String(preset.code||''));
+    if(option)item.value=option.value;
+  }
+  if(select)select.blur();
+}
 function addItemRow(){const t=document.getElementById('f-items');const tr=document.createElement('tr');
   const quote=window.invoiceFormMode==='quote';
   tr.innerHTML=`<td><input style="width:80px" class="i-code"></td><td><input style="width:100%" class="i-desc"></td>${quote?`<td><select class="i-item" style="min-width:180px"><option value="">Select item…</option>${quoteItemOptions()}</select></td>`:''}<td><input style="width:55px" class="i-qty" type="number" value="1"></td><td><input style="width:100px" class="i-price" type="number" value="0"></td><td><button class="btn sm danger" onclick="this.parentElement.parentElement.remove()">✕</button></td>`;
