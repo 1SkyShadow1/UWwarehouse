@@ -1,5 +1,5 @@
-const CACHE_NAME = 'uw-accounting-v25';
-const DOCUMENT_CACHE = 'uw-accounting-documents-v1';
+const CACHE_NAME = 'uw-accounting-v26';
+const DOCUMENT_CACHE = 'uw-accounting-documents-v2';
 const APP_SHELL = ['./', './index.html', './imported-data.js', './income-2026.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
@@ -25,7 +25,7 @@ self.addEventListener('fetch', event => {
   if (isDocumentRequest) {
     event.respondWith(caches.open(DOCUMENT_CACHE).then(async cache => {
       const cached = await cache.match(event.request);
-      const network = fetch(event.request, { cache: 'no-store' }).then(response => {
+      const network = fetch(event.request, { cache: 'default' }).then(response => {
         const type = response.headers.get('content-type') || '';
         if (response.ok && (type.startsWith('application/pdf') || type.startsWith('image/'))) cache.put(event.request, response.clone());
         return response;

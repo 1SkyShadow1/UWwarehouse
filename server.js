@@ -71,6 +71,7 @@ const tokenEncryptionKey = (() => {
 })();
 const remoteStorageCache = { expiresAt: 0, files: [], error: '' };
 const remoteDocumentCache = new Map();
+const remoteDocumentInflight = new Map();
 const remoteDocumentCacheTtlMs = 10 * 60 * 1000;
 const remoteDocumentCacheMaxEntries = 24;
 const stateVersion = 1;
@@ -462,17 +463,26 @@ const loadDocumentFromSupabase = async storagePath => {
   const cached = remoteDocumentCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.buffer;
   if (cached) remoteDocumentCache.delete(cacheKey);
-  const response = await fetch(supabaseObjectUrl(storagePath), {
-    headers: supabaseHeaders(),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!response.ok) return null;
-  const buffer = Buffer.from(await response.arrayBuffer());
-  remoteDocumentCache.set(cacheKey, { buffer, expiresAt: Date.now() + remoteDocumentCacheTtlMs });
-  while (remoteDocumentCache.size > remoteDocumentCacheMaxEntries) {
-    remoteDocumentCache.delete(remoteDocumentCache.keys().next().value);
-  }
-  return buffer;
+  if (remoteDocumentInflight.has(cacheKey)) return remoteDocumentInflight.get(cacheKey);
+  const request = (async () => {
+    try {
+      const response = await fetch(supabaseObjectUrl(storagePath), {
+        headers: supabaseHeaders(),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) return null;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      remoteDocumentCache.set(cacheKey, { buffer, expiresAt: Date.now() + remoteDocumentCacheTtlMs });
+      while (remoteDocumentCache.size > remoteDocumentCacheMaxEntries) {
+        remoteDocumentCache.delete(remoteDocumentCache.keys().next().value);
+      }
+      return buffer;
+    } finally {
+      remoteDocumentInflight.delete(cacheKey);
+    }
+  })();
+  remoteDocumentInflight.set(cacheKey, request);
+  return request;
 };
 const normalizeDocumentName = value => String(value || '')
   .toLowerCase()
@@ -504,11 +514,13 @@ const loadSourceObjectFromSupabase = async (requestedPath, requestedName) => {
     const bScore = requestedLower.includes(b.toLowerCase()) ? 2 : 0;
     return bScore - aScore;
   });
-  for (const candidate of [...pathCandidates, ...orderedFolders.map(folder => `${folder ? `${folder}/` : ''}${name}`)]) {
-    const storagePath = candidate;
-    const buffer = await loadDocumentFromSupabase(storagePath);
-    if (buffer) return { buffer, mimeType: mimeForFile(name), name };
-  }
+  const candidates = [...new Set([...pathCandidates, ...orderedFolders.map(folder => `${folder ? `${folder}/` : ''}${name}`)])];
+  const results = await Promise.all(candidates.map(async storagePath => ({
+    storagePath,
+    buffer: await loadDocumentFromSupabase(storagePath).catch(() => null),
+  })));
+  const match = results.find(result => result.buffer);
+  if (match) return { buffer: match.buffer, mimeType: mimeForFile(name), name };
   return null;
 };
 const recordDocumentInSupabase = async metadata => {
@@ -524,7 +536,7 @@ const recordDocumentInSupabase = async metadata => {
       mime_type: metadata.mimeType,
       size_bytes: metadata.size,
     }),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) throw new Error(`Supabase document metadata sync failed (${response.status}).`);
 };
@@ -540,7 +552,7 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
   const exactParams = new URLSearchParams({ ...baseParams, name: `eq.${name}` });
   let response = await fetch(`${supabaseUrl}/rest/v1/uw_documents?${exactParams.toString()}`, {
     headers: supabaseHeaders(),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(8000),
   });
   let [metadata] = response.ok ? await response.json() : [];
   if (!metadata) {
