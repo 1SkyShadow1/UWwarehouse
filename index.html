@@ -1611,7 +1611,7 @@ function vAssistant(c){
       </div>
       <span class="tag paid">No cloud/API required</span>
     </div>
-    <p class="ai-copy">This explainable assistant analyses the complete locally stored D:\UW snapshot. It never invents amounts and flags records requiring source review.</p>
+    <p class="ai-copy">This explainable assistant analyses the complete UW dataset currently loaded in this workspace, including imported accounting records and source evidence. It never invents amounts and flags records requiring source review.</p>
     <div class="ai-stats">
       ${insights.map(x=>`<div class="ai-stat"><span class="label">Signal</span><span class="value">?</span><div style="font-size:12px;color:var(--muted)">${x}</div></div>`).join('')}
       <div class="ai-stat"><span class="label">Source gaps</span><span class="value">${sourceGaps}</span><div style="font-size:12px;color:var(--muted)">Need amount/qty verification</div></div>
@@ -1651,6 +1651,27 @@ function vAssistant(c){
   if(task==='fnb') return `${base}\n\nTask: Review the FNB statement reconciliation and scanned receipts/invoices. Highlight the matching risks, note which scanned items should be approved or rejected, and give a concise evidence-driven plan for reconciling the bank ledger to source documents.`;
   if(task==='followup') return `${base}\n\nTask: Draft a professional customer follow-up for an overdue or pending upholstery job. Include a clear call to action, acknowledgement of the current work status, and a short, credible payment or delivery reminder without making unsupported claims.`;
   return `${base}\n\nTask: ${task || 'Provide a practical operational recommendation based on the current UW data set.'}`;
+}
+function buildAiContext(){
+  const keys=['meta','invoices','receipts','expenses','quotes','jobs','payables','bankStatements','fnbStatements','documents','scannedDocuments','filesystemAudit','filesystemFiles','suppliers','stock','priceBook','fabrics','wages','wageOperationalCosts','customers','vendors','budgets','counters'];
+  const context={source:'signed-in UW Accounting System browser state',localRevision:serverRevision||null};
+  keys.forEach(key=>{
+    if(DB[key]!==undefined) context[key]=DB[key];
+  });
+  context.derived={
+    invoiceBalances:(DB.invoices||[]).map(i=>({
+      id:i.id,date:i.date,customer:i.customer,project:i.project,total:invTotal(i),
+      paid:Number(i.paid)||0,balance:invBalance(i),status:i.status
+    })),
+    totals:{
+      invoiceCount:(DB.invoices||[]).length,
+      receiptCount:(DB.receipts||[]).length,
+      expenseCount:(DB.expenses||[]).length,
+      income:(DB.invoices||[]).reduce((sum,i)=>sum+(Number(i.paid)||0),0),
+      outstanding:(DB.invoices||[]).reduce((sum,i)=>sum+Math.max(0,invBalance(i)),0)
+    }
+  };
+  return context;
 }
 function escapeHtml(value=''){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
 function askGemini(prefill=''){
@@ -1693,7 +1714,7 @@ async function runGemini(){
   const result=document.getElementById('gemini-result');result.textContent='Working…';
   const providerEl=document.getElementById('ai-provider');
   const provider=providerEl ? providerEl.value : 'auto';
-  try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=payload.text||'No response returned.'}catch(error){result.textContent=error.message;toast('AI request failed')}
+  try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider,context:buildAiContext()})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=payload.text||'No response returned.'}catch(error){result.textContent=error.message;toast('AI request failed')}
 }
 function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(DB.expenses.reduce((s,e)=>s+e.amount,0))}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
 
