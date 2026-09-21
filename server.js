@@ -549,20 +549,24 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
     select: 'name,mime_type,storage_path,size_bytes',
     limit: '1',
   };
+  const readMetadata = async params => {
+    try {
+      const response = await fetch(`${supabaseUrl}/rest/v1/uw_documents?${params.toString()}`, {
+        headers: supabaseHeaders(),
+        signal: AbortSignal.timeout(8000),
+      });
+      return response.ok ? await response.json() : [];
+    } catch (error) {
+      console.warn(`Supabase document metadata lookup failed for "${name}":`, error.message);
+      return [];
+    }
+  };
   const exactParams = new URLSearchParams({ ...baseParams, name: `eq.${name}` });
-  let response = await fetch(`${supabaseUrl}/rest/v1/uw_documents?${exactParams.toString()}`, {
-    headers: supabaseHeaders(),
-    signal: AbortSignal.timeout(8000),
-  });
-  let [metadata] = response.ok ? await response.json() : [];
+  let [metadata] = await readMetadata(exactParams);
   if (!metadata) {
     const stem = name.replace(/\.[^.]+$/, '');
     const stemParams = new URLSearchParams({ ...baseParams, name: `ilike.${stem}%` });
-    response = await fetch(`${supabaseUrl}/rest/v1/uw_documents?${stemParams.toString()}`, {
-      headers: supabaseHeaders(),
-      signal: AbortSignal.timeout(15000),
-    });
-    [metadata] = response.ok ? await response.json() : [];
+    [metadata] = await readMetadata(stemParams);
   }
   if (metadata?.storage_path) {
     const buffer = await loadDocumentFromSupabase(metadata.storage_path);
