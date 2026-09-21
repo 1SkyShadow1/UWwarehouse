@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
 <meta name="description" content="Offline-first accounting and operations system for Upholstery Warehouse">
-<link rel="icon" href="uw-round-logo.png" type="image/png">
+<link rel="icon" href="uw-round-logo.png" type="image/png" sizes="512x512">
+<link rel="shortcut icon" href="uw-round-logo.png" type="image/png">
 <link rel="apple-touch-icon" href="uw-round-logo.png">
+<meta name="msapplication-TileImage" content="uw-round-logo.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
 <style>
@@ -53,6 +55,8 @@ body.light .btn,body.light .tb-btn{color:#25251f}
 .ai-tip{font-size:11px;color:var(--muted);line-height:1.5}
 .ai-result{margin:0;white-space:pre-wrap;max-height:60vh;min-height:120px;overflow:auto;padding:14px 16px;border-radius:12px;background:rgba(9,11,14,.72);border:1px solid rgba(212,175,55,.14);color:var(--text);font-size:13px;line-height:1.6}
 .ai-result:empty{display:none}
+.whatsapp-btn{color:#25D366!important;padding:5px 8px!important}
+.whatsapp-btn svg{width:16px;height:16px;display:block}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
 ::-webkit-scrollbar{width:10px;height:10px}
@@ -421,10 +425,14 @@ async function initializeServerSync(){
     serverSyncAvailable=true;
     serverRetryAttempt=0;
     clearTimeout(serverRetryTimer);
-    if(snapshot.data&&Object.keys(snapshot.data).length){
+    const localSavedAt=Date.parse(DB.meta?.localSavedAt||'');
+    const remoteUpdatedAt=Date.parse(snapshot.updatedAt||'');
+    if(snapshot.data&&Object.keys(snapshot.data).length&&(!Number.isFinite(localSavedAt)||!Number.isFinite(remoteUpdatedAt)||remoteUpdatedAt>=localSavedAt)){
       DB={...DB,...snapshot.data,meta:{...DB.meta,...(snapshot.data.meta||{})}};
-      localStorage.setItem(DB_KEY,JSON.stringify(DB));
+      persistLocalSnapshot();
       render();
+    }else if(Number.isFinite(localSavedAt)&&(!Number.isFinite(remoteUpdatedAt)||localSavedAt>remoteUpdatedAt)){
+      queueServerStateSave();
     }else{
       queueServerStateSave();
     }
@@ -518,6 +526,7 @@ async function uploadManagedDocument(file){
   return payload;
 }
 window.addEventListener('online',()=>initializeServerSync());
+window.addEventListener('pagehide',()=>persistLocalSnapshot());
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!serverSyncAvailable)initializeServerSync();});
 function normalizeQuoteFields(db){
   (db.quotes||[]).forEach(q=>{
@@ -539,7 +548,7 @@ function load(){
   const base={...JSON.parse(JSON.stringify(seed)),...imported,...operations,...(income2026.invoices?.length?{invoices:[...(imported.invoices||[]),...income2026.invoices],receipts:[...(imported.receipts||[]),...(income2026.receipts||[])]}:{}),scannedDocuments:scanned.documents||[],fnbStatements:fnb.statements||[],meta:{...seed.meta,...(imported.meta||{}),...(operations.meta||{}),income2026Version:income2026.version||'',scannedVersion:scanned.version||'',fnbVersion:fnb.version||''}};
   base.meta.googleDrive={clientId:'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com',fileName:'UW_ACCOUNTING_BACKUP.json',backupFolderName:'UW Accounting Backups',autoBackup:false,...(base.meta.googleDrive||{})};
   try{
-    const raw=localStorage.getItem(DB_KEY);
+    const raw=localStorage.getItem(DB_KEY)||localStorage.getItem('UW_DB_V1_BACKUP');
     if(raw){
       const parsed=JSON.parse(raw);
       const merged={...base,...parsed,meta:{...base.meta,...(parsed.meta||{}),googleDrive:{...base.meta.googleDrive,...((parsed.meta||{}).googleDrive||{})}}};
@@ -593,7 +602,8 @@ function load(){
   normalizeQuoteFields(initial);
   localStorage.setItem(DB_KEY,JSON.stringify(initial)); return initial;
 }
-let cloudSyncTimer,driveSyncTimer;
+let cloudSyncTimer,driveSyncTimer,periodicSyncTimer;
+const LOCAL_BACKUP_KEY='UW_DB_V1_BACKUP';
 function refreshBundledData(){
   const imported=window.UW_IMPORTED||{},operations=window.UW_OPERATIONS||{};
   if(!confirm('Refresh the current local dataset imported from '+DATA_SOURCE_PATH+'? This replaces the local historical collections with the current bundled D:\\UW snapshot. Export a backup first if needed.'))return;
@@ -603,13 +613,39 @@ function refreshBundledData(){
   DB.meta={...DB.meta,...(imported.meta||{}),...(operations.meta||{})};save();toast('Current D:\\UW dataset loaded locally');render();
 }
 function save(){
-  localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  DB.meta=DB.meta||{};
+  DB.meta.localSavedAt=new Date().toISOString();
+  const serialized=JSON.stringify(DB);
+  try{
+    localStorage.setItem(DB_KEY,serialized);
+    localStorage.setItem(LOCAL_BACKUP_KEY,serialized);
+  }catch(error){
+    console.error('Local database save failed:',error);
+    toast('Local save failed — export a backup before continuing');
+    return false;
+  }
   queueServerStateSave();
   clearTimeout(cloudSyncTimer);
   if(DB.meta.cloud&&DB.meta.cloud.url&&DB.meta.cloud.key) cloudSyncTimer=setTimeout(()=>cloudSync('push'),1200);
   clearTimeout(driveSyncTimer);
   const drive=DB.meta.googleDrive||{};
   if(drive.autoBackup&&drive.token) driveSyncTimer=setTimeout(()=>googleDriveSync('push',true),1800);
+  return true;
+}
+function persistLocalSnapshot(){
+  try{
+    const serialized=JSON.stringify(DB);
+    localStorage.setItem(DB_KEY,serialized);
+    localStorage.setItem(LOCAL_BACKUP_KEY,serialized);
+    queueServerStateSave();
+  }catch(error){console.error('Periodic local save failed:',error);}
+}
+function startPeriodicSync(){
+  clearInterval(periodicSyncTimer);
+  periodicSyncTimer=setInterval(()=>{
+    persistLocalSnapshot();
+    if(serverSyncAvailable&&!serverSyncInFlight) syncServerState();
+  },30000);
 }
 function cloudConfig(){return DB.meta.cloud||{};}
 async function cloudSync(direction){
@@ -948,6 +984,18 @@ function vDashboard(c){
 }
 
 /* ---------- INVOICES ---------- */
+ const whatsappIcon='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M20.52 3.48A11.84 11.84 0 0 0 12.08 0C5.53 0 .2 5.33.2 11.88c0 2.1.55 4.15 1.6 5.96L.1 24l6.3-1.65a11.9 11.9 0 0 0 5.68 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.18-1.23-6.17-3.45-8.43Zm-8.44 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.22-3.74.98 1-3.65-.24-.37a9.85 9.85 0 1 1 8.38 4.64Zm5.4-7.4c-.3-.15-1.78-.88-2.05-.98-.27-.1-.47-.15-.67.15-.2.3-.77.98-.95 1.18-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.09 4.49.71.31 1.27.5 1.7.64.72.23 1.38.2 1.9.12.58-.09 1.78-.73 2.03-1.43.25-.7.25-1.3.17-1.43-.07-.12-.27-.2-.57-.35Z"/></svg>';
+ function shareDocumentWhatsApp(kind,id){
+   const record=(kind==='invoice'?DB.invoices:DB.quotes).find(x=>x.id===id);
+   if(!record)return;
+   const total=kind==='invoice'?invTotal(record):(record.items||[]).reduce((sum,item)=>sum+(Number(item.qty)||0)*(Number(item.price)||0),0);
+   const label=kind==='invoice'?'Invoice':'Quotation';
+   const lines=[`UPHOLSTERY WAREHOUSE`,`${label}: ${record.id}`,`Date: ${record.date}`,`Client: ${record.customer||'—'}`,record.project?`Project: ${record.project}`:record.projectReference?`Project: ${record.projectReference}`:'',`Total: ${R(total)}`,kind==='invoice'?`Balance: ${R(invBalance(record))}`:'',record.expiry?`Valid until: ${record.expiry}`:''].filter(Boolean);
+   const text=lines.join('\n');
+   if(navigator.share){
+     navigator.share({title:`${label} ${record.id}`,text}).then(()=>toast(`${label} shared`)).catch(error=>{if(error.name!=='AbortError')window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,'_blank','noopener')});
+   }else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,'_blank','noopener');
+ }
 function vInvoices(c){
   const rows=DB.invoices.filter(i=>docMatches(i,'invoices','Sales invoice',i.status));
   const years=[];for(let y=2024;y<=new Date().getFullYear();y++)years.push(y);
@@ -968,6 +1016,7 @@ function vInvoices(c){
         <button class="btn sm" onclick="viewInvoice('${i.id}')">View</button>
         <button class="btn sm" onclick="editInvoice('${i.id}')">Edit</button>
         <button class="btn sm" onclick="recordPayment('${i.id}')">Pay</button>
+        <button class="btn sm whatsapp-btn" title="Share on WhatsApp" aria-label="Share invoice on WhatsApp" onclick="shareDocumentWhatsApp('invoice','${i.id}')">${whatsappIcon}</button>
         ${i.generatedFromQuote?`<button class="btn sm danger" onclick="undoQuoteInvoice('${i.id}')">Undo invoice</button>`:''}
         <button class="btn sm danger" onclick="del('invoices','${i.id}')">✕</button>
       </td></tr>`).join('')||'<tr><td colspan="9" class="empty">No invoices</td></tr>'}
@@ -1156,7 +1205,7 @@ function vQuotes(c){
     <td class="num">${R(q.items.reduce((s,i)=>s+i.qty*i.price,0))}</td><td>${q.status==='Accepted'?'<span class="tag paid">Accepted</span>':'<span class="tag quote">'+q.status+'</span>'}</td>
     <td style="white-space:nowrap"><button class="btn sm" onclick="viewQuote('${q.id}')">View</button>
     <button class="btn sm" onclick="editQuote('${q.id}')">Edit</button>
-    <button class="btn sm" onclick="convertQuote('${q.id}')">→ Invoice</button>
+    <button class="btn sm" onclick="convertQuote('${q.id}')">→ Invoice</button><button class="btn sm whatsapp-btn" title="Share on WhatsApp" aria-label="Share quote on WhatsApp" onclick="shareDocumentWhatsApp('quote','${q.id}')">${whatsappIcon}</button>
     <button class="btn sm danger" onclick="del('quotes','${q.id}')">✕</button></td></tr>`).join('')}
   </table></div>`;
 }
@@ -1197,7 +1246,7 @@ function viewInvoice(id){
     <table><tbody>${i.items.map(x=>`<tr><td style="width:20%">${x.code||''}</td><td>${x.desc||''}${x.qty>1?` <small>(${x.qty} × ${R(x.price)})</small>`:''}</td><td class="right" style="width:20%">R ${money(x.qty*x.price)}</td></tr>`).join('')}</tbody><tfoot><tr class="grand-total"><td colspan="2" class="right">*Grand Total:</td><td class="right">R ${money(t)}</td></tr></tfoot></table>
     <div class="terms">${m.vatNote||'*Quoted prices above exclude VAT.'}<br>Full Terms and Conditions can be provided.<br>All goods received/collected in terms of this order remain the property of Upholstery Warehouse Pty Ltd until account is settled in full.<br><br><b>Banking Details:</b><br>Account Name: Upholstery Warehouse (Pty) Ltd<br>Bank Name: ${m.bank||'First National Bank'}<br>Account type: Current<br>Account Number: ${m.account||'63173509557'}<br>Branch Code: ${m.branch||'250655'}<br><br>*Kindly use ${i.id} as reference when making payment.</div>
     <div class="signature-grid"><div>Received By: ...........................................................</div><div>Signature: ...............................................................</div><div>Date: ..................................................</div><div style="text-align:right;border-top:0">E&OE.<br>Produced by UW</div></div></div></div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn whatsapp-btn" onclick="shareDocumentWhatsApp('invoice','${i.id}')">${whatsappIcon} Share on WhatsApp</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
 }
 function viewQuote(id){
   const q=DB.quotes.find(x=>x.id===id),m=DB.meta,t=q.items.reduce((s,i)=>s+i.qty*i.price,0);
@@ -1209,7 +1258,7 @@ function viewQuote(id){
     <div class="template-section">Introduction, notes and specifications</div><div class="quote-introduction">${q.introduction||q.notes||''}</div><div class="template-section">Quote line items</div>
     <table><thead><tr><th>Description</th><th>Item</th><th class="right">Qty</th><th class="right">Unit Price</th><th class="right">Total Price</th></tr></thead><tbody>${q.items.map(x=>`<tr><td>${x.desc||''}</td><td>${quoteItemLabel(x.item)}</td><td class="right">${x.qty}</td><td class="right">R ${money(x.price)}</td><td class="right">R ${money(x.qty*x.price)}</td></tr>`).join('')}</tbody><tfoot><tr class="grand-total"><td colspan="4" class="right">*TOTAL</td><td class="right">R ${money(t)}</td></tr></tfoot></table>
     <div class="template-section">Payment Details: COD or EFT</div><div class="terms">• Upholstery Warehouse (PTY) LTD, First National Bank, Account Number: 63173509557 - Branch Code: 250655<br><b><i>Kindly use Quote Number as reference when making payment. *Quoted prices above exclude VAT. To be Invoiced.</i></b><br><br>By my signature I hereby declare that I have read, understood, and accept the above quotation and below terms.<br>• 80% Deposit due on collection, 20% balance due prior to delivery.<br>• No works will commence until deposit payment is made in full.<br>• Unpaid balances will result in interest being charged as well as storage costs.<br>• Quote includes FREE collection and delivery within a 5km radius of our workshop.<br>• Quote is valid for 30 days from date generated.</div><div class="signature-grid"><div>Client signature: ...........................................................</div><div>Date: ...............................................................</div></div></div></div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / PDF</button></div>`);
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn whatsapp-btn" onclick="shareDocumentWhatsApp('quote','${q.id}')">${whatsappIcon} Share on WhatsApp</button><button class="btn gold" onclick="window.print()">Print / PDF</button></div>`);
 }
 function convertQuote(id){
   const q=DB.quotes.find(x=>x.id===id);
@@ -1958,6 +2007,7 @@ function initializeAccessFlow(){
 
 function startApplication(user){
   initializeServerSync();
+  startPeriodicSync();
   renderNav();
   render();
   applyTheme(localStorage.getItem('UW_THEME')||'dark');
