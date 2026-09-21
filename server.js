@@ -109,6 +109,16 @@ const parseAuthUsers = () => {
 };
 const authUsers = parseAuthUsers();
 const authConfigured = () => Object.values(authUsers).some(user => user && typeof user === 'object' && typeof user.passwordHash === 'string' && user.passwordHash.startsWith('scrypt$'));
+const getAuthUser = identifier => {
+  const normalized = String(identifier || '').trim().toLowerCase();
+  const direct = authUsers[normalized];
+  if (direct) return { key: normalized, user: direct };
+  const match = Object.entries(authUsers).find(([key, user]) => {
+    const name = String(user?.name || '').trim().toLowerCase();
+    return key.toLowerCase() === normalized || name === normalized;
+  });
+  return match ? { key: match[0], user: match[1] } : null;
+};
 const timingSafeEqualText = (a, b) => {
   const left = Buffer.from(String(a || ''));
   const right = Buffer.from(String(b || ''));
@@ -658,15 +668,17 @@ app.get('/api/auth/session', (req, res) => {
   return res.json({ authenticated: Boolean(session), user: session ? { email: session.email, name: session.name, role: session.role } : null, csrfToken: session?.csrfToken || '' });
 });
 app.post('/api/auth/login', async (req, res) => {
-  const email = String(req.body?.email || '').trim().toLowerCase();
+  const identifier = String(req.body?.email || req.body?.username || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   const now = Date.now();
-  const prior = authAttempts.get(email) || { count: 0, windowStartedAt: now };
+  const prior = authAttempts.get(identifier) || { count: 0, windowStartedAt: now };
   if (now - prior.windowStartedAt > 15 * 60 * 1000) { prior.count = 0; prior.windowStartedAt = now; }
-  prior.count += 1; authAttempts.set(email, prior);
+  prior.count += 1; authAttempts.set(identifier, prior);
   if (prior.count > 10) return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
-  const user = authUsers[email];
-  if (!user || !(await verifyPassword(password, user.passwordHash))) return res.status(401).json({ error: 'Invalid email or password.' });
+  const account = getAuthUser(identifier);
+  const user = account?.user;
+  if (!user || !(await verifyPassword(password, user.passwordHash))) return res.status(401).json({ error: 'Invalid profile or password.' });
+  const email = account.key;
   const token = crypto.randomBytes(32).toString('base64url');
   const csrfToken = crypto.randomBytes(24).toString('base64url');
   authSessions.set(token, { email, name: String(user.name || email), role: String(user.role || 'Operator'), csrfToken, expiresAt: now + AUTH_SESSION_TTL_MS });
