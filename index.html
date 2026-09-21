@@ -51,7 +51,7 @@ body.light .btn,body.light .tb-btn{color:#25251f}
 .ai-prompt-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.12)}
 .ai-prompt-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:12px}
 .ai-tip{font-size:11px;color:var(--muted);line-height:1.5}
-.ai-result{margin:0;white-space:pre-wrap;max-height:280px;overflow:auto;padding:14px 16px;border-radius:12px;background:rgba(9,11,14,.72);border:1px solid rgba(212,175,55,.14);color:var(--text);font-size:13px;line-height:1.6}
+.ai-result{margin:0;white-space:pre-wrap;max-height:60vh;min-height:120px;overflow:auto;padding:14px 16px;border-radius:12px;background:rgba(9,11,14,.72);border:1px solid rgba(212,175,55,.14);color:var(--text);font-size:13px;line-height:1.6}
 .ai-result:empty{display:none}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
@@ -1714,7 +1714,7 @@ async function runGemini(){
   const result=document.getElementById('gemini-result');result.textContent='Working…';
   const providerEl=document.getElementById('ai-provider');
   const provider=providerEl ? providerEl.value : 'auto';
-  try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider,context:buildAiContext()})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=payload.text||'No response returned.'}catch(error){result.textContent=error.message;toast('AI request failed')}
+  try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider,context:buildAiContext()})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=(payload.text||'No response returned.')+(payload.truncated?'\n\n[The response reached the model limit. Ask “continue from where you stopped” to retrieve the remaining details.]':'')}catch(error){result.textContent=error.message;toast('AI request failed')}
 }
 function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(DB.expenses.reduce((s,e)=>s+e.amount,0))}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
 

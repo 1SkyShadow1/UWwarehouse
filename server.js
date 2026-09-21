@@ -1114,7 +1114,7 @@ const callGeminiChat = async (prompt, requestContext = null) => {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: getSystemKnowledge(requestContext) }] },
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+            generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
           }),
         },
       );
@@ -1134,7 +1134,14 @@ const callGeminiChat = async (prompt, requestContext = null) => {
 
       const text = extractAiText(payload);
       if (!text) throw new Error('Gemini returned no text.');
-      return { text, provider: 'gemini', model };
+      const finishReason = payload?.candidates?.[0]?.finishReason || '';
+      return {
+        text,
+        provider: 'gemini',
+        model,
+        truncated: finishReason === 'MAX_TOKENS',
+        finishReason: finishReason || null,
+      };
     } catch (error) {
       lastError = error;
       const shouldRetry = error?.message && /no longer available|not found|404|Model not found/i.test(error.message);
