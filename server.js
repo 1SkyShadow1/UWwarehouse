@@ -646,7 +646,13 @@ const validateStateData = data => {
   return '';
 };
 
-app.get('/api/auth/config', (_, res) => res.json({ configured: authConfigured(), methods: authConfigured() ? ['email-password'] : [] }));
+app.get('/api/auth/config', (_, res) => res.json({
+  configured: authConfigured(),
+  methods: authConfigured() ? ['email-password'] : [],
+  users: Object.entries(authUsers)
+    .filter(([, user]) => user && typeof user === 'object' && typeof user.passwordHash === 'string' && user.passwordHash.startsWith('scrypt$'))
+    .map(([email, user]) => ({ email, name: String(user.name || email), role: String(user.role || 'Operator') })),
+}));
 app.get('/api/auth/session', (req, res) => {
   const session = sessionFromRequest(req);
   return res.json({ authenticated: Boolean(session), user: session ? { email: session.email, name: session.name, role: session.role } : null, csrfToken: session?.csrfToken || '' });

@@ -84,8 +84,36 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);colo
 .login-field{display:flex;flex-direction:column;gap:8px;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase}
 .login-field input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,175,55,.2);color:var(--text);padding:12px 14px;border-radius:12px;font-size:14px;outline:none;transition:border-color .2s ease,box-shadow .2s ease}
 .login-field input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.12)}
+.login-field select{width:100%;appearance:none;background:rgba(255,255,255,.04);border:1px solid rgba(212,175,55,.2);color:var(--text);padding:12px 42px 12px 14px;border-radius:12px;font-size:14px;outline:none;transition:border-color .2s ease,box-shadow .2s ease;background-image:linear-gradient(45deg,transparent 50%,var(--gold2) 50%),linear-gradient(135deg,var(--gold2) 50%,transparent 50%);background-position:calc(100% - 19px) 50%,calc(100% - 14px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.login-field select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.12)}
+.login-field select option{background:#1a1a1a;color:var(--text)}
 .login-submit{width:100%;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:700}
 .login-note{font-size:11.5px;color:var(--muted);text-align:center;max-width:240px;line-height:1.5}
+.welcome-modal{position:relative;overflow:hidden;padding:0!important;background:linear-gradient(145deg,#181818 0%,#101010 68%,#211b0e 100%);border-color:rgba(212,175,55,.42);box-shadow:0 30px 100px rgba(0,0,0,.62)}
+.welcome-modal::before{content:'';position:absolute;width:280px;height:280px;right:-130px;top:-140px;border:1px solid rgba(212,175,55,.22);border-radius:50%;box-shadow:0 0 0 22px rgba(212,175,55,.04),0 0 0 44px rgba(212,175,55,.025);pointer-events:none}
+.welcome-hero{display:grid;grid-template-columns:112px 1fr;gap:20px;align-items:center;padding:30px 30px 26px;border-bottom:1px solid rgba(212,175,55,.16);background:radial-gradient(circle at 10% 0%,rgba(212,175,55,.22),transparent 46%)}
+.welcome-mark{width:96px;height:96px;border-radius:50%;padding:8px;border:1px solid rgba(212,175,55,.58);box-shadow:0 0 0 8px rgba(212,175,55,.05),0 10px 30px rgba(0,0,0,.3);background:#111}
+.welcome-mark img{width:100%;height:100%;object-fit:contain}
+.welcome-hero h3{font-size:clamp(1.45rem,3vw,2.15rem);letter-spacing:-.025em;margin:0 0 8px;color:#fff}
+.welcome-hero p{font-size:13px;line-height:1.6;color:var(--muted);max-width:46ch}
+.welcome-body{padding:24px 30px 28px}
+.welcome-body h4{font-size:13px;letter-spacing:.8px;text-transform:uppercase;color:var(--gold2);margin-bottom:14px}
+.welcome-points{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+.welcome-point{padding:13px 12px;border:1px solid rgba(212,175,55,.14);border-radius:12px;background:rgba(255,255,255,.025)}
+.welcome-point strong{display:block;color:var(--text);font-size:12px;margin-bottom:5px}
+.welcome-point span{display:block;color:var(--muted);font-size:11px;line-height:1.45}
+.welcome-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.welcome-actions .btn{min-width:146px}
+.tutorial-modal{padding:0!important;max-width:760px;overflow:hidden;background:#151515}
+.tutorial-progress{height:3px;background:rgba(255,255,255,.08)}
+.tutorial-progress span{display:block;height:100%;background:var(--gold);transition:width .25s ease}
+.tutorial-stage{display:grid;grid-template-columns:160px 1fr;gap:24px;align-items:center;padding:34px 34px 28px;background:radial-gradient(circle at 12% 12%,rgba(212,175,55,.2),transparent 38%),linear-gradient(145deg,#191919,#111)}
+.tutorial-icon{width:132px;height:132px;display:grid;place-items:center;border:1px solid rgba(212,175,55,.35);border-radius:28px;background:rgba(212,175,55,.08);font-size:54px;box-shadow:inset 0 1px rgba(255,255,255,.08),0 16px 30px rgba(0,0,0,.25)}
+.tutorial-stage h3{margin:0 0 10px;font-size:1.55rem;color:#fff}
+.tutorial-stage p{font-size:13px;line-height:1.65;color:var(--muted);max-width:52ch}
+.tutorial-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;border-top:1px solid rgba(212,175,55,.14)}
+.tutorial-step{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+@media(max-width:600px){.welcome-hero,.tutorial-stage{grid-template-columns:1fr}.welcome-mark{width:76px;height:76px}.welcome-points{grid-template-columns:1fr}.welcome-body,.welcome-hero{padding-left:22px;padding-right:22px}.tutorial-icon{width:82px;height:82px;font-size:36px;border-radius:20px}}
 @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 @keyframes spinReverse{0%{transform:rotate(360deg)}100%{transform:rotate(0deg)}}
 @keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
@@ -235,12 +263,14 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     </div>
     <form id="login-form" class="login-form">
       <label class="login-field">
-        <span>Authorized email</span>
-        <input id="login-user" type="email" placeholder="brian@yourcompany.co.za" autocomplete="username">
+        <span>Select your profile</span>
+        <select id="login-user" autocomplete="username" required>
+          <option value="">Loading authorized profiles…</option>
+        </select>
       </label>
       <label class="login-field">
         <span>Encrypted account password</span>
-        <input id="login-pass" type="password" placeholder="Enter your passphrase" autocomplete="current-password">
+        <input id="login-pass" type="password" placeholder="Enter your password" autocomplete="current-password" required>
       </label>
       <button type="submit" class="btn gold login-submit">Launch system</button>
     </form>
@@ -1789,6 +1819,38 @@ function vSettings(c){
 function modal(html){document.getElementById('modal-root').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;}
 function closeModal(){document.getElementById('modal-root').innerHTML='';}
 
+const tutorialSteps=[
+  {icon:'◈',title:'Your command centre',copy:'The dashboard gives you a clean read on income, expenses, outstanding balances and the work moving through Upholstery Warehouse.'},
+  {icon:'▣',title:'Keep every document close',copy:'Open Document Register to view receipts, invoices and statements from the connected Supabase library. Review, search and save without leaving the workspace.'},
+  {icon:'✦',title:'Let intelligence do the heavy lifting',copy:'Use the AI assistant to draft follow-ups and review documents. Nothing important is saved without your confirmation.'},
+  {icon:'↗',title:'Move from insight to action',copy:'Create quotes and invoices, reconcile bank activity, and keep your records backed up from Settings whenever you need to.'}
+];
+let tutorialStep=0;
+function showTutorial(){
+  tutorialStep=0;
+  renderTutorialStep();
+}
+function renderTutorialStep(){
+  const step=tutorialSteps[tutorialStep];
+  const isLast=tutorialStep===tutorialSteps.length-1;
+  document.getElementById('modal-root').innerHTML=`<div class="modal-bg"><div class="modal tutorial-modal">
+    <div class="tutorial-progress"><span style="width:${((tutorialStep+1)/tutorialSteps.length)*100}%"></span></div>
+    <div class="tutorial-stage"><div class="tutorial-icon" aria-hidden="true">${step.icon}</div><div><h3>${step.title}</h3><p>${step.copy}</p></div></div>
+    <div class="tutorial-footer"><span class="tutorial-step">Step ${tutorialStep+1} of ${tutorialSteps.length}</span><div class="toolbar" style="margin:0"><button class="btn" onclick="closeModal()">Skip tour</button>${tutorialStep?'<button class="btn" onclick="tutorialStep--;renderTutorialStep()">Back</button>':''}<button class="btn gold" onclick="${isLast?'finishTutorial()':'tutorialStep++;renderTutorialStep()'}">${isLast?'Enter workspace':'Next'}</button></div></div>
+  </div></div>`;
+}
+function finishTutorial(){
+  localStorage.setItem('UW_TUTORIAL_SEEN','true');
+  closeModal();
+}
+function showWelcome(user){
+  const name=escapeHtml(user?.name||'there');
+  modal(`<div class="welcome-modal">
+    <div class="welcome-hero"><div class="welcome-mark"><img src="uw-round-logo.png" alt=""></div><div><h3>Welcome back, ${name}.</h3><p>Your workspace is ready. Everything you need to keep the warehouse moving is gathered in one calm, connected command centre.</p></div></div>
+    <div class="welcome-body"><h4>Make your first minute count</h4><div class="welcome-points"><div class="welcome-point"><strong>See the signal</strong><span>Start with today’s financial snapshot.</span></div><div class="welcome-point"><strong>Find the proof</strong><span>Open the document register for source records.</span></div><div class="welcome-point"><strong>Take the next step</strong><span>Create, review or reconcile with confidence.</span></div></div><div class="welcome-actions"><button class="btn" onclick="closeModal()">Enter workspace</button><button class="btn gold" onclick="showTutorial()">Take the 2-minute tour <span aria-hidden="true">→</span></button></div></div>
+  </div>`);
+}
+
 function initializeAccessFlow(){
   const launchStartedAt=performance.now();
   const minimumLaunchMs=4000;
@@ -1797,11 +1859,6 @@ function initializeAccessFlow(){
   const loginForm = document.getElementById('login-form');
   const userField = document.getElementById('login-user');
   const passField = document.getElementById('login-pass');
-
-  const storedUser = localStorage.getItem('UW_ACCESS_USER');
-  if (storedUser) {
-    userField.value = storedUser;
-  }
 
   const finishLaunch = () => {
     bootScreen.classList.add('exit');
@@ -1814,6 +1871,11 @@ function initializeAccessFlow(){
   setTimeout(finishLaunch, Math.max(0, minimumLaunchMs-(performance.now()-launchStartedAt)));
 
   fetch('/api/auth/config',{headers:{Accept:'application/json'}}).then(response=>response.json()).then(config=>{
+    if(Array.isArray(config.users)&&config.users.length){
+      userField.innerHTML='<option value="">Choose your profile…</option>'+config.users.map(user=>`<option value="${escapeHtml(user.email)}">${escapeHtml(user.name)} · ${escapeHtml(user.role)}</option>`).join('');
+      const storedUser=localStorage.getItem('UW_ACCESS_USER');
+      if(storedUser&&config.users.some(user=>user.email===storedUser))userField.value=storedUser;
+    }
     if(!config.configured){
       setTimeout(()=>{loginScreen.classList.add('hidden');startApplication();},Math.max(0,minimumLaunchMs-(performance.now()-launchStartedAt)+700));
     }
@@ -1827,18 +1889,19 @@ function initializeAccessFlow(){
     const result = await response.json().catch(()=>({}));
     if(!response.ok){alert(result.error||'Unable to sign in.');passField.value='';return;}
     sessionStorage.setItem('UW_CSRF_TOKEN',result.csrfToken||'');
-    localStorage.setItem('UW_ACCESS_USER', result.user?.name||userValue);
+    localStorage.setItem('UW_ACCESS_USER', result.user?.email||userValue);
     loginScreen.classList.add('hidden');
-    startApplication();
+    startApplication(result.user);
   });
 }
 
-function startApplication(){
+function startApplication(user){
   initializeServerSync();
   renderNav();
   render();
   applyTheme(localStorage.getItem('UW_THEME')||'dark');
   document.body.classList.add('app-ready');
+  if(user)showWelcome(user);
 }
 
 initializeAccessFlow();
