@@ -1610,9 +1610,29 @@ async function loadDocumentViewerAsset(url,kind){
       const response=await fetch(url,{cache:attempt===0?'default':'reload',headers:{Accept:kind==='pdf'?'application/pdf':'image/*'}});
       const type=String(response.headers.get('content-type')||'').toLowerCase();
       if(response.ok&&type.startsWith(expected)){
-        const blob=await response.blob();
-        const objectUrl=URL.createObjectURL(blob);
-        if(target){target.src=objectUrl;target.hidden=false;}
+        /*
+         * Keep the display URL same-origin. Creating a blob URL here can cross
+         * Chrome storage partitions when the modal is opened from an embedded
+         * or restored application context, leaving images/PDFs blocked.
+         */
+        if(target){
+          await new Promise((resolve,reject)=>{
+            let settled=false;
+            const finish=(error)=>{
+              if(settled)return;
+              settled=true;
+              clearTimeout(timer);
+              target.onload=null;
+              target.onerror=null;
+              error?reject(error):resolve();
+            };
+            const timer=setTimeout(()=>finish(new Error('The document loaded but the browser did not display it in time.')),8000);
+            target.onload=()=>finish();
+            target.onerror=()=>finish(new Error('The document loaded but the browser could not display it.'));
+            target.src=url;
+          });
+          target.hidden=false;
+        }
         if(loading)loading.remove();
         return;
       }
