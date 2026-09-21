@@ -53,6 +53,7 @@ const run = async () => {
   const readyJson = await ready.json();
   expect(typeof readyJson.ready === 'boolean' && readyJson.checks, 'Readiness response is malformed.');
   expect(typeof readyJson.checks.persistentStorage === 'boolean', 'Readiness does not report persistent storage.');
+  expect(typeof readyJson.checks.durableAuth === 'boolean', 'Readiness does not report durable authentication.');
 
   const aiConfig = await fetch(`${base}/api/ai/config`);
   const aiConfigJson = await aiConfig.json();

@@ -57,6 +57,17 @@ const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').t
 const supabaseWorkspace = String(process.env.SUPABASE_WORKSPACE || 'default').trim() || 'default';
 const supabaseStateTable = String(process.env.SUPABASE_STATE_TABLE || 'uw_accounting_data').trim() || 'uw_accounting_data';
 const supabaseDocumentBucket = String(process.env.SUPABASE_DOCUMENT_BUCKET || 'uw-documents').trim() || 'uw-documents';
+const supabaseSessionTable = String(process.env.SUPABASE_SESSION_TABLE || 'uw_auth_sessions').trim() || 'uw_auth_sessions';
+const supabaseSecretTable = String(process.env.SUPABASE_SECRET_TABLE || 'uw_secure_secrets').trim() || 'uw_secure_secrets';
+const tokenEncryptionKey = (() => {
+  const raw = String(process.env.UW_TOKEN_ENCRYPTION_KEY || '').trim();
+  try {
+    const key = Buffer.from(raw, 'base64');
+    return key.length === 32 ? key : null;
+  } catch (_) {
+    return null;
+  }
+})();
 const remoteStorageCache = { expiresAt: 0, files: [], error: '' };
 const remoteDocumentCache = new Map();
 const remoteDocumentCacheTtlMs = 10 * 60 * 1000;
@@ -88,6 +99,9 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 const AI_RATE_WINDOW_MS = 15 * 60 * 1000;
 const AI_RATE_LIMIT = 20;
 const AUTH_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const uploadTempRoot = path.join(dataRoot, 'upload-tmp');
+fs.mkdirSync(uploadTempRoot, { recursive: true });
+const durableAuthConfigured = () => supabaseConfigured() && Boolean(tokenEncryptionKey);
 const driveState = {
   tokens: null,
   connected: false,
@@ -134,9 +148,12 @@ const verifyPassword = async (password, encoded) => {
     resolve(!error && timingSafeEqualText(derived.toString('hex'), expected));
   }));
 };
-const sessionFromRequest = req => {
+const sessionTokenFromRequest = req => {
   const token = String(req.get('cookie') || '').split(';').map(x => x.trim()).find(x => x.startsWith('uw_session='));
-  const value = token ? decodeURIComponent(token.slice('uw_session='.length)) : '';
+  return token ? decodeURIComponent(token.slice('uw_session='.length)) : '';
+};
+const sessionFromRequest = req => {
+  const value = sessionTokenFromRequest(req);
   const session = value && authSessions.get(value);
   if (!session || session.expiresAt <= Date.now()) {
     if (value) authSessions.delete(value);
@@ -151,16 +168,22 @@ const requestHasValidApiKey = req => {
   const supplied = String(req.get('x-api-key') || '').trim() || String(req.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   return timingSafeEqualText(supplied, expected);
 };
-const requireSessionOrApiKey = (req, res, next) => {
+const requireSessionOrApiKey = async (req, res, next) => {
   if (requestHasValidApiKey(req)) return next();
-  const session = sessionFromRequest(req);
+  const token = sessionTokenFromRequest(req);
+  const session = sessionFromRequest(req) || await loadDurableSession(token).catch(error => {
+    console.error('Durable session lookup failed:', error.message);
+    return null;
+  });
+  if (session && token) authSessions.set(token, session);
   if (!session && (isProduction || authConfigured())) return res.status(401).json({ error: 'Authentication required.' });
   req.auth = session || { email: 'local', name: 'Local operator', role: 'Owner' };
   return next();
 };
-const requireCsrf = (req, res, next) => {
+const requireCsrf = async (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || requestHasValidApiKey(req) || req.path.startsWith('/auth/')) return next();
-  const session = sessionFromRequest(req);
+  const token = sessionTokenFromRequest(req);
+  const session = sessionFromRequest(req) || await loadDurableSession(token).catch(() => null);
   if (session && !timingSafeEqualText(req.get('x-csrf-token'), session.csrfToken)) return res.status(403).json({ error: 'CSRF validation failed.' });
   return next();
 };
@@ -213,6 +236,98 @@ const supabaseHeaders = () => ({
   Authorization: `Bearer ${supabaseServiceKey}`,
   'Content-Type': 'application/json',
 });
+const encryptedSecret = value => {
+  if (!tokenEncryptionKey) throw new Error('UW_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.');
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', tokenEncryptionKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(String(value || ''), 'utf8'), cipher.final()]);
+  return `v1:${iv.toString('base64url')}:${ciphertext.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}`;
+};
+const decryptSecret = value => {
+  if (!tokenEncryptionKey || !String(value || '').startsWith('v1:')) return '';
+  try {
+    const [, ivRaw, ciphertextRaw, tagRaw] = String(value).split(':');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', tokenEncryptionKey, Buffer.from(ivRaw, 'base64url'));
+    decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
+    return Buffer.concat([decipher.update(Buffer.from(ciphertextRaw, 'base64url')), decipher.final()]).toString('utf8');
+  } catch (_) {
+    return '';
+  }
+};
+const supabaseRows = async (table, query) => {
+  if (!supabaseConfigured()) return [];
+  const response = await fetch(`${supabaseUrl}/rest/v1/${encodeURIComponent(table)}?${query}`, {
+    headers: supabaseHeaders(),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`Supabase ${table} read failed (${response.status}).`);
+  return response.json();
+};
+const upsertSupabaseRow = async (table, row, conflict) => {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${encodeURIComponent(table)}?on_conflict=${encodeURIComponent(conflict)}`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(row),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`Supabase ${table} write failed (${response.status}).`);
+};
+const deleteSupabaseRows = async (table, query) => {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${encodeURIComponent(table)}?${query}`, {
+    method: 'DELETE',
+    headers: supabaseHeaders(),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`Supabase ${table} delete failed (${response.status}).`);
+};
+const hashSessionToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
+const persistSession = async (token, session) => {
+  if (!durableAuthConfigured()) return;
+  await upsertSupabaseRow(supabaseSessionTable, {
+    token_hash: hashSessionToken(token),
+    workspace_id: supabaseWorkspace,
+    email: session.email,
+    name: session.name,
+    role: session.role,
+    csrf_token: encryptedSecret(session.csrfToken),
+    expires_at: new Date(session.expiresAt).toISOString(),
+  }, 'token_hash');
+};
+const loadDurableSession = async token => {
+  if (!durableAuthConfigured() || !token) return null;
+  const rows = await supabaseRows(supabaseSessionTable, `token_hash=eq.${encodeURIComponent(hashSessionToken(token))}&workspace_id=eq.${encodeURIComponent(supabaseWorkspace)}&select=email,name,role,csrf_token,expires_at&limit=1`);
+  const row = rows[0];
+  if (!row) return null;
+  const expiresAt = Date.parse(row.expires_at || '');
+  const csrfToken = decryptSecret(row.csrf_token);
+  if (!csrfToken || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+  return { email: row.email, name: row.name, role: row.role, csrfToken, expiresAt };
+};
+const deleteDurableSession = async token => {
+  if (!durableAuthConfigured() || !token) return;
+  await deleteSupabaseRows(supabaseSessionTable, `token_hash=eq.${encodeURIComponent(hashSessionToken(token))}&workspace_id=eq.${encodeURIComponent(supabaseWorkspace)}`);
+};
+const persistDriveTokens = async () => {
+  if (!durableAuthConfigured() || !driveState.tokens) return;
+  await upsertSupabaseRow(supabaseSecretTable, {
+    workspace_id: supabaseWorkspace,
+    secret_name: 'google_drive_tokens',
+    secret_value: encryptedSecret(JSON.stringify(driveState.tokens)),
+    updated_at: new Date().toISOString(),
+  }, 'workspace_id,secret_name');
+};
+const restoreDriveTokens = async () => {
+  if (!durableAuthConfigured()) return;
+  const rows = await supabaseRows(supabaseSecretTable, `workspace_id=eq.${encodeURIComponent(supabaseWorkspace)}&secret_name=eq.google_drive_tokens&select=secret_value&limit=1`);
+  const raw = decryptSecret(rows[0]?.secret_value);
+  if (!raw) return;
+  try {
+    driveState.tokens = JSON.parse(raw);
+    driveState.connected = Boolean(driveState.tokens?.refresh_token || driveState.tokens?.access_token);
+  } catch (error) {
+    console.error('Stored Google Drive credentials are invalid:', error.message);
+  }
+};
 const syncSnapshotToSupabase = async snapshot => {
   if (!supabaseConfigured()) return snapshot;
   const response = await fetch(`${supabaseUrl}/rest/v1/${encodeURIComponent(supabaseStateTable)}?on_conflict=workspace_id`, {
@@ -267,7 +382,8 @@ const syncDocumentToSupabase = async (id, file) => {
   const response = await fetch(supabaseObjectUrl(storagePath), {
     method: 'POST',
     headers: { ...supabaseHeaders(), 'Content-Type': file.mimetype, 'x-upsert': 'true' },
-    body: file.buffer,
+    body: fs.createReadStream(file.path),
+    duplex: 'half',
     signal: AbortSignal.timeout(30000),
   });
   if (!response.ok) throw new Error(`Supabase document upload failed (${response.status}).`);
@@ -280,6 +396,16 @@ const removeDocumentFromSupabase = async storagePath => {
     await fetch(supabaseObjectUrl(storagePath), { method: 'DELETE', headers: supabaseHeaders(), signal: AbortSignal.timeout(15000) });
   } catch (error) {
     console.warn('Supabase orphan cleanup failed:', error.message);
+  }
+};
+const documentBufferPrefix = async filePath => {
+  const handle = await fs.promises.open(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(64);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
   }
 };
 const supabaseObjectUrl = storagePath => {
@@ -642,9 +768,26 @@ app.use('/api', (_, res, next) => {
 
 ensureStorage();
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_, __, callback) => callback(null, uploadTempRoot),
+    filename: (_, file, callback) => callback(null, `${process.pid}-${crypto.randomBytes(12).toString('hex')}-${path.basename(file.originalname || 'upload')}`),
+  }),
   limits: { fileSize: maxDocumentBytes, files: 1 },
 });
+const cleanupUploadTemp = () => {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const name of fs.readdirSync(uploadTempRoot)) {
+    const file = path.join(uploadTempRoot, name);
+    try {
+      if (fs.statSync(file).mtimeMs < cutoff) fs.rmSync(file, { force: true });
+    } catch (error) {
+      console.warn('Temporary upload cleanup skipped:', error.message);
+    }
+  }
+};
+cleanupUploadTemp();
+const uploadCleanupTimer = setInterval(cleanupUploadTemp, 15 * 60 * 1000);
+uploadCleanupTimer.unref();
 
 const validCollectionKeys = ['invoices', 'quotes', 'expenses', 'receipts', 'documents', 'scannedDocuments', 'fnbStatements'];
 const validateStateData = data => {
@@ -663,8 +806,9 @@ app.get('/api/auth/config', (_, res) => res.json({
     .filter(([, user]) => user && typeof user === 'object' && typeof user.passwordHash === 'string' && user.passwordHash.startsWith('scrypt$'))
     .map(([email, user]) => ({ email, name: String(user.name || email), role: String(user.role || 'Operator') })),
 }));
-app.get('/api/auth/session', (req, res) => {
-  const session = sessionFromRequest(req);
+app.get('/api/auth/session', async (req, res) => {
+  const token = sessionTokenFromRequest(req);
+  const session = sessionFromRequest(req) || await loadDurableSession(token).catch(() => null);
   return res.json({ authenticated: Boolean(session), user: session ? { email: session.email, name: session.name, role: session.role } : null, csrfToken: session?.csrfToken || '' });
 });
 app.post('/api/auth/login', async (req, res) => {
@@ -681,13 +825,21 @@ app.post('/api/auth/login', async (req, res) => {
   const email = account.key;
   const token = crypto.randomBytes(32).toString('base64url');
   const csrfToken = crypto.randomBytes(24).toString('base64url');
-  authSessions.set(token, { email, name: String(user.name || email), role: String(user.role || 'Operator'), csrfToken, expiresAt: now + AUTH_SESSION_TTL_MS });
+  const session = { email, name: String(user.name || email), role: String(user.role || 'Operator'), csrfToken, expiresAt: now + AUTH_SESSION_TTL_MS };
+  authSessions.set(token, session);
+  try {
+    await persistSession(token, session);
+  } catch (error) {
+    console.error('Durable session could not be saved:', error.message);
+    return res.status(503).json({ error: 'Sign-in could not be completed because durable session storage is unavailable.' });
+  }
   res.set('Set-Cookie', `uw_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${AUTH_SESSION_TTL_MS / 1000}${isProduction ? '; Secure' : ''}`);
   return res.json({ ok: true, user: { email, name: String(user.name || email), role: String(user.role || 'Operator') }, csrfToken });
 });
-app.post('/api/auth/logout', (req, res) => {
-  const cookie = String(req.get('cookie') || '').split(';').map(x => x.trim()).find(x => x.startsWith('uw_session='));
-  if (cookie) authSessions.delete(decodeURIComponent(cookie.slice('uw_session='.length)));
+app.post('/api/auth/logout', async (req, res) => {
+  const token = sessionTokenFromRequest(req);
+  if (token) authSessions.delete(token);
+  await deleteDurableSession(token).catch(error => console.error('Durable session cleanup failed:', error.message));
   res.set('Set-Cookie', 'uw_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
   return res.json({ ok: true });
 });
@@ -748,12 +900,16 @@ app.post('/api/documents', requireApiKey, (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'A file is required.' });
     if (!allowedDocumentTypes.has(req.file.mimetype)) return res.status(415).json({ error: 'Unsupported document type.' });
-    if (!hasDocumentSignature(req.file.buffer, req.file.mimetype)) return res.status(415).json({ error: 'The file signature does not match its declared document type.' });
+    const signature = await documentBufferPrefix(req.file.path).catch(() => null);
+    if (!hasDocumentSignature(signature, req.file.mimetype)) {
+      await fs.promises.rm(req.file.path, { force: true }).catch(() => {});
+      return res.status(415).json({ error: 'The file signature does not match its declared document type.' });
+    }
     const id = crypto.randomBytes(16).toString('hex');
     const metadata = { id, name: path.basename(req.file.originalname || 'document'), size: req.file.size, mimeType: req.file.mimetype, createdAt: new Date().toISOString(), url: `/api/documents/${id}` };
     let storagePath = '';
     try {
-      fs.writeFileSync(safeDocumentPath(id), req.file.buffer, { flag: 'wx' });
+      await fs.promises.copyFile(req.file.path, safeDocumentPath(id), fs.constants.COPYFILE_EXCL);
       storagePath = await syncDocumentToSupabase(id, req.file);
       if (storagePath) metadata.storagePath = storagePath;
       await recordDocumentInSupabase(metadata);
@@ -771,6 +927,8 @@ app.post('/api/documents', requireApiKey, (req, res) => {
       await removeDocumentFromSupabase(storagePath);
       console.error('Document upload failed:', writeError);
       res.status(500).json({ error: 'Document could not be stored.' });
+    } finally {
+      await fs.promises.rm(req.file.path, { force: true }).catch(error => console.warn('Temporary upload cleanup failed:', error.message));
     }
   });
 });
@@ -1235,6 +1393,7 @@ app.get('/api/ready', (req, res) => {
     bootstrap: bootstrapComplete,
     apiAuth: !isProduction || Boolean(process.env.UW_API_KEY),
     operatorAuth: !isProduction || authConfigured(),
+    durableAuth: !isProduction || durableAuthConfigured(),
     supabase: !isProduction || supabaseConfigured(),
   };
   const ready = checks.server && (!isProduction || (
@@ -1242,6 +1401,7 @@ app.get('/api/ready', (req, res) => {
     checks.sourceStorage &&
     checks.apiAuth &&
     checks.operatorAuth &&
+    checks.durableAuth &&
     checks.durableStore &&
     checks.documentStorage &&
     checks.persistentStorage &&
@@ -1319,6 +1479,7 @@ app.get('/api/google-drive/callback', async (req, res) => {
     const drive = google.drive({ version: 'v3', auth: oauth2Client });
     const response = await drive.about.get({ fields: 'user' });
     driveState.accountEmail = response.data.user?.emailAddress || '';
+    await persistDriveTokens();
 
     return res.send(`<!doctype html>
       <html><head><meta charset="utf-8" /></head>
@@ -1353,6 +1514,8 @@ app.post('/api/google-drive/disconnect', requireApiKey, (_, res) => {
   driveState.accountEmail = '';
   driveState.fileId = '';
   driveState.lastSync = null;
+  deleteSupabaseRows(supabaseSecretTable, `workspace_id=eq.${encodeURIComponent(supabaseWorkspace)}&secret_name=eq.google_drive_tokens`)
+    .catch(error => console.error('Durable Google Drive credential cleanup failed:', error.message));
   return res.json({ ok: true, message: 'Google Drive disconnected.' });
 });
 
@@ -1575,7 +1738,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log('Google OAuth backend status:', getGoogleConfig().clientId && getGoogleConfig().clientSecret ? 'configured' : 'missing env vars');
   if (supabaseConfigured()) {
     bootstrapComplete = false;
-    bootstrapReady = restoreSnapshotFromSupabase().then(() => {
+    bootstrapReady = Promise.all([restoreSnapshotFromSupabase(), restoreDriveTokens()]).then(() => {
       bootstrapComplete = true;
       console.log('Supabase state sync: configured');
     }).catch(error => {
