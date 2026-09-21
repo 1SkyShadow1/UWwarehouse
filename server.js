@@ -56,6 +56,9 @@ const supabaseWorkspace = String(process.env.SUPABASE_WORKSPACE || 'default').tr
 const supabaseStateTable = String(process.env.SUPABASE_STATE_TABLE || 'uw_accounting_data').trim() || 'uw_accounting_data';
 const supabaseDocumentBucket = String(process.env.SUPABASE_DOCUMENT_BUCKET || 'uw-documents').trim() || 'uw-documents';
 const remoteStorageCache = { expiresAt: 0, files: [], error: '' };
+const remoteDocumentCache = new Map();
+const remoteDocumentCacheTtlMs = 10 * 60 * 1000;
+const remoteDocumentCacheMaxEntries = 24;
 const stateVersion = 1;
 const maxDocumentBytes = Number(process.env.UW_MAX_DOCUMENT_BYTES || 25 * 1024 * 1024);
 const allowedDocumentTypes = new Set((process.env.UW_DOCUMENT_MIME_TYPES || [
@@ -238,12 +241,21 @@ const listSupabaseStorage = async () => {
 };
 const loadDocumentFromSupabase = async storagePath => {
   if (!supabaseConfigured() || !storagePath) return null;
+  const cacheKey = String(storagePath);
+  const cached = remoteDocumentCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.buffer;
+  if (cached) remoteDocumentCache.delete(cacheKey);
   const response = await fetch(supabaseObjectUrl(storagePath), {
     headers: supabaseHeaders(),
     signal: AbortSignal.timeout(30000),
   });
   if (!response.ok) return null;
-  return Buffer.from(await response.arrayBuffer());
+  const buffer = Buffer.from(await response.arrayBuffer());
+  remoteDocumentCache.set(cacheKey, { buffer, expiresAt: Date.now() + remoteDocumentCacheTtlMs });
+  while (remoteDocumentCache.size > remoteDocumentCacheMaxEntries) {
+    remoteDocumentCache.delete(remoteDocumentCache.keys().next().value);
+  }
+  return buffer;
 };
 const normalizeDocumentName = value => String(value || '')
   .toLowerCase()
@@ -660,6 +672,7 @@ app.get('/api/documents/:id', requireApiKey, async (req, res) => {
   if (!metadata) return res.status(404).json({ error: 'Document not found.' });
   res.type(metadata.mimeType || 'application/octet-stream');
   res.set('Content-Disposition', `inline; filename="${String(metadata.name).replace(/["\r\n]/g, '_')}"`);
+  res.set('Cache-Control', 'private, max-age=600, stale-while-revalidate=86400');
   if (fs.existsSync(file)) return res.sendFile(file);
   const remote = await loadDocumentFromSupabase(metadata.storagePath);
   if (!remote) return res.status(404).json({ error: 'Document content is not available.' });
@@ -1338,11 +1351,13 @@ app.post('/api/google-drive/restore', async (req, res) => {
 
 app.get('/api/source-file', requireApiKey, (req, res) => {
   const file = findSourceFile(req.query.path, req.query.name);
+  res.set('Cache-Control', 'private, max-age=600, stale-while-revalidate=86400');
   if (file) return res.sendFile(file);
   loadSourceFromSupabase(req.query.path, req.query.name).then(remote => {
     if (!remote) return res.status(404).json({ error: 'Document is not available in local sources or managed cloud storage.' });
     res.type(remote.mimeType);
     res.set('Content-Disposition', `inline; filename="${String(remote.name).replace(/["\r\n]/g, '_')}"`);
+    res.set('Cache-Control', 'private, max-age=600, stale-while-revalidate=86400');
     return res.send(remote.buffer);
   }).catch(error => {
     console.error('Remote source lookup failed:', error.message);

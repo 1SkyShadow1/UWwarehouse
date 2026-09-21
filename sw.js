@@ -1,5 +1,6 @@
-const CACHE_NAME = 'uw-accounting-v23';
-const APP_SHELL = ['./', './index.html', './imported-data.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
+const CACHE_NAME = 'uw-accounting-v24';
+const DOCUMENT_CACHE = 'uw-accounting-documents-v1';
+const APP_SHELL = ['./', './index.html', './imported-data.js', './income-2026.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
@@ -18,7 +19,21 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const requestUrl = new URL(event.request.url);
-  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/__source/')) {
+  const isDocumentRequest = (requestUrl.pathname === '/api/source-file'
+    || /^\/api\/documents\/[a-f0-9]{32}$/i.test(requestUrl.pathname)
+    || requestUrl.pathname.startsWith('/__source/'));
+  if (isDocumentRequest) {
+    event.respondWith(caches.open(DOCUMENT_CACHE).then(async cache => {
+      const cached = await cache.match(event.request);
+      const network = fetch(event.request, { cache: 'no-store' }).then(response => {
+        if (response.ok) cache.put(event.request, response.clone());
+        return response;
+      }).catch(() => cached || Response.error());
+      return cached || network;
+    }));
+    return;
+  }
+  if (requestUrl.pathname.startsWith('/api/')) {
     event.respondWith(fetch(event.request, { cache: 'no-store' }));
     return;
   }
@@ -30,7 +45,6 @@ self.addEventListener('fetch', event => {
     }).catch(() => caches.match('./index.html')))
   );
 });
-
 
 
 
