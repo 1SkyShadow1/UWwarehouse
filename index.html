@@ -1612,7 +1612,11 @@ async function loadDocumentViewerAsset(url,kind){
       if(response.ok&&type.startsWith(expected)){
         const blob=await response.blob();
         const objectUrl=URL.createObjectURL(blob);
-        if(target){target.src=objectUrl;target.hidden=false;}
+        if(target){
+          target.src=objectUrl;
+          target.hidden=false;
+          target.style.display='block';
+        }
         if(loading)loading.remove();
         return;
       }
