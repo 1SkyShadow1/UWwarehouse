@@ -1108,6 +1108,7 @@ function newInvoice(mode='invoice'){
     <div class="fld"><label>Email</label><input id="f-email"></div>
     <div class="fld"><label>${mode==='quote'?'Project Reference':'Project'}</label><input id="f-project" value="${mode==='quote'?'':'Re-Upholstery'}"></div>
     ${mode==='quote'?`<div class="fld"><label>Quote item preset</label><select id="f-preset" onchange="applyQuotePreset(this.value, this)"><option value="">Choose size/type/material preset…</option>${(Array.isArray(DB.priceBook)?DB.priceBook:[]).map((p,i)=>`<option value="${i}">${p.code||'Preset '+(i+1)} — ${p.desc||'Priced item'}</option>`).join('')}</select></div>
+    <div class="fld"><label>Number of items</label><input id="f-qty" type="number" min="1" step="1" value="1"></div>
     <div class="fld"><label>Work type</label><select id="f-work-type"><option>Manufacturing</option><option>Repair</option><option>Reupholster</option></select></div>
     <div class="fld"><label>Colour</label><input id="f-colour" placeholder="e.g. Stone, Charcoal, Navy"></div>`:''}
   </div>
@@ -1126,29 +1127,26 @@ function applyQuotePreset(index,select){
   const presetIndex=Number.parseInt(index,10);
   if(!Number.isInteger(presetIndex)||presetIndex<0||presetIndex>=presets.length)return;
   const preset=presets[presetIndex];
-  const row=document.querySelector('#f-items tbody tr:last-child')||document.querySelector('#f-items tr:last-child');
-  const code=row?.querySelector('.i-code'),desc=row?.querySelector('.i-desc'),qty=row?.querySelector('.i-qty'),price=row?.querySelector('.i-price');
-  if(!code||!desc||!qty||!price){toast('The quote line is not ready yet. Please add a line and try again.');return;}
-  const calculated=priceCalc(
-    preset,
-    1, Number(preset.fabCost)||0, Number(preset.mtr)||0,
-    1, Number(preset.matCost)||0,
-    1, 400, Number(preset.labHr)||0, 20, 0
-  );
-  code.value=String(preset.code||'');
-  desc.value=String(preset.desc||'');
-  qty.value='1';
-  price.value=Number.isFinite(calculated.sell)?calculated.sell.toFixed(2):'0.00';
-  const item=row.querySelector('.i-item');
-  if(item){
-    const option=[...item.options].find(option=>option.value===String(preset.code||''));
-    if(option)item.value=option.value;
+  const quantity=Math.max(1,Number(document.getElementById('f-qty')?.value)||1);
+  const workType=document.getElementById('f-work-type')?.value||'Reupholster';
+  const colour=document.getElementById('f-colour')?.value.trim()||'the selected fabric';
+  const introduction=document.getElementById('f-introduction');
+  if(introduction) introduction.value=`${quantity} x ${preset.desc||'Item'} to be ${workType.toLowerCase()} in ${colour}.\n* New high density foam, 3-line webbing, Comfortel filling, Decron, wood, etc. all included.`;
+  const table=document.getElementById('f-items');
+  if(table){
+    table.querySelectorAll('tr:not(:first-child)').forEach(row=>row.remove());
+    [
+      {item:'Fabric',desc:`${preset.desc||'Item'} - Fabric`,qty:(Number(preset.mtr)||1)*quantity,price:Number(preset.fabCost)||0},
+      {item:'Foam',desc:`${preset.desc||'Item'} - Foam`,qty:quantity,price:Number(preset.matCost)||0},
+      {item:'Labour',desc:`${preset.desc||'Item'} - Labour`,qty:quantity,price:(Number(preset.labHr)||0)*400},
+      {item:'Consumables',desc:`${preset.desc||'Item'} - Consumables`,qty:quantity,price:20},
+    ].forEach(line=>addItemRow({...line,code:String(preset.code||'')}));
   }
   if(select)select.blur();
 }
-function addItemRow(){const t=document.getElementById('f-items');const tr=document.createElement('tr');
+function addItemRow(item={}){const t=document.getElementById('f-items');const tr=document.createElement('tr');
   const quote=window.invoiceFormMode==='quote';
-  tr.innerHTML=`<td><input style="width:80px" class="i-code"></td><td><input style="width:100%" class="i-desc"></td>${quote?`<td><select class="i-item" style="min-width:180px"><option value="">Select item…</option>${quoteItemOptions()}</select></td>`:''}<td><input style="width:55px" class="i-qty" type="number" value="1"></td><td><input style="width:100px" class="i-price" type="number" value="0"></td><td><button class="btn sm danger" onclick="this.parentElement.parentElement.remove()">✕</button></td>`;
+  tr.innerHTML=`<td><input style="width:80px" class="i-code" value="${item.code||''}"></td><td><input style="width:100%" class="i-desc" value="${item.desc||''}"></td>${quote?`<td><select class="i-item" style="min-width:180px"><option value="">Select category…</option>${quoteItemOptions(item.item||'')}</select></td>`:''}<td><input style="width:55px" class="i-qty" type="number" value="${item.qty||1}"></td><td><input style="width:100px" class="i-price" type="number" value="${item.price||0}"></td><td><button class="btn sm danger" onclick="this.parentElement.parentElement.remove()">✕</button></td>`;
   t.appendChild(tr);}
 function saveInvoice(){
   const items=[...document.querySelectorAll('#f-items tr')].slice(1).map(tr=>({code:tr.querySelector('.i-code').value,desc:tr.querySelector('.i-desc').value,item:tr.querySelector('.i-item')?.value||'',qty:+tr.querySelector('.i-qty').value||0,price:+tr.querySelector('.i-price').value||0})).filter(i=>i.desc);
@@ -1227,6 +1225,14 @@ function del(coll,id){if(!confirm('Delete this record?'))return;DB[coll]=DB[coll
 function quoteItemOptions(selected=''){
   const groups={Materials:[],Labour:[],Consumables:[]};
   const add=(group,value,label)=>{if(value&&!groups[group].some(x=>x.value===value))groups[group].push({value,label});};
+  const categories=[
+    ['Fabric','Fabric'],
+    ['Foam','Foam'],
+    ['Labour','Labour'],
+    ['Consumables','Consumables'],
+    ['Delivery','Delivery'],
+    ['Other','Other'],
+  ];
   (DB.fabrics||[]).forEach(f=>add('Materials',f.code||f.desc,`${f.desc}${f.supplier?' — '+f.supplier:''}`));
   (DB.stock||[]).forEach(s=>{
     const name=String(s.name||'').trim();if(name)add('Materials',s.sku||name,`${name}${s.supplier?' — '+s.supplier:''}`);
@@ -1236,7 +1242,7 @@ function quoteItemOptions(selected=''){
     .forEach(p=>add(/consum/i.test(p.category||'')?'Consumables':'Materials',p.description||p.vendor,`${p.description||p.vendor}${p.vendor?' — '+p.vendor:''}`));
   ['Upholstery labour','Removal and preparation labour','Cutting and sewing labour','Installation labour'].forEach(x=>add('Labour',x,x));
   ['Foam','High-density foam','Webbing','Springs','Batting / Dacron','Staples','Adhesive / glue','Thread','Zips','Calico / lining','Dust cover fabric','Screws and fasteners','Packaging and delivery consumables'].forEach(x=>add('Consumables',x,x));
-  return Object.entries(groups).map(([group,items])=>`<optgroup label="${group}">${items.map(x=>`<option value="${x.value}" ${x.value===selected?'selected':''}>${x.label}</option>`).join('')}</optgroup>`).join('');
+  return `<optgroup label="Cost category">${categories.map(([value,label])=>`<option value="${value}" ${value===selected?'selected':''}>${label}</option>`).join('')}</optgroup>${Object.entries(groups).map(([group,items])=>`<optgroup label="${group}">${items.map(x=>`<option value="${x.value}" ${x.value===selected?'selected':''}>${x.label}</option>`).join('')}</optgroup>`).join('')}`;
 }
 function quoteItemLabel(value){
   if(!value)return '—';
