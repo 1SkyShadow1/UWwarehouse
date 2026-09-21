@@ -51,6 +51,7 @@ const run = async () => {
   expect([200, 503].includes(ready.status), 'Readiness endpoint returned an unexpected status.');
   const readyJson = await ready.json();
   expect(typeof readyJson.ready === 'boolean' && readyJson.checks, 'Readiness response is malformed.');
+  expect(typeof readyJson.checks.persistentStorage === 'boolean', 'Readiness does not report persistent storage.');
 
   const aiConfig = await fetch(`${base}/api/ai/config`);
   const aiConfigJson = await aiConfig.json();

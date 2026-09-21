@@ -38,6 +38,7 @@ const canUseDirectory = candidate => {
 const dataRoot = canUseDirectory(configuredDataRoot)
   ? configuredDataRoot
   : (console.warn(`UW_DATA_DIR is not writable: ${configuredDataRoot}. Falling back to ${defaultDataRoot}. Configure a writable Render disk path such as /var/data/uw-accounting.`), defaultDataRoot);
+const dataRootFallback = path.resolve(dataRoot) !== path.resolve(configuredDataRoot);
 const defaultStateFile = path.join(dataRoot, 'uw-state.json');
 const configuredStateFile = process.env.UW_DB_FILE || defaultStateFile;
 const stateFile = canUseDirectory(path.dirname(configuredStateFile))
@@ -47,6 +48,7 @@ const configuredDocumentsRoot = process.env.UW_DOCUMENTS_DIR || path.join(dataRo
 const documentsRoot = canUseDirectory(configuredDocumentsRoot)
   ? configuredDocumentsRoot
   : (console.warn(`UW_DOCUMENTS_DIR is not writable: ${configuredDocumentsRoot}. Falling back to ${path.join(dataRoot, 'documents')}.`), path.join(dataRoot, 'documents'));
+const documentsRootFallback = path.resolve(documentsRoot) !== path.resolve(configuredDocumentsRoot);
 const sourceSearchCache = new Map();
 let sourceFileIndex;
 let sourceStemIndex;
@@ -87,6 +89,8 @@ const driveState = {
 
 let stateSnapshot;
 let stateWrite = Promise.resolve();
+let bootstrapReady = Promise.resolve();
+let bootstrapComplete = true;
 const ensureStorage = () => {
   fs.mkdirSync(dataRoot, { recursive: true });
   fs.mkdirSync(documentsRoot, { recursive: true });
@@ -565,12 +569,14 @@ const upload = multer({
   limits: { fileSize: maxDocumentBytes, files: 1 },
 });
 
-app.get('/api/state', requireApiKey, (req, res) => {
+app.get('/api/state', requireApiKey, async (req, res) => {
+  await bootstrapReady;
   const snapshot = ensureStorage();
   res.json(snapshot);
 });
 
 app.put('/api/state', requireApiKey, async (req, res) => {
+  await bootstrapReady;
   const current = ensureStorage();
   const expectedRevision = req.body && req.body.revision !== undefined ? Number(req.body.revision) : current.revision;
   if (!Number.isInteger(expectedRevision) || expectedRevision !== current.revision) {
@@ -665,6 +671,7 @@ app.get('/api/documents/catalog', requireApiKey, async (req, res) => {
 });
 
 app.get('/api/documents/:id', requireApiKey, async (req, res) => {
+  await bootstrapReady;
   const id = String(req.params.id || '');
   if (!safeDocumentId(id)) return res.status(400).json({ error: 'Invalid document id.' });
   const metadata = (ensureStorage().data.documents || []).find(doc => doc.id === id);
@@ -1097,6 +1104,8 @@ app.get('/api/ready', (req, res) => {
     serverAuth: Boolean(process.env.UW_API_KEY),
     durableStore: Boolean(stateSnapshot && fs.existsSync(stateFile)),
     documentStorage: fs.existsSync(documentsRoot),
+    persistentStorage: !isProduction || (!dataRootFallback && !documentsRootFallback),
+    bootstrap: bootstrapComplete,
     apiAuth: !isProduction || Boolean(process.env.UW_API_KEY),
     supabase: !isProduction || supabaseConfigured(),
   };
@@ -1106,6 +1115,8 @@ app.get('/api/ready', (req, res) => {
     checks.apiAuth &&
     checks.durableStore &&
     checks.documentStorage &&
+    checks.persistentStorage &&
+    checks.bootstrap &&
     checks.supabase
   ));
   return res.status(ready ? 200 : 503).json({
@@ -1365,7 +1376,7 @@ app.get('/api/source-file', requireApiKey, (req, res) => {
   });
 });
 
-app.get('/__source/*', (req, res) => {
+app.get('/__source/*', requireApiKey, (req, res) => {
   const relativePath = decodeURIComponent(req.params[0] || '').replace(/\\/g, '/').replace(/^\/+/, '');
   const safePath = relativePath.split('/').filter(Boolean).filter(part => part !== '..' && part !== '.').join('/');
   const bundledCandidate = path.join(rootDir, '__source', safePath);
@@ -1412,9 +1423,12 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`UW Accounting app and API running at http://${HOST}:${PORT}`);
   console.log('Google OAuth backend status:', getGoogleConfig().clientId && getGoogleConfig().clientSecret ? 'configured' : 'missing env vars');
   if (supabaseConfigured()) {
-    restoreSnapshotFromSupabase().then(() => {
+    bootstrapComplete = false;
+    bootstrapReady = restoreSnapshotFromSupabase().then(() => {
+      bootstrapComplete = true;
       console.log('Supabase state sync: configured');
     }).catch(error => {
+      bootstrapComplete = true;
       console.error('Supabase state bootstrap failed:', error.message);
     });
   } else {

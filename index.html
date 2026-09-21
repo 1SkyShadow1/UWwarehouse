@@ -310,11 +310,11 @@ const seed = {
   ],
   expenses:[
     {id:1,date:'2025-01-04',vendor:"George - Landlord",desc:'January Rent',category:'Rent',invoiceNo:'DT',paidBy:'Brian',amount:12000,fundedBy:'Company',fy:'2025'},
-    {id:2,date:'2025-02-29',vendor:'George',desc:'February Rent',category:'Rent',invoiceNo:'DT',paidBy:'Brian',amount:12000,fundedBy:'Company',fy:'2025'},
+    {id:2,date:'2025-02-28',vendor:'George',desc:'February Rent',category:'Rent',invoiceNo:'DT',paidBy:'Brian',amount:12000,fundedBy:'Company',fy:'2025'},
     {id:3,date:'2025-02-28',vendor:'Hawaii Commodoties',desc:'Leather',category:'Consumables',invoiceNo:'DT',paidBy:'Brian',amount:3742,fundedBy:'Company',fy:'2025'},
-    {id:4,date:'2025-02-29',vendor:'Sullies',desc:'Material',category:'Consumables',invoiceNo:'67',paidBy:'Brian',amount:3140,fundedBy:'Company',fy:'2025'},
-    {id:5,date:'2025-02-29',vendor:'Outsurance',desc:'Vehicle Insurance',category:'Vehicle',invoiceNo:'DD',paidBy:'Brian',amount:1407.83,fundedBy:'Company',fy:'2025'},
-    {id:6,date:'2025-02-31',vendor:'CEBK',desc:'Facebook Ads',category:'Marketing',invoiceNo:'DD',paidBy:'Brian',amount:615.25,fundedBy:'Company',fy:'2025'},
+    {id:4,date:'2025-02-28',vendor:'Sullies',desc:'Material',category:'Consumables',invoiceNo:'67',paidBy:'Brian',amount:3140,fundedBy:'Company',fy:'2025'},
+    {id:5,date:'2025-02-28',vendor:'Outsurance',desc:'Vehicle Insurance',category:'Vehicle',invoiceNo:'DD',paidBy:'Brian',amount:1407.83,fundedBy:'Company',fy:'2025'},
+    {id:6,date:'2025-02-28',vendor:'CEBK',desc:'Facebook Ads',category:'Marketing',invoiceNo:'DD',paidBy:'Brian',amount:615.25,fundedBy:'Company',fy:'2025'},
     {id:7,date:'2025-01-03',vendor:'MBT Edleen Garage',desc:'NP300 Fuel',category:'Fuel',invoiceNo:'7607',paidBy:'Mike',amount:500.05,fundedBy:'Company',fy:'2025'},
     {id:8,date:'2025-01-04',vendor:'Chamdor',desc:'Material',category:'Consumables',invoiceNo:'1688',paidBy:'Mike',amount:578.75,fundedBy:'Company',fy:'2025'},
     {id:9,date:'2025-01-17',vendor:'Rain',desc:'Internet',category:'Office',invoiceNo:'DD',paidBy:'Brian',amount:595,fundedBy:'Company',fy:'2025'},
@@ -362,17 +362,23 @@ const seed = {
 let DB = load();
 let serverRevision = null;
 let serverSyncTimer;
+let serverRetryTimer;
+let serverRetryAttempt = 0;
 let serverSyncInFlight = false;
 let serverSyncAvailable = false;
 let pendingAiReview=null;
 let remoteDocumentCatalog=[];
 async function initializeServerSync(){
+  if(serverSyncInFlight)return;
+  serverSyncInFlight=true;
   try{
     const response=await fetch('/api/state',{headers:{Accept:'application/json'}});
     if(!response.ok) throw new Error('server state unavailable');
     const snapshot=await response.json();
     serverRevision=Number(snapshot.revision||0);
     serverSyncAvailable=true;
+    serverRetryAttempt=0;
+    clearTimeout(serverRetryTimer);
     if(snapshot.data&&Object.keys(snapshot.data).length){
       DB={...DB,...snapshot.data,meta:{...DB.meta,...(snapshot.data.meta||{})}};
       localStorage.setItem(DB_KEY,JSON.stringify(DB));
@@ -384,6 +390,12 @@ async function initializeServerSync(){
   }catch(error){
     serverSyncAvailable=false;
     console.warn('Server persistence unavailable; continuing offline.',error);
+    clearTimeout(serverRetryTimer);
+    const delay=Math.min(30000,2000*2**serverRetryAttempt);
+    serverRetryAttempt=Math.min(serverRetryAttempt+1,4);
+    serverRetryTimer=setTimeout(initializeServerSync,delay);
+  }finally{
+    serverSyncInFlight=false;
   }
 }
 async function synchronizeRemoteDocuments(){
@@ -429,6 +441,8 @@ async function syncServerState(){
     serverSyncAvailable=false;
     console.warn('Server save failed; offline fallback enabled.',error);
     toast('Saved locally; server sync is unavailable');
+    clearTimeout(serverRetryTimer);
+    serverRetryTimer=setTimeout(initializeServerSync,Math.min(30000,2000*2**serverRetryAttempt));
   }finally{serverSyncInFlight=false;}
 }
 async function uploadManagedDocument(file){
@@ -439,6 +453,8 @@ async function uploadManagedDocument(file){
   return payload;
 }
 initializeServerSync();
+window.addEventListener('online',()=>initializeServerSync());
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!serverSyncAvailable)initializeServerSync();});
 function normalizeQuoteFields(db){
   (db.quotes||[]).forEach(q=>{
     if(q.projectReference===undefined) q.projectReference='';

@@ -10,7 +10,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+      keys.filter(key => key !== CACHE_NAME && key !== DOCUMENT_CACHE).map(key => caches.delete(key))
     ))
   );
   self.clients.claim();
@@ -24,7 +24,7 @@ self.addEventListener('fetch', event => {
     || requestUrl.pathname.startsWith('/__source/'));
   if (isDocumentRequest) {
     event.respondWith(caches.open(DOCUMENT_CACHE).then(async cache => {
-      const cached = await cache.match(event.request, { ignoreSearch: true });
+      const cached = await cache.match(event.request);
       const network = fetch(event.request, { cache: 'no-store' }).then(response => {
         const type = response.headers.get('content-type') || '';
         if (response.ok && (type.startsWith('application/pdf') || type.startsWith('image/'))) cache.put(event.request, response.clone());
@@ -47,5 +47,4 @@ self.addEventListener('fetch', event => {
     }).catch(() => caches.match('./index.html')))
   );
 });
-
 
