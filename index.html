@@ -88,7 +88,10 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);colo
 .login-field select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.12)}
 .login-field select option{background:#1a1a1a;color:var(--text)}
 .login-submit{width:100%;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:700}
+.login-submit:disabled{opacity:.55;cursor:not-allowed;filter:grayscale(.35)}
 .login-note{font-size:11.5px;color:var(--muted);text-align:center;max-width:240px;line-height:1.5}
+.login-error{display:none;width:100%;padding:10px 12px;border:1px solid rgba(217,83,79,.42);border-radius:10px;background:rgba(217,83,79,.1);color:#ffb0a8;font-size:12px;line-height:1.45}
+.login-error.visible{display:block}
 .welcome-modal{position:relative;overflow:hidden;padding:0!important;background:linear-gradient(145deg,#181818 0%,#101010 68%,#211b0e 100%);border-color:rgba(212,175,55,.42);box-shadow:0 30px 100px rgba(0,0,0,.62)}
 .welcome-modal::before{content:'';position:absolute;width:280px;height:280px;right:-130px;top:-140px;border:1px solid rgba(212,175,55,.22);border-radius:50%;box-shadow:0 0 0 22px rgba(212,175,55,.04),0 0 0 44px rgba(212,175,55,.025);pointer-events:none}
 .welcome-hero{display:grid;grid-template-columns:112px 1fr;gap:20px;align-items:center;padding:30px 30px 26px;border-bottom:1px solid rgba(212,175,55,.16);background:radial-gradient(circle at 10% 0%,rgba(212,175,55,.22),transparent 46%)}
@@ -272,9 +275,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
         <span>Encrypted account password</span>
         <input id="login-pass" type="password" placeholder="Enter your password" autocomplete="current-password" required>
       </label>
-      <button type="submit" class="btn gold login-submit">Launch system</button>
+      <button type="submit" class="btn gold login-submit" disabled>Launch system</button>
+      <div id="login-error" class="login-error" role="alert" aria-live="polite"></div>
     </form>
-    <p class="login-note">Sign in with your authorized company email. Sessions are protected by an encrypted server-side login.</p>
+    <p class="login-note">Choose Brian or Evans, then enter the matching passphrase. Sessions are protected by a server-side login.</p>
   </div>
 </div>
 
@@ -1859,6 +1863,28 @@ function initializeAccessFlow(){
   const loginForm = document.getElementById('login-form');
   const userField = document.getElementById('login-user');
   const passField = document.getElementById('login-pass');
+  const submitButton = loginForm.querySelector('button[type="submit"]');
+  const loginError = document.getElementById('login-error');
+  const fallbackProfiles = [
+    {email:'brian', name:'Brian', role:'Owner'},
+    {email:'evans', name:'Evans', role:'Manager'}
+  ];
+  const showLoginError = message => {
+    loginError.textContent = message;
+    loginError.classList.toggle('visible', Boolean(message));
+  };
+  const populateProfiles = profiles => {
+    const available = Array.isArray(profiles) && profiles.length ? profiles : fallbackProfiles;
+    userField.replaceChildren(new Option('Choose your profile…', ''));
+    available.forEach(profile => {
+      const option = new Option(`${profile.name} · ${profile.role}`, profile.email);
+      userField.add(option);
+    });
+    const storedUser = localStorage.getItem('UW_ACCESS_USER');
+    if (storedUser && available.some(profile => profile.email === storedUser)) userField.value = storedUser;
+    userField.disabled = false;
+    submitButton.disabled = false;
+  };
 
   const finishLaunch = () => {
     bootScreen.classList.add('exit');
@@ -1870,28 +1896,44 @@ function initializeAccessFlow(){
 
   setTimeout(finishLaunch, Math.max(0, minimumLaunchMs-(performance.now()-launchStartedAt)));
 
-  fetch('/api/auth/config',{headers:{Accept:'application/json'}}).then(response=>response.json()).then(config=>{
-    if(Array.isArray(config.users)&&config.users.length){
-      userField.innerHTML='<option value="">Choose your profile…</option>'+config.users.map(user=>`<option value="${escapeHtml(user.email)}">${escapeHtml(user.name)} · ${escapeHtml(user.role)}</option>`).join('');
-      const storedUser=localStorage.getItem('UW_ACCESS_USER');
-      if(storedUser&&config.users.some(user=>user.email===storedUser))userField.value=storedUser;
-    }
+  fetch('/api/auth/config',{headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)}).then(response=>{
+    if(!response.ok) throw new Error(`Profile service returned ${response.status}`);
+    return response.json();
+  }).then(config=>{
+    populateProfiles(config.users);
+    showLoginError('');
     if(!config.configured){
-      setTimeout(()=>{loginScreen.classList.add('hidden');startApplication();},Math.max(0,minimumLaunchMs-(performance.now()-launchStartedAt)+700));
+      showLoginError('Authorized accounts are not configured on the server. Set UW_AUTH_USERS_JSON, then reload.');
     }
-  }).catch(()=>{});
+  }).catch(error=>{
+    populateProfiles(fallbackProfiles);
+    showLoginError(`Could not load the profile list (${error.message}). The Brian and Evans profiles are shown; if sign-in fails, reload once the server is online.`);
+  });
 
   loginForm.addEventListener('submit', async event => {
     event.preventDefault();
-    const userValue = document.getElementById('login-user').value.trim().toLowerCase();
-    const passValue = document.getElementById('login-pass').value.trim();
-    const response = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:userValue,password:passValue})});
-    const result = await response.json().catch(()=>({}));
-    if(!response.ok){alert(result.error||'Unable to sign in.');passField.value='';return;}
-    sessionStorage.setItem('UW_CSRF_TOKEN',result.csrfToken||'');
-    localStorage.setItem('UW_ACCESS_USER', result.user?.email||userValue);
-    loginScreen.classList.add('hidden');
-    startApplication(result.user);
+    showLoginError('');
+    const userValue = userField.value.trim().toLowerCase();
+    const passValue = passField.value;
+    if(!userValue){showLoginError('Choose Brian or Evans before entering a password.');userField.focus();return;}
+    if(!passValue){showLoginError('Enter the selected account password.');passField.focus();return;}
+    submitButton.disabled=true;
+    submitButton.textContent='Verifying…';
+    try{
+      const response = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:userValue,password:passValue}),signal:AbortSignal.timeout(15000)});
+      const result = await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(result.error||`Sign-in failed (${response.status}).`);
+      sessionStorage.setItem('UW_CSRF_TOKEN',result.csrfToken||'');
+      localStorage.setItem('UW_ACCESS_USER', result.user?.email||userValue);
+      loginScreen.classList.add('hidden');
+      startApplication(result.user);
+    }catch(error){
+      showLoginError(error.name==='TimeoutError'?'The sign-in request timed out. Check the connection and try again.':error.message||'Unable to sign in. Try again.');
+      passField.value='';
+    }finally{
+      submitButton.disabled=false;
+      submitButton.textContent='Launch system';
+    }
   });
 }
 

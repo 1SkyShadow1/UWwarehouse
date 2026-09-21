@@ -59,7 +59,10 @@ const run = async () => {
   expect(typeof aiConfigJson.configured === 'boolean', 'AI config response is malformed.');
   const authConfig = await fetch(`${base}/api/auth/config`);
   const authConfigJson = await authConfig.json();
-  expect(authConfig.status === 200 && typeof authConfigJson.configured === 'boolean', 'Auth config response is malformed.');
+  expect(authConfig.status === 200 && typeof authConfigJson.configured === 'boolean' && Array.isArray(authConfigJson.users), 'Auth config response is malformed.');
+  const unknownApi = await fetch(`${base}/api/does-not-exist`);
+  const unknownApiJson = await unknownApi.json();
+  expect(unknownApi.status === 404 && unknownApiJson.error === 'API route not found.', 'Unknown API errors are not explicit.');
 
   const invalidAi = await fetch(`${base}/api/ai/generate`, {
     method: 'POST',

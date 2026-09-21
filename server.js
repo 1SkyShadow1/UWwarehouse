@@ -1542,10 +1542,32 @@ app.get('/__source/*', requireApiKey, (req, res) => {
     </html>`);
 });
 
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    error: 'API route not found.',
+    path: req.path,
+    method: req.method,
+    recovery: 'Check the deployed app version and API route spelling.',
+  });
+});
+
 app.use(express.static(rootDir, { index: 'index.html' }));
 
 app.get('*', (_, res) => {
   res.sendFile(path.join(rootDir, 'index.html'));
+});
+
+app.use((error, req, res, next) => {
+  console.error('Unhandled request error:', error);
+  if (res.headersSent) return next(error);
+  const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+  if (req.path.startsWith('/api/')) {
+    return res.status(status).json({
+      error: status === 500 ? 'The server could not complete that request.' : String(error.message || 'Request failed.'),
+      recovery: status === 500 ? 'Try again. If the problem persists, check the server logs and readiness endpoint.' : 'Correct the request and try again.',
+    });
+  }
+  return res.status(status).send('The server could not complete that request.');
 });
 
 const server = app.listen(PORT, HOST, () => {
