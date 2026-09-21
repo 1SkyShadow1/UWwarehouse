@@ -24,12 +24,14 @@ self.addEventListener('fetch', event => {
     || requestUrl.pathname.startsWith('/__source/'));
   if (isDocumentRequest) {
     event.respondWith(caches.open(DOCUMENT_CACHE).then(async cache => {
-      const cached = await cache.match(event.request);
+      const cached = await cache.match(event.request, { ignoreSearch: true });
       const network = fetch(event.request, { cache: 'no-store' }).then(response => {
-        if (response.ok) cache.put(event.request, response.clone());
+        const type = response.headers.get('content-type') || '';
+        if (response.ok && (type.startsWith('application/pdf') || type.startsWith('image/'))) cache.put(event.request, response.clone());
         return response;
       }).catch(() => cached || Response.error());
-      return cached || network;
+      const cachedType = cached ? (cached.headers.get('content-type') || '') : '';
+      return cached && (cachedType.startsWith('application/pdf') || cachedType.startsWith('image/')) ? cached : network;
     }));
     return;
   }
@@ -45,7 +47,5 @@ self.addEventListener('fetch', event => {
     }).catch(() => caches.match('./index.html')))
   );
 });
-
-
 
 

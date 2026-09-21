@@ -192,6 +192,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .template-doc .signature-grid{row-gap:42px;margin-top:34px}.template-doc .signature-grid div{min-height:32px;padding-top:9px}
 .quote-reference{display:grid;grid-template-columns:290px 1fr;border-top:1px solid #222;border-bottom:1px solid #222;min-height:30px;font-size:13px}.quote-reference b,.quote-reference span{padding:6px 8px}.quote-reference b{border-right:1px solid #222}.quote-introduction{border-bottom:1px solid #222;padding-bottom:10px;font-size:13px;line-height:1.55;white-space:pre-line}
 .doc-viewer{height:calc(100vh - 230px);min-height:520px;max-height:78vh;overflow:auto;background:var(--bg);border:1px solid var(--border);padding:10px}.doc-viewer img{display:block;width:100%;height:auto;max-width:100%;object-fit:contain;transform-origin:top left}.doc-viewer iframe{display:block;width:100%;height:100%;min-width:100%;min-height:100%;border:0}.viewer-tools{display:flex;gap:6px;align-items:center;margin:8px 0}.viewer-tools .btn{min-width:42px}.viewer-scale{font-size:12px;color:var(--muted);min-width:54px;text-align:center}
+.document-loading{height:100%;min-height:360px;display:grid;place-items:center;color:var(--muted);font-size:13px;text-align:center;padding:30px}.document-loading strong{display:block;color:var(--gold2);font-size:15px;margin-bottom:7px}.document-loading .spinner{width:24px;height:24px;border:2px solid rgba(212,175,55,.25);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}@keyframes spin{to{transform:rotate(360deg)}}
 .review-needed{background:rgba(220,70,70,.12)!important;color:#ffb0a8!important}.review-approved{background:rgba(50,180,100,.1)!important;color:#9be7b0!important}
 .quote-top-header{display:grid;grid-template-columns:minmax(0,2fr) minmax(220px,1fr);align-items:center;gap:28px;margin-bottom:8px}
 .quote-top-header .template-logo{width:100%;height:116px;margin:0;object-fit:contain;object-position:left center}
@@ -1422,14 +1423,40 @@ function sourceLabel(document){
 }
 function viewerControls(target){return `<div class="viewer-tools"><button class="btn sm" onclick="viewerZoom('${target}',-0.1)">−</button><span id="${target}-scale" class="viewer-scale">100%</span><button class="btn sm" onclick="viewerZoom('${target}',0.1)">+</button><button class="btn sm" onclick="viewerZoom('${target}',0,true)">Reset</button><span style="font-size:11px;color:var(--muted)">Scroll to pan</span></div>`}
 function viewerZoom(target,delta,reset){const el=document.getElementById(target);if(!el)return;const scale=reset?1:Math.max(.4,Math.min(3,(Number(el.dataset.scale)||1)+delta));el.dataset.scale=scale;el.style.transform=`scale(${scale})`;const label=document.getElementById(target+'-scale');if(label)label.textContent=Math.round(scale*100)+'%';}
+function documentLoadingMarkup(kind){return `<div id="document-loading" class="document-loading"><div><div class="spinner"></div><strong>Reconnecting to document storage…</strong><span> the server may be waking up. This viewer will retry automatically.</span></div></div>`}
+async function loadDocumentViewerAsset(url,kind){
+  const loading=document.getElementById('document-loading');
+  const target=document.getElementById(kind==='pdf'?'document-pdf':'document-image');
+  const expected=kind==='pdf'?'application/pdf':'image/';
+  let lastError='Document storage is waking up.';
+  for(let attempt=0;attempt<6;attempt++){
+    try{
+      const response=await fetch(`${url}${url.includes('?')?'&':'?'}viewerAttempt=${attempt+1}`,{cache:'no-store',headers:{Accept:kind==='pdf'?'application/pdf':'image/*'}});
+      const type=String(response.headers.get('content-type')||'').toLowerCase();
+      if(response.ok&&type.startsWith(expected)){
+        const blob=await response.blob();
+        const objectUrl=URL.createObjectURL(blob);
+        if(target){target.src=objectUrl;target.hidden=false;}
+        if(loading)loading.remove();
+        return;
+      }
+      lastError=response.ok?'The hosting service returned its wake-up page instead of the document.':`Document request failed (${response.status}).`;
+    }catch(error){lastError=error.message||lastError;}
+    if(loading)loading.querySelector('span').textContent=` ${lastError} Retrying (${attempt+1}/6)…`;
+    await new Promise(resolve=>setTimeout(resolve,Math.min(1000*2**attempt,8000)));
+  }
+  if(loading)loading.innerHTML=`<div><strong>Document unavailable right now</strong><span>${escapeHtml(lastError)} Please try View again in a moment.</span></div>`;
+}
 function viewDocument(d){
   const url=documentUrl(d),name=String(d.name||d.path||'Source document'),ext=name.split('.').pop().toLowerCase(),safe=String(d.path||'Source unavailable').replace(/</g,'&lt;'),title=name.replace(/"/g,'&quot;');
   let body;
   if(!url) body=`<div class="empty">A viewable source file is not available for this record.</div><div class="kv"><span>Source status</span><b>Not uploaded to managed storage</b></div><p style="color:var(--muted);font-size:12px">This record is preserved, but its original file must be uploaded to the managed document store before it can be displayed.</p>`;
-  else if(['png','jpg','jpeg','gif','webp','avif'].includes(ext)) body=viewerControls('document-image')+`<div class="doc-viewer"><img id="document-image" data-scale="1" src="${url}" alt="${title}" decoding="async" fetchpriority="high" style="background:#111" onerror="this.hidden=true;document.getElementById('document-view-error').hidden=false"></div><p id="document-view-error" hidden class="empty">This image could not be loaded from its managed source.</p>`;
-  else if(ext==='pdf') body=viewerControls('document-pdf')+`<div class="doc-viewer"><iframe id="document-pdf" src="${url}" title="${title}" loading="eager"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;
+  else if(['png','jpg','jpeg','gif','webp','avif'].includes(ext)) body=viewerControls('document-image')+`<div class="doc-viewer">${documentLoadingMarkup('image')}<img id="document-image" data-scale="1" alt="${title}" decoding="async" fetchpriority="high" style="background:#111;display:none"></div><p id="document-view-error" hidden class="empty">This image could not be loaded from its managed source.</p>`;
+  else if(ext==='pdf') body=viewerControls('document-pdf')+`<div class="doc-viewer">${documentLoadingMarkup('pdf')}<iframe id="document-pdf" title="${title}" loading="eager" style="display:none"></iframe><p style="font-size:11px;color:var(--muted)">Use the browser PDF toolbar for page-level controls; the surrounding viewer supports scrolling.</p></div>`;
   else body=`<div class="kv"><span>Source document</span><b>${safe}</b></div><p style="color:var(--muted);font-size:12px">This file type opens in a new browser tab or downloads from its managed source.</p><a class="btn gold" href="${url}" target="_blank" rel="noopener">Open / Download document</a>`;
   modal(`<h3>${title}</h3>${body}<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`);
+  if(url&&['png','jpg','jpeg','gif','webp','avif'].includes(ext))loadDocumentViewerAsset(url,'image');
+  if(url&&ext==='pdf')loadDocumentViewerAsset(url,'pdf');
 }
 function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
 function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
