@@ -85,6 +85,16 @@ const run = async () => {
   const state = await fetch(`${base}/api/state`);
   const stateJson = await state.json();
   expect(state.status === 200 && Number.isInteger(stateJson.revision), 'State endpoint is malformed.');
+  const pdfExport = await fetch(`${base}/api/documents/export-pdf`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      kind: 'invoice',
+      record: { id: 'BB2026/09/2101', date: '2026-09-21', customer: 'Smoke Test', items: [{ desc: 'Test work', qty: 1, price: 100 }] },
+    }),
+  });
+  const pdfBytes = Buffer.from(await pdfExport.arrayBuffer());
+  expect(pdfExport.status === 200 && pdfExport.headers.get('content-type')?.startsWith('application/pdf') && pdfBytes.subarray(0, 5).toString() === '%PDF-', 'PDF document export failed.');
   const savedState = await fetch(`${base}/api/state`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },

@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { google } = require('googleapis');
 const multer = require('multer');
+const PDFDocument = require('pdfkit');
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -576,6 +577,45 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
   return remoteBuffer ? { buffer: remoteBuffer, mimeType: remote.mimeType, name: remote.name } : null;
 };
 const requireApiKey = requireSessionOrApiKey;
+const pdfText = value => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
+const createDocumentPdf = ({ kind, record, meta = {} }) => new Promise((resolve, reject) => {
+  const pdf = new PDFDocument({ size: 'A4', margin: 48, info: { Title: `${kind === 'invoice' ? 'Invoice' : 'Quotation'} ${record.id || ''}`, Author: 'Upholstery Warehouse' } });
+  const chunks = [];
+  pdf.on('data', chunk => chunks.push(chunk));
+  pdf.on('end', () => resolve(Buffer.concat(chunks)));
+  pdf.on('error', reject);
+  const gold = '#B08D2C';
+  const dark = '#1A1A1A';
+  const title = kind === 'invoice' ? 'INVOICE' : 'QUOTATION';
+  const items = Array.isArray(record.items) ? record.items : [];
+  const total = items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0), 0);
+  const money = value => `R ${(Number(value) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  pdf.fillColor(dark).fontSize(18).font('Helvetica-Bold').text('UPHOLSTERY WAREHOUSE');
+  pdf.fillColor('#555').fontSize(9).font('Helvetica').text('ALL THINGS UPHOLSTERY...');
+  pdf.moveDown(1).strokeColor(gold).lineWidth(2).moveTo(48, pdf.y).lineTo(547, pdf.y).stroke();
+  pdf.moveDown(1).fillColor(dark).fontSize(20).font('Helvetica-Bold').text(title, { align: 'right' });
+  pdf.fontSize(10).font('Helvetica').text(`${kind === 'invoice' ? 'Invoice' : 'Quote'} number: ${pdfText(record.id)}`, { align: 'right' });
+  pdf.text(`Date: ${pdfText(record.date)}${record.expiry ? `   Expiry: ${pdfText(record.expiry)}` : ''}`, { align: 'right' });
+  pdf.moveDown(1).fillColor(dark).font('Helvetica-Bold').text(`Client: ${pdfText(record.customer)}`);
+  if (record.contact) pdf.font('Helvetica').text(`Contact: ${pdfText(record.contact)}`);
+  if (record.email) pdf.text(`Email: ${pdfText(record.email)}`);
+  if (record.project || record.projectReference) pdf.text(`Project: ${pdfText(record.project || record.projectReference)}`);
+  pdf.moveDown(1).fillColor(gold).font('Helvetica-Bold').text('LINE ITEMS');
+  pdf.moveDown(.3).fillColor(dark).font('Helvetica').fontSize(10);
+  items.forEach(item => {
+    const lineTotal = (Number(item.qty) || 0) * (Number(item.price) || 0);
+    pdf.text(`${pdfText(item.desc || item.item || 'Item')}   |   Qty ${Number(item.qty) || 0}   |   ${money(lineTotal)}`);
+  });
+  pdf.moveDown(1).font('Helvetica-Bold').fontSize(13).text(`TOTAL: ${money(total)}`, { align: 'right' });
+  if (kind === 'invoice') pdf.fontSize(10).font('Helvetica').text(`Balance: ${money(Math.max(0, total - (Number(record.paid) || 0) - (Number(record.deposit) || 0)))}`, { align: 'right' });
+  if (record.introduction || record.notes) {
+    pdf.moveDown(1).fillColor(gold).font('Helvetica-Bold').text('NOTES');
+    pdf.fillColor(dark).font('Helvetica').fontSize(10).text(pdfText(record.introduction || record.notes));
+  }
+  pdf.moveDown(2).fillColor('#555').fontSize(8).font('Helvetica').text(`${pdfText(meta.address || '4, 5th Avenue, Edenvale, Johannesburg')} | ${pdfText(meta.phone || '077 412 8367')} | ${pdfText(meta.email || 'info@upholsterywarehouse.co.za')}`);
+  pdf.text('Produced by Upholstery Warehouse. Please retain this document for your records.');
+  pdf.end();
+});
 const safeDocumentId = id => /^[a-f0-9]{32}$/.test(String(id || ''));
 const safeDocumentPath = id => path.join(documentsRoot, `${id}.bin`);
 const sourcePathWithin = candidate => {
@@ -889,6 +929,25 @@ app.post('/api/state/restore', requireApiKey, async (req, res) => {
     res.json(next);
   } catch (error) {
     res.status(500).json({ error: 'State restore failed.' });
+  }
+});
+
+app.post('/api/documents/export-pdf', requireApiKey, async (req, res) => {
+  const kind = req.body?.kind === 'quote' ? 'quote' : req.body?.kind === 'invoice' ? 'invoice' : '';
+  const record = req.body?.record;
+  if (!kind || !record || typeof record !== 'object' || !record.id) {
+    return res.status(400).json({ error: 'A valid invoice or quote is required for PDF export.' });
+  }
+  try {
+    const pdf = await createDocumentPdf({ kind, record, meta: ensureStorage().data.meta || {} });
+    const safeId = String(record.id).replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80);
+    res.type('application/pdf');
+    res.set('Content-Disposition', `attachment; filename="${kind}-${safeId}.pdf"`);
+    res.set('Cache-Control', 'no-store');
+    return res.send(pdf);
+  } catch (error) {
+    console.error('PDF export failed:', error.message);
+    return res.status(500).json({ error: 'The document PDF could not be generated.' });
   }
 });
 

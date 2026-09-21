@@ -985,16 +985,30 @@ function vDashboard(c){
 
 /* ---------- INVOICES ---------- */
  const whatsappIcon='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M20.52 3.48A11.84 11.84 0 0 0 12.08 0C5.53 0 .2 5.33.2 11.88c0 2.1.55 4.15 1.6 5.96L.1 24l6.3-1.65a11.9 11.9 0 0 0 5.68 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.18-1.23-6.17-3.45-8.43Zm-8.44 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.22-3.74.98 1-3.65-.24-.37a9.85 9.85 0 1 1 8.38 4.64Zm5.4-7.4c-.3-.15-1.78-.88-2.05-.98-.27-.1-.47-.15-.67.15-.2.3-.77.98-.95 1.18-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.09 4.49.71.31 1.27.5 1.7.64.72.23 1.38.2 1.9.12.58-.09 1.78-.73 2.03-1.43.25-.7.25-1.3.17-1.43-.07-.12-.27-.2-.57-.35Z"/></svg>';
- function shareDocumentWhatsApp(kind,id){
+ async function shareDocumentWhatsApp(kind,id){
    const record=(kind==='invoice'?DB.invoices:DB.quotes).find(x=>x.id===id);
    if(!record)return;
-   const total=kind==='invoice'?invTotal(record):(record.items||[]).reduce((sum,item)=>sum+(Number(item.qty)||0)*(Number(item.price)||0),0);
    const label=kind==='invoice'?'Invoice':'Quotation';
-   const lines=[`UPHOLSTERY WAREHOUSE`,`${label}: ${record.id}`,`Date: ${record.date}`,`Client: ${record.customer||'—'}`,record.project?`Project: ${record.project}`:record.projectReference?`Project: ${record.projectReference}`:'',`Total: ${R(total)}`,kind==='invoice'?`Balance: ${R(invBalance(record))}`:'',record.expiry?`Valid until: ${record.expiry}`:''].filter(Boolean);
-   const text=lines.join('\n');
-   if(navigator.share){
-     navigator.share({title:`${label} ${record.id}`,text}).then(()=>toast(`${label} shared`)).catch(error=>{if(error.name!=='AbortError')window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,'_blank','noopener')});
-   }else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,'_blank','noopener');
+   const button=document.querySelector(`.whatsapp-btn[onclick*="'${id}'"]`);
+   if(button){button.disabled=true;button.dataset.originalLabel=button.innerHTML;button.innerHTML='Preparing PDF…';}
+   try{
+     const response=await fetch('/api/documents/export-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,record})});
+     if(!response.ok){const payload=await response.json().catch(()=>({}));throw new Error(payload.error||'PDF export failed');}
+     const blob=await response.blob();
+     const file=new File([blob],`${kind}-${record.id}.pdf`,{type:'application/pdf'});
+     const message=`${label} ${record.id} — PDF attached`;
+     if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+       await navigator.share({title:`${label} ${record.id}`,text:message,files:[file]});
+       toast(`${label} PDF ready to share`);
+     }else{
+       const url=URL.createObjectURL(blob);
+       const link=document.createElement('a');link.href=url;link.download=file.name;link.click();
+       setTimeout(()=>URL.revokeObjectURL(url),1000);
+       window.open(`https://wa.me/?text=${encodeURIComponent(message+' — attach the downloaded PDF.')}`,'_blank','noopener');
+       toast('PDF downloaded — attach it in WhatsApp');
+     }
+   }catch(error){if(error.name!=='AbortError'){console.error('WhatsApp PDF sharing failed:',error);toast(error.message||'Could not prepare the PDF');}}
+   finally{if(button){button.disabled=false;button.innerHTML=button.dataset.originalLabel||whatsappIcon;}}
  }
 function vInvoices(c){
   const rows=DB.invoices.filter(i=>docMatches(i,'invoices','Sales invoice',i.status));
