@@ -1135,19 +1135,26 @@ function applyQuotePreset(index,select){
   const table=document.getElementById('f-items');
   if(table){
     table.querySelectorAll('tr:not(:first-child)').forEach(row=>row.remove());
-    [
-      {item:'Fabric',desc:`${preset.desc||'Item'} - Fabric`,qty:(Number(preset.mtr)||1)*quantity,price:Number(preset.fabCost)||0},
-      {item:'Foam',desc:`${preset.desc||'Item'} - Foam`,qty:quantity,price:Number(preset.matCost)||0},
-      {item:'Labour',desc:`${preset.desc||'Item'} - Labour`,qty:quantity,price:(Number(preset.labHr)||0)*400},
-      {item:'Consumables',desc:`${preset.desc||'Item'} - Consumables`,qty:quantity,price:20},
-    ].forEach(line=>addItemRow({...line,code:String(preset.code||'')}));
+    quotePresetLines(preset,quantity).forEach(line=>addItemRow({...line,code:String(preset.code||'')}));
   }
   if(select)select.blur();
+}
+function quotePresetLines(preset,quantity=1){
+  const name=String(preset?.desc||'Item');
+  const count=Math.max(1,Number(quantity)||1);
+  return [
+    {item:'Fabric',desc:`${name} - Fabric`,qty:(Number(preset?.mtr)||1)*count,price:Number(preset?.fabCost)||0},
+    {item:'Foam',desc:`${name} - Foam`,qty:count,price:Number(preset?.matCost)||0},
+    {item:'Labour',desc:`${name} - Labour`,qty:count,price:(Number(preset?.labHr)||0)*400},
+    {item:'Consumables',desc:`${name} - Consumables`,qty:count,price:20},
+  ];
 }
 function addItemRow(item={}){const t=document.getElementById('f-items');const tr=document.createElement('tr');
   const quote=window.invoiceFormMode==='quote';
   tr.innerHTML=`<td><input style="width:80px" class="i-code" value="${item.code||''}"></td><td><input style="width:100%" class="i-desc" value="${item.desc||''}"></td>${quote?`<td><select class="i-item" style="min-width:180px"><option value="">Select category…</option>${quoteItemOptions(item.item||'')}</select></td>`:''}<td><input style="width:55px" class="i-qty" type="number" value="${item.qty||1}"></td><td><input style="width:100px" class="i-price" type="number" value="${item.price||0}"></td><td><button class="btn sm danger" onclick="this.parentElement.parentElement.remove()">✕</button></td>`;
-  t.appendChild(tr);}
+  t.appendChild(tr);
+  if(quote&&item.item)tr.querySelector('.i-item').value=item.item;
+}
 function saveInvoice(){
   const items=[...document.querySelectorAll('#f-items tr')].slice(1).map(tr=>({code:tr.querySelector('.i-code').value,desc:tr.querySelector('.i-desc').value,item:tr.querySelector('.i-item')?.value||'',qty:+tr.querySelector('.i-qty').value||0,price:+tr.querySelector('.i-price').value||0})).filter(i=>i.desc);
   const common={id:document.getElementById('f-no').value,date:document.getElementById('f-date').value,customer:document.getElementById('f-cust').value,contact:document.getElementById('f-contact').value,email:document.getElementById('f-email').value,items};
