@@ -321,12 +321,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <div id="topbar">
     <button class="tb-btn" onclick="toggleSidebar()">☰</button>
     <h2 id="page-title">Dashboard</h2>
-    <button class="tb-btn" onclick="exportBackup()">⬇ Export Backup</button>
-    <button class="tb-btn" onclick="document.getElementById('importFile').click()">⬆ Restore Backup</button>
+    <button class="tb-btn gold global-save-btn" id="global-save-btn" onclick="globalSave()" title="Save the complete workspace locally and to the database">✓ Global Save</button>
     <button class="tb-btn" onclick="refreshBundledData()">↻ Refresh D:\UW Data</button>
     <button class="tb-btn" id="installBtn" hidden onclick="installApp()">⇩ Install App</button>
     <button class="tb-btn" id="themeBtn" onclick="toggleTheme()" title="Switch light/dark mode">☀ Light</button>
-    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">
     <button class="tb-btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
   </div>
   <div id="content"></div>
@@ -496,8 +494,8 @@ function queueServerStateSave(){
   clearTimeout(serverSyncTimer);
   serverSyncTimer=setTimeout(syncServerState,900);
 }
-async function syncServerState(){
-  if(!serverSyncAvailable||serverSyncInFlight)return;
+async function syncServerState(force=false,silent=false){
+  if((!serverSyncAvailable&&!force)||serverSyncInFlight)return false;
   serverSyncInFlight=true;
   try{
     const response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision,data:DB})});
@@ -507,15 +505,17 @@ async function syncServerState(){
       serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:payload.snapshot.data||{},revision:payload.snapshot.revision};
       localStorage.setItem('UW_STATE_CONFLICT',JSON.stringify(serverConflict));
       serverSyncAvailable=false;
-      toast('A newer server copy exists. Your local changes were preserved; review the conflict in Settings.');
+      if(!silent)toast('A newer server copy exists. Your local changes were preserved; review the conflict in Settings.');
+      return false;
     }else if(!response.ok) throw new Error(payload.error||'Server save failed');
-    else serverRevision=payload.revision;
+    else {serverRevision=payload.revision;serverSyncAvailable=true;return true;}
   }catch(error){
     serverSyncAvailable=false;
     console.warn('Server save failed; offline fallback enabled.',error);
-    toast('Saved locally; server sync is unavailable');
+    if(!silent)toast('Saved locally; server sync is unavailable');
     clearTimeout(serverRetryTimer);
     serverRetryTimer=setTimeout(initializeServerSync,Math.min(30000,2000*2**serverRetryAttempt));
+    return false;
   }finally{serverSyncInFlight=false;}
 }
 function resolveStateConflict(choice){
@@ -643,7 +643,7 @@ function save(){
     localStorage.setItem(LOCAL_BACKUP_KEY,serialized);
   }catch(error){
     console.error('Local database save failed:',error);
-    toast('Local save failed — export a backup before continuing');
+    toast('Local save failed — try Global Save again');
     return false;
   }
   queueServerStateSave();
@@ -653,6 +653,30 @@ function save(){
   const drive=DB.meta.googleDrive||{};
   if(drive.autoBackup&&drive.token) driveSyncTimer=setTimeout(()=>googleDriveSync('push',true),1800);
   return true;
+}
+async function globalSave(){
+  const button=document.getElementById('global-save-btn');
+  if(button?.disabled)return;
+  const originalLabel=button?.textContent||'✓ Global Save';
+  if(button){button.disabled=true;button.textContent='⟳ Saving…';button.setAttribute('aria-busy','true');}
+  try{
+    if(!save())throw new Error('The local workspace could not be written.');
+    clearTimeout(serverSyncTimer);
+    if(!serverSyncAvailable||serverRevision===null)await initializeServerSync();
+    if(serverSyncAvailable&&serverRevision!==null){
+      const synced=await syncServerState(true,true);
+      if(synced)toast('Global save complete — local and database copies updated');
+      else if(serverConflict)toast('Saved locally — a database conflict needs review in Settings');
+      else toast('Saved locally — database sync is temporarily unavailable');
+    }else{
+      toast('Saved locally — database sync is temporarily unavailable');
+    }
+  }catch(error){
+    console.error('Global save failed:',error);
+    toast(error.message||'Global save failed');
+  }finally{
+    if(button){button.disabled=false;button.textContent=originalLabel;button.removeAttribute('aria-busy');}
+  }
 }
 function persistLocalSnapshot(){
   try{
@@ -852,19 +876,6 @@ function exportSystemReport(){
   a.download='UW_SYSTEM_REPORT_'+today()+'.txt';
   a.click();
   toast('System report exported');
-}
-
-/* ---------- Backup / Restore ---------- */
-function exportBackup(){
-  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='UW_BACKUP_'+today()+'.json';a.click();toast('Backup exported');
-}
-function importBackup(e){
-  const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{ try{DB=JSON.parse(r.result);save();toast('Backup restored');go(current);}catch(err){toast('Invalid backup file');} };
-  r.readAsText(f); e.target.value='';
 }
 
 /* ---------- Router / Navigation ---------- */
@@ -1879,7 +1890,6 @@ function vSettings(c){
     </div>
     <div class="toolbar" style="margin-top:8px">
       <button class="btn gold" onclick="refreshBundledData()">↻ Refresh D:\UW data</button>
-      <button class="btn" onclick="document.getElementById('importFile').click()">⬆ Import backup</button>
       <button class="btn danger" onclick="if(confirm('Wipe ALL local data and restore factory seed?')){localStorage.removeItem(DB_KEY);location.reload()}">Factory Reset</button>
     </div>
 
