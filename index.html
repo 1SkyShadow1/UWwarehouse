@@ -235,16 +235,16 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     </div>
     <form id="login-form" class="login-form">
       <label class="login-field">
-        <span>Operator name</span>
-        <input id="login-user" type="text" placeholder="Brian or Evans" autocomplete="username">
+        <span>Authorized email</span>
+        <input id="login-user" type="email" placeholder="brian@yourcompany.co.za" autocomplete="username">
       </label>
       <label class="login-field">
-        <span>Access passphrase</span>
+        <span>Encrypted account password</span>
         <input id="login-pass" type="password" placeholder="Enter your passphrase" autocomplete="current-password">
       </label>
       <button type="submit" class="btn gold login-submit">Launch system</button>
     </form>
-    <p class="login-note">This workspace stays local to this device unless Google Drive backup is enabled.</p>
+    <p class="login-note">Sign in with your authorized company email. Sessions are protected by an encrypted server-side login.</p>
   </div>
 </div>
 
@@ -289,9 +289,16 @@ const DB_KEY = 'UW_DB_V1';
 const DATA_SOURCE_PATH = 'D:\\UW';
 const today = () => new Date().toISOString().slice(0,10);
 
-const AUTH_USERS = {
-  brian: { name: 'Brian', passphrase: 'LeatherGold2026', role: 'Owner' },
-  evans: { name: 'Evans', passphrase: 'WarehouseSunrise', role: 'Manager' }
+const nativeFetch=window.fetch.bind(window);
+window.fetch=(input,options={})=>{
+  const method=String(options.method||'GET').toUpperCase();
+  if(!['GET','HEAD','OPTIONS'].includes(method)){
+    const headers=new Headers(options.headers||{});
+    const csrf=sessionStorage.getItem('UW_CSRF_TOKEN');
+    if(csrf)headers.set('x-csrf-token',csrf);
+    options={...options,headers,credentials:'same-origin'};
+  }
+  return nativeFetch(input,options);
 };
 
 const seed = {
@@ -366,6 +373,7 @@ let serverRetryTimer;
 let serverRetryAttempt = 0;
 let serverSyncInFlight = false;
 let serverSyncAvailable = false;
+let serverConflict = (()=>{try{return JSON.parse(localStorage.getItem('UW_STATE_CONFLICT')||'null')}catch(_){return null}})();
 let pendingAiReview=null;
 let remoteDocumentCatalog=[];
 async function initializeServerSync(){
@@ -432,9 +440,10 @@ async function syncServerState(){
     const payload=await response.json().catch(()=>({}));
     if(response.status===409&&payload.snapshot){
       serverRevision=payload.snapshot.revision;
-      DB={...DB,...(payload.snapshot.data||{}),meta:{...DB.meta,...(payload.snapshot.data?.meta||{})}};
-      localStorage.setItem(DB_KEY,JSON.stringify(DB));
-      toast('Server data changed elsewhere; latest version loaded');
+      serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:payload.snapshot.data||{},revision:payload.snapshot.revision};
+      localStorage.setItem('UW_STATE_CONFLICT',JSON.stringify(serverConflict));
+      serverSyncAvailable=false;
+      toast('A newer server copy exists. Your local changes were preserved; review the conflict in Settings.');
     }else if(!response.ok) throw new Error(payload.error||'Server save failed');
     else serverRevision=payload.revision;
   }catch(error){
@@ -445,6 +454,28 @@ async function syncServerState(){
     serverRetryTimer=setTimeout(initializeServerSync,Math.min(30000,2000*2**serverRetryAttempt));
   }finally{serverSyncInFlight=false;}
 }
+function resolveStateConflict(choice){
+  if(!serverConflict)return;
+  if(choice==='server'){
+    DB={...DB,...serverConflict.remote,meta:{...DB.meta,...(serverConflict.remote.meta||{})}};
+    serverRevision=serverConflict.revision;
+    serverSyncAvailable=true;
+    localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  }else if(choice==='local'){
+    DB=serverConflict.local;
+    serverRevision=serverConflict.revision;
+    serverSyncAvailable=true;
+    localStorage.removeItem('UW_STATE_CONFLICT');
+    queueServerStateSave();
+    toast('Local copy queued for overwrite');
+    return;
+  }else{
+    const blob=new Blob([JSON.stringify(serverConflict.local,null,2)],{type:'application/json'});
+    const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`UW_CONFLICT_BACKUP_${today()}.json`;link.click();URL.revokeObjectURL(link.href);
+    return;
+  }
+  serverConflict=null;localStorage.removeItem('UW_STATE_CONFLICT');render();toast(choice==='server'?'Server copy restored':'Conflict backup exported');
+}
 async function uploadManagedDocument(file){
   const form=new FormData(); form.append('file',file);
   const response=await fetch('/api/documents',{method:'POST',body:form});
@@ -452,7 +483,6 @@ async function uploadManagedDocument(file){
   if(!response.ok) throw new Error(payload.error||'Document upload failed');
   return payload;
 }
-initializeServerSync();
 window.addEventListener('online',()=>initializeServerSync());
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!serverSyncAvailable)initializeServerSync();});
 function normalizeQuoteFields(db){
@@ -1736,6 +1766,7 @@ function vSettings(c){
     </div>
 
     <h3 style="margin-top:22px">Supabase database</h3>
+    ${serverConflict?`<div class="panel" style="border-color:var(--amber)"><b style="color:var(--amber)">Sync conflict detected.</b><p style="font-size:12px;color:var(--muted)">Your local work was preserved instead of being overwritten.</p><div class="toolbar"><button class="btn" onclick="resolveStateConflict('server')">Use server copy</button><button class="btn gold" onclick="resolveStateConflict('local')">Keep local copy</button><button class="btn" onclick="resolveStateConflict('export')">Export local backup</button></div></div>`:''}
     <div class="toolbar">
       <button class="btn gold" onclick="supabaseStatus()">Test Supabase connection</button>
       <button class="btn" onclick="cloudSync('push')">Save state now</button>
@@ -1782,27 +1813,28 @@ function initializeAccessFlow(){
 
   setTimeout(finishLaunch, Math.max(0, minimumLaunchMs-(performance.now()-launchStartedAt)));
 
-  loginForm.addEventListener('submit', event => {
+  fetch('/api/auth/config',{headers:{Accept:'application/json'}}).then(response=>response.json()).then(config=>{
+    if(!config.configured){
+      setTimeout(()=>{loginScreen.classList.add('hidden');startApplication();},Math.max(0,minimumLaunchMs-(performance.now()-launchStartedAt)+700));
+    }
+  }).catch(()=>{});
+
+  loginForm.addEventListener('submit', async event => {
     event.preventDefault();
     const userValue = document.getElementById('login-user').value.trim().toLowerCase();
     const passValue = document.getElementById('login-pass').value.trim();
-    const selectedUser = Object.keys(AUTH_USERS).find(key => AUTH_USERS[key].name.toLowerCase() === userValue || key === userValue);
-    const validUser = selectedUser && AUTH_USERS[selectedUser].passphrase === passValue;
-
-    if (!validUser) {
-      alert('Access denied. Only Brian and Evans may enter this system.');
-      passField.value = '';
-      return;
-    }
-
-    localStorage.setItem('UW_ACCESS_GRANTED', '1');
-    localStorage.setItem('UW_ACCESS_USER', AUTH_USERS[selectedUser].name);
+    const response = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:userValue,password:passValue})});
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok){alert(result.error||'Unable to sign in.');passField.value='';return;}
+    sessionStorage.setItem('UW_CSRF_TOKEN',result.csrfToken||'');
+    localStorage.setItem('UW_ACCESS_USER', result.user?.name||userValue);
     loginScreen.classList.add('hidden');
     startApplication();
   });
 }
 
 function startApplication(){
+  initializeServerSync();
   renderNav();
   render();
   applyTheme(localStorage.getItem('UW_THEME')||'dark');

@@ -67,7 +67,9 @@ will reject the request unless the current origin is registered as an Authorized
 
 ### Current release blockers
 
-The browser login remains a client-side convenience; production deployments must put the server behind an authenticated network or configure `UW_API_KEY` (or an upstream identity-aware proxy). The backend smoke test and readiness endpoint provide deployment diagnostics; they do not replace organizational access controls or tested restore procedures.
+Production authentication uses server-only operator accounts configured with `UW_AUTH_USERS_JSON`. Each account is keyed by an authorized email and stores only an scrypt password hash; generate hashes with `node scripts/generate-auth-hash.js "a-long-password"`. Brian and Evans can use their company email plus password, with HttpOnly sessions and CSRF tokens. The browser no longer contains operator passwords. A real phone OTP can be added later through an SMS provider; it is not simulated locally. `UW_API_KEY` remains available for trusted automation and deployment probes, but Origin/Referer headers are never treated as credentials.
+
+State conflicts are preserved instead of silently overwritten. When the server reports a newer revision, the local draft is saved to `UW_STATE_CONFLICT` and Settings offers **Use server copy**, **Keep local copy**, or **Export local backup**. State writes validate core collection shapes and reject oversized/malformed envelopes.
 
 ## Data, persistence, and managed documents
 

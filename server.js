@@ -69,13 +69,25 @@ const allowedDocumentTypes = new Set((process.env.UW_DOCUMENT_MIME_TYPES || [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain',
 ].join(',')).split(',').map(x => x.trim()).filter(Boolean));
+const hasDocumentSignature = (buffer, mimeType) => {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
+  if (mimeType === 'application/pdf') return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+  if (mimeType === 'image/jpeg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimeType === 'image/png') return buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  if (mimeType === 'image/webp') return buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  if (mimeType.startsWith('application/vnd.openxmlformats-officedocument.')) return buffer.subarray(0, 2).toString('ascii') === 'PK';
+  return mimeType === 'text/plain';
+};
 const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) app.set('trust proxy', 1);
 const stateStore = new Map();
 const aiRateStore = new Map();
+const authSessions = new Map();
+const authAttempts = new Map();
 const STATE_TTL_MS = 10 * 60 * 1000;
 const AI_RATE_WINDOW_MS = 15 * 60 * 1000;
 const AI_RATE_LIMIT = 20;
+const AUTH_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const driveState = {
   tokens: null,
   connected: false,
@@ -85,6 +97,62 @@ const driveState = {
   folderId: '',
   backupFolderName: 'UW Accounting Backups',
   lastSync: null,
+};
+const parseAuthUsers = () => {
+  try {
+    const parsed = JSON.parse(process.env.UW_AUTH_USERS_JSON || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    console.error('UW_AUTH_USERS_JSON is invalid:', error.message);
+    return {};
+  }
+};
+const authUsers = parseAuthUsers();
+const authConfigured = () => Object.values(authUsers).some(user => user && typeof user === 'object' && typeof user.passwordHash === 'string' && user.passwordHash.startsWith('scrypt$'));
+const timingSafeEqualText = (a, b) => {
+  const left = Buffer.from(String(a || ''));
+  const right = Buffer.from(String(b || ''));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+};
+const verifyPassword = async (password, encoded) => {
+  const parts = String(encoded || '').split('$');
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
+  const [, nRaw, rRaw, pRaw, salt, expected] = parts;
+  const n = Number(nRaw), r = Number(rRaw), p = Number(pRaw);
+  if (!Number.isSafeInteger(n) || !Number.isSafeInteger(r) || !Number.isSafeInteger(p) || !salt || !expected) return false;
+  return new Promise(resolve => crypto.scrypt(String(password || ''), salt, 64, { N: n, r, p }, (error, derived) => {
+    resolve(!error && timingSafeEqualText(derived.toString('hex'), expected));
+  }));
+};
+const sessionFromRequest = req => {
+  const token = String(req.get('cookie') || '').split(';').map(x => x.trim()).find(x => x.startsWith('uw_session='));
+  const value = token ? decodeURIComponent(token.slice('uw_session='.length)) : '';
+  const session = value && authSessions.get(value);
+  if (!session || session.expiresAt <= Date.now()) {
+    if (value) authSessions.delete(value);
+    return null;
+  }
+  session.expiresAt = Date.now() + AUTH_SESSION_TTL_MS;
+  return session;
+};
+const requestHasValidApiKey = req => {
+  const expected = String(process.env.UW_API_KEY || '').trim();
+  if (!expected) return false;
+  const supplied = String(req.get('x-api-key') || '').trim() || String(req.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  return timingSafeEqualText(supplied, expected);
+};
+const requireSessionOrApiKey = (req, res, next) => {
+  if (requestHasValidApiKey(req)) return next();
+  const session = sessionFromRequest(req);
+  if (!session && (isProduction || authConfigured())) return res.status(401).json({ error: 'Authentication required.' });
+  req.auth = session || { email: 'local', name: 'Local operator', role: 'Owner' };
+  return next();
+};
+const requireCsrf = (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || requestHasValidApiKey(req) || req.path.startsWith('/auth/')) return next();
+  const session = sessionFromRequest(req);
+  if (session && !timingSafeEqualText(req.get('x-csrf-token'), session.csrfToken)) return res.status(403).json({ error: 'CSRF validation failed.' });
+  return next();
 };
 
 let stateSnapshot;
@@ -195,6 +263,14 @@ const syncDocumentToSupabase = async (id, file) => {
   if (!response.ok) throw new Error(`Supabase document upload failed (${response.status}).`);
   remoteStorageCache.expiresAt = 0;
   return storagePath;
+};
+const removeDocumentFromSupabase = async storagePath => {
+  if (!storagePath || !supabaseConfigured()) return;
+  try {
+    await fetch(supabaseObjectUrl(storagePath), { method: 'DELETE', headers: supabaseHeaders(), signal: AbortSignal.timeout(15000) });
+  } catch (error) {
+    console.warn('Supabase orphan cleanup failed:', error.message);
+  }
 };
 const supabaseObjectUrl = storagePath => {
   const encodedPath = String(storagePath || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
@@ -363,17 +439,7 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
   const remoteBuffer = await loadDocumentFromSupabase(remote.storagePath);
   return remoteBuffer ? { buffer: remoteBuffer, mimeType: remote.mimeType, name: remote.name } : null;
 };
-const apiKeyIsValid = (req) => {
-  const expected = String(process.env.UW_API_KEY || '').trim();
-  if (!expected) return true;
-  const supplied = String(req.get('x-api-key') || '').trim() || String(req.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (supplied === expected) return true;
-  const origin = String(req.get('origin') || '');
-  const referer = String(req.get('referer') || '');
-  const requestOrigin = `${req.protocol}://${req.get('host')}`;
-  return origin === requestOrigin || referer.startsWith(`${requestOrigin}/`);
-};
-const requireApiKey = (req, res, next) => apiKeyIsValid(req) ? next() : res.status(401).json({ error: 'Authentication required.' });
+const requireApiKey = requireSessionOrApiKey;
 const safeDocumentId = id => /^[a-f0-9]{32}$/.test(String(id || ''));
 const safeDocumentPath = id => path.join(documentsRoot, `${id}.bin`);
 const sourcePathWithin = candidate => {
@@ -546,6 +612,7 @@ const normalizeBackupData = (payload) => {
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.disable('x-powered-by');
+app.use('/api', requireCsrf);
 app.use((req, res, next) => {
   res.set({
     'X-Content-Type-Options': 'nosniff',
@@ -569,6 +636,44 @@ const upload = multer({
   limits: { fileSize: maxDocumentBytes, files: 1 },
 });
 
+const validCollectionKeys = ['invoices', 'quotes', 'expenses', 'receipts', 'documents', 'scannedDocuments', 'fnbStatements'];
+const validateStateData = data => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return 'State data must be an object.';
+  if (JSON.stringify(data).length > 40 * 1024 * 1024) return 'State data exceeds the 40 MB limit.';
+  for (const key of validCollectionKeys) {
+    if (data[key] !== undefined && !Array.isArray(data[key])) return `${key} must be an array.`;
+  }
+  return '';
+};
+
+app.get('/api/auth/config', (_, res) => res.json({ configured: authConfigured(), methods: authConfigured() ? ['email-password'] : [] }));
+app.get('/api/auth/session', (req, res) => {
+  const session = sessionFromRequest(req);
+  return res.json({ authenticated: Boolean(session), user: session ? { email: session.email, name: session.name, role: session.role } : null, csrfToken: session?.csrfToken || '' });
+});
+app.post('/api/auth/login', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  const now = Date.now();
+  const prior = authAttempts.get(email) || { count: 0, windowStartedAt: now };
+  if (now - prior.windowStartedAt > 15 * 60 * 1000) { prior.count = 0; prior.windowStartedAt = now; }
+  prior.count += 1; authAttempts.set(email, prior);
+  if (prior.count > 10) return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
+  const user = authUsers[email];
+  if (!user || !(await verifyPassword(password, user.passwordHash))) return res.status(401).json({ error: 'Invalid email or password.' });
+  const token = crypto.randomBytes(32).toString('base64url');
+  const csrfToken = crypto.randomBytes(24).toString('base64url');
+  authSessions.set(token, { email, name: String(user.name || email), role: String(user.role || 'Operator'), csrfToken, expiresAt: now + AUTH_SESSION_TTL_MS });
+  res.set('Set-Cookie', `uw_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${AUTH_SESSION_TTL_MS / 1000}${isProduction ? '; Secure' : ''}`);
+  return res.json({ ok: true, user: { email, name: String(user.name || email), role: String(user.role || 'Operator') }, csrfToken });
+});
+app.post('/api/auth/logout', (req, res) => {
+  const cookie = String(req.get('cookie') || '').split(';').map(x => x.trim()).find(x => x.startsWith('uw_session='));
+  if (cookie) authSessions.delete(decodeURIComponent(cookie.slice('uw_session='.length)));
+  res.set('Set-Cookie', 'uw_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  return res.json({ ok: true });
+});
+
 app.get('/api/state', requireApiKey, async (req, res) => {
   await bootstrapReady;
   const snapshot = ensureStorage();
@@ -583,7 +688,8 @@ app.put('/api/state', requireApiKey, async (req, res) => {
     return res.status(409).json({ error: 'State revision conflict.', snapshot: current });
   }
   const data = req.body && Object.prototype.hasOwnProperty.call(req.body, 'data') ? req.body.data : req.body;
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return res.status(400).json({ error: 'State data must be an object.' });
+  const validationError = validateStateData(data);
+  if (validationError) return res.status(400).json({ error: validationError });
   try {
     const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data };
     await queueStateWrite(next);
@@ -624,11 +730,13 @@ app.post('/api/documents', requireApiKey, (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'A file is required.' });
     if (!allowedDocumentTypes.has(req.file.mimetype)) return res.status(415).json({ error: 'Unsupported document type.' });
+    if (!hasDocumentSignature(req.file.buffer, req.file.mimetype)) return res.status(415).json({ error: 'The file signature does not match its declared document type.' });
     const id = crypto.randomBytes(16).toString('hex');
     const metadata = { id, name: path.basename(req.file.originalname || 'document'), size: req.file.size, mimeType: req.file.mimetype, createdAt: new Date().toISOString(), url: `/api/documents/${id}` };
+    let storagePath = '';
     try {
       fs.writeFileSync(safeDocumentPath(id), req.file.buffer, { flag: 'wx' });
-      const storagePath = await syncDocumentToSupabase(id, req.file);
+      storagePath = await syncDocumentToSupabase(id, req.file);
       if (storagePath) metadata.storagePath = storagePath;
       await recordDocumentInSupabase(metadata);
       await stateWrite;
@@ -642,6 +750,7 @@ app.post('/api/documents', requireApiKey, (req, res) => {
       res.status(201).json(metadata);
     } catch (writeError) {
       try { fs.rmSync(safeDocumentPath(id), { force: true }); } catch (_) {}
+      await removeDocumentFromSupabase(storagePath);
       console.error('Document upload failed:', writeError);
       res.status(500).json({ error: 'Document could not be stored.' });
     }
@@ -686,7 +795,7 @@ app.get('/api/documents/:id', requireApiKey, async (req, res) => {
   return res.send(remote);
 });
 
-app.post('/api/ai/review-document', async (req, res) => {
+app.post('/api/ai/review-document', requireApiKey, async (req, res) => {
   if (!allowAiRequest(req)) return res.status(429).json({ error: 'AI request limit reached. Please try again later.' });
   const id = String(req.body?.id || '').trim();
   const name = String(req.body?.name || '').trim();
@@ -720,7 +829,7 @@ app.post('/api/ai/review-document', async (req, res) => {
   }
 });
 
-app.post('/api/gemini/review-document', (req, res, next) => {
+app.post('/api/gemini/review-document', requireApiKey, (req, res, next) => {
   req.url = '/api/ai/review-document';
   return app._router.handle(req, res, next);
 });
@@ -1033,7 +1142,7 @@ app.get('/api/gemini/config', (_, res) => {
   });
 });
 
-app.post('/api/ai/generate', async (req, res) => {
+app.post('/api/ai/generate', requireApiKey, async (req, res) => {
   if (!allowAiRequest(req)) {
     return res.status(429).json({ error: 'AI request limit reached. Please try again later.' });
   }
@@ -1050,7 +1159,7 @@ app.post('/api/ai/generate', async (req, res) => {
   }
 });
 
-app.post('/api/gemini/generate', async (req, res) => {
+app.post('/api/gemini/generate', requireApiKey, async (req, res) => {
   if (!allowAiRequest(req)) {
     return res.status(429).json({ error: 'AI request limit reached. Please try again later.' });
   }
@@ -1107,12 +1216,14 @@ app.get('/api/ready', (req, res) => {
     persistentStorage: !isProduction || (!dataRootFallback && !documentsRootFallback),
     bootstrap: bootstrapComplete,
     apiAuth: !isProduction || Boolean(process.env.UW_API_KEY),
+    operatorAuth: !isProduction || authConfigured(),
     supabase: !isProduction || supabaseConfigured(),
   };
   const ready = checks.server && (!isProduction || (
     checks.googleOAuth &&
     checks.sourceStorage &&
     checks.apiAuth &&
+    checks.operatorAuth &&
     checks.durableStore &&
     checks.documentStorage &&
     checks.persistentStorage &&
@@ -1218,7 +1329,7 @@ app.get('/api/google-drive/callback', async (req, res) => {
   }
 });
 
-app.post('/api/google-drive/disconnect', (_, res) => {
+app.post('/api/google-drive/disconnect', requireApiKey, (_, res) => {
   driveState.tokens = null;
   driveState.connected = false;
   driveState.accountEmail = '';
@@ -1227,7 +1338,7 @@ app.post('/api/google-drive/disconnect', (_, res) => {
   return res.json({ ok: true, message: 'Google Drive disconnected.' });
 });
 
-app.get('/api/google-drive/status', (_, res) => {
+app.get('/api/google-drive/status', requireApiKey, (_, res) => {
   return res.json({
     ok: true,
     connected: driveState.connected,
@@ -1239,7 +1350,7 @@ app.get('/api/google-drive/status', (_, res) => {
   });
 });
 
-app.post('/api/google-drive/sync', async (req, res) => {
+app.post('/api/google-drive/sync', requireApiKey, async (req, res) => {
   try {
     const config = getGoogleConfig(req);
     if (!config.clientId || !config.clientSecret) {
@@ -1314,7 +1425,7 @@ app.post('/api/google-drive/sync', async (req, res) => {
 }
 });
 
-app.post('/api/google-drive/restore', async (req, res) => {
+app.post('/api/google-drive/restore', requireApiKey, async (req, res) => {
   try {
     const config = getGoogleConfig(req);
     if (!config.clientId || !config.clientSecret) {

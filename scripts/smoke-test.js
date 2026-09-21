@@ -14,6 +14,7 @@ const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')],
     UW_DATA_DIR: dataRoot,
     UW_DOCUMENTS_DIR: documentsRoot,
     UW_API_KEY: '',
+    UW_AUTH_USERS_JSON: '',
     SUPABASE_URL: '',
     SUPABASE_SERVICE_ROLE_KEY: '',
   },
@@ -56,6 +57,9 @@ const run = async () => {
   const aiConfig = await fetch(`${base}/api/ai/config`);
   const aiConfigJson = await aiConfig.json();
   expect(typeof aiConfigJson.configured === 'boolean', 'AI config response is malformed.');
+  const authConfig = await fetch(`${base}/api/auth/config`);
+  const authConfigJson = await authConfig.json();
+  expect(authConfig.status === 200 && typeof authConfigJson.configured === 'boolean', 'Auth config response is malformed.');
 
   const invalidAi = await fetch(`${base}/api/ai/generate`, {
     method: 'POST',
@@ -89,8 +93,18 @@ const run = async () => {
     body: JSON.stringify({ revision: stateJson.revision, data: { smoke: false } }),
   });
   expect(conflict.status === 409, 'State revision conflict was not enforced.');
+  const invalidState = await fetch(`${base}/api/state`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ revision: savedStateJson.revision, data: { invoices: {} } }),
+  });
+  expect(invalidState.status === 400, 'Malformed state was accepted.');
 
   const form = new FormData();
+  const invalidForm = new FormData();
+  invalidForm.append('file', new Blob(['not a pdf'], { type: 'application/pdf' }), 'fake.pdf');
+  const invalidUpload = await fetch(`${base}/api/documents`, { method: 'POST', body: invalidForm });
+  expect(invalidUpload.status === 415, 'Upload signature validation did not reject a mismatched file.');
   form.append('file', new Blob(['UW smoke document'], { type: 'text/plain' }), 'smoke.txt');
   const upload = await fetch(`${base}/api/documents`, { method: 'POST', body: form });
   const uploadJson = await upload.json();
@@ -104,7 +118,7 @@ const run = async () => {
   console.log(JSON.stringify({
     ok: true,
     port,
-    checks: ['health', 'security headers', 'readiness', 'AI config', 'AI validation', 'Drive status', 'Supabase status', 'state persistence', 'revision conflicts', 'document upload/serve', 'document catalog'],
+    checks: ['health', 'security headers', 'readiness', 'AI config', 'auth config', 'AI validation', 'Drive status', 'Supabase status', 'state persistence', 'revision conflicts', 'state schema validation', 'upload signature validation', 'document upload/serve', 'document catalog'],
   }, null, 2));
 };
 
