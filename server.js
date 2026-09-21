@@ -1011,16 +1011,11 @@ app.post('/api/gemini/review-document', requireApiKey, (req, res, next) => {
 });
 
 const getAiProvider = () => {
-  const configuredProvider = String(process.env.AI_PROVIDER || '').trim().toLowerCase();
-  if (configuredProvider) return configuredProvider;
-  if (process.env.GEMINI_API_KEY) return 'gemini';
-  if (process.env.TYPESAFE_API_KEY) return 'typesafe';
   return 'gemini';
 };
 
 const getAiModel = (providerOverride) => {
   const provider = String(providerOverride || getAiProvider()).trim().toLowerCase();
-  if (provider === 'typesafe') return process.env.TYPESAFE_MODEL || process.env.AI_MODEL || 'gpt-4o-mini';
   const configured = process.env.GEMINI_MODEL || process.env.AI_MODEL || 'gemini-3.6-flash';
   return configured;
 };
@@ -1044,29 +1039,29 @@ const getGeminiModelAttempts = (configuredModel) => {
   return [...new Set(attempts)];
 };
 
-const extractAiText = (payload, provider) => {
-  if (provider === 'typesafe') {
-    const candidates = payload?.choices || payload?.output || [];
-    const firstMessage = candidates?.[0]?.message?.content || candidates?.[0]?.content || '';
-    if (Array.isArray(firstMessage)) {
-      return firstMessage.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim();
-    }
-    if (typeof firstMessage === 'string') return firstMessage.trim();
-    if (payload?.output && Array.isArray(payload.output)) {
-      return payload.output
-        .map(block => block?.content || [])
-        .flat()
-        .map(part => typeof part === 'string' ? part : part?.text || '')
-        .join('')
-        .trim();
-    }
-  }
-
+const extractAiText = payload => {
   return (payload?.candidates || [])
     .flatMap(candidate => candidate.content?.parts || [])
     .map(part => part.text || '')
     .join('')
     .trim();
+};
+
+const getSystemKnowledge = () => {
+  const snapshot = ensureStorage();
+  const data = snapshot.data || {};
+  const collections = ['invoices', 'quotes', 'expenses', 'receipts', 'documents', 'scannedDocuments', 'fnbStatements'];
+  const recordCounts = Object.fromEntries(collections.map(key => [key, Array.isArray(data[key]) ? data[key].length : 0]));
+  const dataContext = JSON.stringify(data).slice(0, 120000);
+  return [
+    'You are the UW Accounting Assistant for Upholstery Warehouse.',
+    'Only answer questions about this UW accounting, document, upholstery operations, income, receipts, invoices, quotes, expenses, payroll, bank reconciliation, Supabase storage, Google Drive backup, and AI workflow system.',
+    'If a request is unrelated, politely refuse and say you can only help with the UW system.',
+    'Never invent values. If the current system data does not contain an answer, say that clearly and identify the relevant page or record the user should check.',
+    'Treat financial figures, dates, document names, and statuses as sensitive operational data.',
+    `Current workspace: ${supabaseWorkspace}. Current state revision: ${snapshot.revision}. Record counts: ${JSON.stringify(recordCounts)}.`,
+    `Authoritative application data snapshot (use this before making claims; it may be truncated): ${dataContext}`,
+  ].join('\n');
 };
 
 const parseJsonObject = text => {
@@ -1098,6 +1093,7 @@ const callGeminiChat = async (prompt) => {
           headers: { 'Content-Type': 'application/json' },
           signal: AbortSignal.timeout(30000),
           body: JSON.stringify({
+            system_instruction: { parts: [{ text: getSystemKnowledge() }] },
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
           }),
@@ -1117,7 +1113,7 @@ const callGeminiChat = async (prompt) => {
         throw error;
       }
 
-      const text = extractAiText(payload, 'gemini');
+      const text = extractAiText(payload);
       if (!text) throw new Error('Gemini returned no text.');
       return { text, provider: 'gemini', model };
     } catch (error) {
@@ -1170,6 +1166,7 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
           headers: { 'Content-Type': 'application/json' },
           signal: AbortSignal.timeout(60000),
           body: JSON.stringify({
+            system_instruction: { parts: [{ text: getSystemKnowledge() }] },
             contents: [{
               role: 'user',
               parts: [
@@ -1191,7 +1188,7 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
         error.statusCode = response.status >= 400 && response.status < 500 ? response.status : 502;
         throw error;
       }
-      const text = extractAiText(payload, 'gemini');
+      const text = extractAiText(payload);
       const extraction = parseJsonObject(text);
       return {
         documentDate: /^\d{4}-\d{2}-\d{2}$/.test(String(extraction.documentDate || '')) ? extraction.documentDate : null,
@@ -1213,98 +1210,28 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
   throw lastError || new Error('Gemini document review failed.');
 };
 
-const callTypesafeChat = async (prompt) => {
-  const apiKey = process.env.TYPESAFE_API_KEY;
-  if (!apiKey) {
-    throw new Error('TypeSafe is not configured. Set TYPESAFE_API_KEY on the server.');
-  }
-
-  const model = getAiModel('typesafe');
-  const candidateUrls = [
-    process.env.TYPESAFE_API_URL,
-    'https://api.typesafe.ai/v1/chat/completions',
-    'https://typesafe.ai/api/v1/chat/completions',
-    'https://api.type-safe.ai/v1/chat/completions',
-  ].filter(Boolean);
-
-  let lastHttpError = null;
-  let lastNetworkError = null;
-  for (const url of [...new Set(candidateUrls)]) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        signal: AbortSignal.timeout(30000),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'x-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.2,
-          max_tokens: 2048,
-          stream: false,
-        }),
-      });
-
-      const payload = await response.json();
-      if (!response.ok) {
-        const message = payload?.error?.message || payload?.message || payload?.detail || `TypeSafe request failed (${response.status}).`;
-        lastHttpError = new Error(message);
-        lastHttpError.statusCode = response.status >= 400 && response.status < 500 ? response.status : 502;
-        continue;
-      }
-
-      const text = extractAiText(payload, 'typesafe');
-      if (!text) {
-        const err = new Error('TypeSafe returned no text.');
-        err.statusCode = 502;
-        throw err;
-      }
-
-      return { text, provider: 'typesafe', model };
-    } catch (error) {
-      if (!lastHttpError) {
-        lastNetworkError = error;
-      }
-    }
-  }
-
-  if (lastHttpError) {
-    throw lastHttpError;
-  }
-  if (lastNetworkError) {
-    throw lastNetworkError;
-  }
-
-  throw new Error('TypeSafe request failed.');
-};
-
-const normalizeProviderOverride = (value) => {
+const normalizeProviderOverride = value => {
   const provider = String(value || '').trim().toLowerCase();
-  if (provider && !['gemini', 'typesafe'].includes(provider)) {
-    throw new Error('Unsupported AI provider. Use "gemini" or "typesafe".');
+  if (provider && provider !== 'gemini') {
+    throw new Error('Unsupported AI provider. Gemini is the only configured AI provider.');
   }
-  return provider || getAiProvider();
+  return 'gemini';
 };
 
 const generateAiText = async (prompt, providerOverride) => {
-  const provider = normalizeProviderOverride(providerOverride);
-  if (provider === 'typesafe') return callTypesafeChat(prompt);
+  normalizeProviderOverride(providerOverride);
   return callGeminiChat(prompt);
 };
 
 app.get('/api/ai/config', (_, res) => {
   const provider = getAiProvider();
-  const configured = Boolean(process.env.GEMINI_API_KEY || process.env.TYPESAFE_API_KEY);
+  const configured = Boolean(process.env.GEMINI_API_KEY);
   res.json({
     configured,
     provider,
     model: getAiModel(),
     providers: {
       gemini: Boolean(process.env.GEMINI_API_KEY),
-      typesafe: Boolean(process.env.TYPESAFE_API_KEY),
     },
   });
 });
@@ -1312,7 +1239,7 @@ app.get('/api/ai/config', (_, res) => {
 app.get('/api/gemini/config', (_, res) => {
   const provider = getAiProvider();
   res.json({
-    configured: Boolean(process.env.GEMINI_API_KEY || process.env.TYPESAFE_API_KEY),
+    configured: Boolean(process.env.GEMINI_API_KEY),
     provider,
     model: getAiModel(),
   });
@@ -1384,7 +1311,7 @@ app.get('/api/ready', (req, res) => {
   const checks = {
     server: true,
     googleOAuth: Boolean(google.clientId && google.clientSecret && google.redirectUri),
-    aiProvider: Boolean(process.env.GEMINI_API_KEY || process.env.TYPESAFE_API_KEY),
+    aiProvider: Boolean(process.env.GEMINI_API_KEY),
     sourceStorage: sourceRoots.some(root => fs.existsSync(root)) || fs.existsSync(documentsRoot),
     serverAuth: Boolean(process.env.UW_API_KEY),
     durableStore: Boolean(stateSnapshot && fs.existsSync(stateFile)),

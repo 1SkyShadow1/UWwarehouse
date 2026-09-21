@@ -58,6 +58,7 @@ const run = async () => {
   const aiConfig = await fetch(`${base}/api/ai/config`);
   const aiConfigJson = await aiConfig.json();
   expect(typeof aiConfigJson.configured === 'boolean', 'AI config response is malformed.');
+  expect(aiConfigJson.provider === 'gemini' && JSON.stringify(Object.keys(aiConfigJson.providers || {}).sort()) === JSON.stringify(['gemini']), 'AI config must be Gemini-only.');
   const authConfig = await fetch(`${base}/api/auth/config`);
   const authConfigJson = await authConfig.json();
   expect(authConfig.status === 200 && typeof authConfigJson.configured === 'boolean' && Array.isArray(authConfigJson.users), 'Auth config response is malformed.');
