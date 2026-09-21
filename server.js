@@ -579,43 +579,68 @@ const loadSourceFromSupabase = async (requestedPath, requestedName) => {
 const requireApiKey = requireSessionOrApiKey;
 const pdfText = value => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
 const createDocumentPdf = ({ kind, record, meta = {} }) => new Promise((resolve, reject) => {
-  const pdf = new PDFDocument({ size: 'A4', margin: 48, info: { Title: `${kind === 'invoice' ? 'Invoice' : 'Quotation'} ${record.id || ''}`, Author: 'Upholstery Warehouse' } });
+  const pdf = new PDFDocument({ size: 'A4', margin: 40, info: { Title: `${kind === 'invoice' ? 'Invoice' : 'Quotation'} ${record.id || ''}`, Author: 'Upholstery Warehouse' } });
   const chunks = [];
   pdf.on('data', chunk => chunks.push(chunk));
   pdf.on('end', () => resolve(Buffer.concat(chunks)));
   pdf.on('error', reject);
-  const gold = '#B08D2C';
-  const dark = '#1A1A1A';
-  const title = kind === 'invoice' ? 'INVOICE' : 'QUOTATION';
+  const gold = '#D4AF37';
+  const dark = '#111111';
+  const grey = '#777777';
+  const left = 40;
+  const right = 555;
+  const width = right - left;
+  const money = value => `R ${(Number(value) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const text = value => pdfText(value) || '';
   const items = Array.isArray(record.items) ? record.items : [];
   const total = items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0), 0);
-  const money = value => `R ${(Number(value) || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  pdf.fillColor(dark).fontSize(18).font('Helvetica-Bold').text('UPHOLSTERY WAREHOUSE');
-  pdf.fillColor('#555').fontSize(9).font('Helvetica').text('ALL THINGS UPHOLSTERY...');
-  pdf.moveDown(1).strokeColor(gold).lineWidth(2).moveTo(48, pdf.y).lineTo(547, pdf.y).stroke();
-  pdf.moveDown(1).fillColor(dark).fontSize(20).font('Helvetica-Bold').text(title, { align: 'right' });
-  pdf.fontSize(10).font('Helvetica').text(`${kind === 'invoice' ? 'Invoice' : 'Quote'} number: ${pdfText(record.id)}`, { align: 'right' });
-  pdf.text(`Date: ${pdfText(record.date)}${record.expiry ? `   Expiry: ${pdfText(record.expiry)}` : ''}`, { align: 'right' });
-  pdf.moveDown(1).fillColor(dark).font('Helvetica-Bold').text(`Client: ${pdfText(record.customer)}`);
-  if (record.contact) pdf.font('Helvetica').text(`Contact: ${pdfText(record.contact)}`);
-  if (record.email) pdf.text(`Email: ${pdfText(record.email)}`);
-  if (record.project || record.projectReference) pdf.text(`Project: ${pdfText(record.project || record.projectReference)}`);
-  pdf.moveDown(1).fillColor(gold).font('Helvetica-Bold').text('LINE ITEMS');
-  pdf.moveDown(.3).fillColor(dark).font('Helvetica').fontSize(10);
-  items.forEach(item => {
-    const lineTotal = (Number(item.qty) || 0) * (Number(item.price) || 0);
-    pdf.text(`${pdfText(item.desc || item.item || 'Item')}   |   Qty ${Number(item.qty) || 0}   |   ${money(lineTotal)}`);
-  });
-  pdf.moveDown(1).font('Helvetica-Bold').fontSize(13).text(`TOTAL: ${money(total)}`, { align: 'right' });
-  if (kind === 'invoice') pdf.fontSize(10).font('Helvetica').text(`Balance: ${money(Math.max(0, total - (Number(record.paid) || 0) - (Number(record.deposit) || 0)))}`, { align: 'right' });
-  if (record.introduction || record.notes) {
-    pdf.moveDown(1).fillColor(gold).font('Helvetica-Bold').text('NOTES');
-    pdf.fillColor(dark).font('Helvetica').fontSize(10).text(pdfText(record.introduction || record.notes));
+  const logo = path.join(rootDir, 'uw-official-logo.png');
+  if (fs.existsSync(logo)) pdf.image(logo, left, 40, { fit: [kind === 'quote' ? 320 : 250, kind === 'quote' ? 82 : 72], align: 'left', valign: 'center' });
+  let y = kind === 'quote' ? 132 : 120;
+  if (kind === 'quote') {
+    pdf.font('Helvetica-Bold').fontSize(10).fillColor(dark).text('Upholstery Warehouse (Pty) Ltd', 390, 48, { width: 165, align: 'right' });
+    pdf.font('Helvetica').fontSize(9).fillColor(dark).text('077 412 8367\n4, 5th Avenue, Edenvale,\nJohannesburg.\ninfo@upholsterywarehouse.co.za', 390, 64, { width: 165, align: 'right' });
+    pdf.moveTo(left, y).lineTo(right, y).strokeColor(dark).lineWidth(1).stroke();
+    y += 12;
+    pdf.font('Helvetica-Bold').fontSize(25).fillColor(dark).text('QUOTATION', left, y, { width, align: 'center', underline: true });
+    y += 31;
+    pdf.font('Helvetica').fontSize(9).text(`Quote number: ${text(record.id)}     Date generated: ${text(record.date)}     Expiry date: ${text(record.expiry)}`, left, y, { width, align: 'center' });
+    y += 24;
+    const fieldRows = [
+      [`Client account name: ${text(record.customer)}`, `Prepared by: ${text(record.preparedBy || 'Brian Raymond')}`],
+      [`Client contact name: ${text(record.contact)}`, `Contact mobile: ${text(record.phone)}`],
+      [`Client telephone: ${text(record.phone)}`, `Contact email: ${text(record.email || 'info@upholsterywarehouse.co.za')}`],
+      [`Client email: ${text(record.email)}`, ''],
+    ];
+    pdf.fontSize(9);
+    fieldRows.forEach(row => { pdf.text(row[0], left, y, { width: 250 }); pdf.text(row[1], 305, y, { width: 250 }); pdf.moveTo(left, y + 14).lineTo(right, y + 14).strokeColor('#999').lineWidth(.5).stroke(); y += 22; });
+    pdf.moveTo(left, y).lineTo(right, y).strokeColor(dark).lineWidth(1).stroke();
+    y += 7;
+    pdf.font('Helvetica-Bold').fontSize(10).text('Project Reference', left + 8, y); pdf.text(text(record.projectReference), left + 150, y); y += 18;
+    pdf.text('Work type', left + 8, y); pdf.font('Helvetica').text(text(record.workType || 'Reupholster'), left + 150, y); pdf.font('Helvetica-Bold').text('Colour', 330, y); pdf.font('Helvetica').text(text(record.colour || '?'), 390, y); y += 22;
+    pdf.font('Helvetica-Bold').text('Introduction, notes and specifications', left, y); y += 17; pdf.font('Helvetica').fontSize(9).text(text(record.introduction || record.notes), left, y, { width, lineGap: 2 }); y = pdf.y + 12;
+    pdf.font('Helvetica-Bold').fontSize(10).text('Quote line items', left, y); y += 16;
+    pdf.font('Helvetica-Bold').fontSize(9).text('Description', left, y).text('Item', 245, y).text('Qty', 390, y, { width: 35, align: 'right' }).text('Unit Price', 430, y, { width: 60, align: 'right' }).text('Total Price', 495, y, { width: 60, align: 'right' });
+    pdf.moveTo(left, y + 13).lineTo(right, y + 13).stroke(); y += 20;
+    pdf.font('Helvetica').fontSize(9);
+    items.forEach(item => { const lineTotal=(Number(item.qty)||0)*(Number(item.price)||0); pdf.text(text(item.desc), left, y, { width: 190 }).text(text(item.item ? item.item : ''), 245, y, { width: 135 }).text(String(Number(item.qty)||0), 390, y, { width: 35, align: 'right' }).text(money(item.price), 430, y, { width: 60, align: 'right' }).text(money(lineTotal), 495, y, { width: 60, align: 'right' }); y += 18; });
+    pdf.moveTo(left, y).lineTo(right, y).strokeColor(dark).lineWidth(1).stroke(); y += 8; pdf.font('Helvetica-Bold').fontSize(11).text('*TOTAL', 430, y, { width: 60, align: 'right' }).text(money(total), 495, y, { width: 60, align: 'right' }); y += 30;
+    pdf.font('Helvetica-Bold').fontSize(10).text('Payment Details: COD or EFT', left, y); y += 15; pdf.font('Helvetica').fontSize(8.5).text('- Upholstery Warehouse (PTY) LTD, First National Bank, Account Number: 63173509557 - Branch Code: 250655\nKindly use Quote Number as reference when making payment. *Quoted prices above exclude VAT. To be Invoiced.\n\nBy my signature I hereby declare that I have read, understood, and accept the above quotation and below terms.\n- 80% Deposit due on collection, 20% balance due prior to delivery.\n- No works will commence until deposit payment is made in full.\n- Unpaid balances will result in interest being charged as well as storage costs.\n- Quote includes FREE collection and delivery within a 5km radius of our workshop.\n- Quote is valid for 30 days from date generated.', left, y, { width, lineGap: 2 });
+    y = Math.max(pdf.y + 28, 700); pdf.moveTo(left, y).lineTo(290, y).stroke(); pdf.moveTo(320, y).lineTo(right, y).stroke(); pdf.fontSize(8).text('Client signature', left, y + 5).text('Date', 320, y + 5);
+  } else {
+    pdf.moveTo(left, y).lineTo(right, y).strokeColor(dark).lineWidth(1).stroke(); y += 12;
+    pdf.font('Helvetica-Bold').fontSize(25).fillColor(dark).text('INVOICE', left, y); pdf.font('Helvetica-Bold').fontSize(10).text(`INVOICE NO: ${text(record.id)}\nDATE: ${text(record.date)}`, 430, y + 3, { width: 125, align: 'right' }); y += 45;
+    pdf.font('Helvetica-Bold').fontSize(9).text('Upholstery Warehouse (Pty) Ltd', left, y); pdf.font('Helvetica').text(`${text(meta.address || '4, 5th Avenue, Edenvale, JHB, 1609.')}\n${text(meta.phone || '077 412 8367')} / ${text(meta.email || 'info@upholsterywarehouse.co.za')}`, left, y + 14); y += 52;
+    const fields = [`INVOICE TO: ${text(record.customer)}`, `Client Contact: ${text(record.contact)}`, `Contact: ${text(record.phone)}`, `Order NO: ${text(record.orderNo)}`, `VAT NO: ${text(record.vatNo)}`, `Project: ${text(record.project || 'Re-Upholstery')}`];
+    fields.forEach((field, index) => { const x=index%2?305:left; const row=y+Math.floor(index/2)*22; pdf.font('Helvetica-Bold').fontSize(9).text(field, x, row, { width: 250 }); pdf.moveTo(x, row+14).lineTo(x+250, row+14).strokeColor('#999').lineWidth(.5).stroke(); }); y += 78;
+    pdf.font('Helvetica-Bold').fontSize(9).text('ITEM CODE', left, y).text('DESCRIPTION', left+105, y).text('AMOUNT', 495, y, { width: 60, align: 'right' }); pdf.moveTo(left, y+14).lineTo(right, y+14).stroke(); y += 21; pdf.font('Helvetica').fontSize(9);
+    items.forEach(item => { const lineTotal=(Number(item.qty)||0)*(Number(item.price)||0); pdf.text(text(item.code), left, y, { width: 95 }).text(`${text(item.desc)}${Number(item.qty)>1?` (${Number(item.qty)} ? ${money(item.price)})`:''}`, left+105, y, { width: 275 }).text(money(lineTotal), 495, y, { width: 60, align: 'right' }); y += 20; });
+    pdf.moveTo(left, y).lineTo(right, y).strokeColor(dark).lineWidth(1).stroke(); y += 9; pdf.font('Helvetica-Bold').fontSize(11).text('*Grand Total:', 420, y, { width: 75, align: 'right' }).text(money(total), 495, y, { width: 60, align: 'right' }); y += 35;
+    pdf.font('Helvetica').fontSize(8.5).text(`${text(meta.vatNote || '*Quoted prices above exclude VAT.')}\nFull Terms and Conditions can be provided.\nAll goods received/collected in terms of this order remain the property of Upholstery Warehouse Pty Ltd until account is settled in full.\n\nBanking Details:\nAccount Name: Upholstery Warehouse (Pty) Ltd\nBank Name: ${text(meta.bank || 'First National Bank')}\nAccount type: Current\nAccount Number: ${text(meta.account || '63173509557')}\nBranch Code: ${text(meta.branch || '250655')}\n\n*Kindly use ${text(record.id)} as reference when making payment.`, left, y, { width, lineGap: 2 }); y = Math.max(pdf.y + 28, 700); pdf.moveTo(left, y).lineTo(280, y).stroke(); pdf.moveTo(300, y).lineTo(430, y).stroke(); pdf.moveTo(450, y).lineTo(right, y).stroke(); pdf.fontSize(8).text('Received By', left, y + 5).text('Signature', 300, y + 5).text('Date', 450, y + 5); pdf.fontSize(8).text('E&OE. Produced by UW', 450, y + 35);
   }
-  pdf.moveDown(2).fillColor('#555').fontSize(8).font('Helvetica').text(`${pdfText(meta.address || '4, 5th Avenue, Edenvale, Johannesburg')} | ${pdfText(meta.phone || '077 412 8367')} | ${pdfText(meta.email || 'info@upholsterywarehouse.co.za')}`);
-  pdf.text('Produced by Upholstery Warehouse. Please retain this document for your records.');
   pdf.end();
 });
+
 const safeDocumentId = id => /^[a-f0-9]{32}$/.test(String(id || ''));
 const safeDocumentPath = id => path.join(documentsRoot, `${id}.bin`);
 const sourcePathWithin = candidate => {
