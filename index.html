@@ -457,6 +457,7 @@ let serverSyncInFlight = false;
 let serverSyncAvailable = false;
 let serverConflict = (()=>{try{return JSON.parse(localStorage.getItem('UW_STATE_CONFLICT')||'null')}catch(_){return null}})();
 let pendingAiReview=null;
+let scannedReviewBatch=null;
 function geminiReviewComplete(doc){
   return Boolean(doc?.aiReview?.successful||(
     doc?.reviewStatus==='AI reviewed'&&
@@ -1763,7 +1764,7 @@ function applyPendingAiReview(){
   pendingAiReview=null;
   applyAiReview(review.id,review.result);
 }
-function applyAiReview(id,result){
+function applyAiReview(id,result,options={}){
   const found=(DB.scannedDocuments||[]).find(x=>String(x.id)===String(id));
   if(!found){toast('Scanned document record was not found');return}
   found.aiReview={provider:result.provider,model:result.model,reviewedAt:new Date().toISOString(),successful:true,confidence:result.confidence||0,notes:result.notes||''};
@@ -1777,26 +1778,78 @@ function applyAiReview(id,result){
   if(result.documentType==='invoice')found.category='Invoice scan';
   else if(result.documentType==='receipt')found.category='Receipt scan';
   found.reviewStatus='AI reviewed';
-  save();closeModal();render();toast('Gemini extraction saved for '+found.name);
+  save();
+  if(!options.silent){
+    closeModal();
+    render();
+    toast('Gemini extraction saved for '+found.name);
+  }
 }
 async function requestGeminiReview(doc){
-  let response=await fetch('/api/ai/review-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:doc.id,name:doc.name,path:doc.path})});
-  if(response.status===404)response=await fetch('/api/gemini/review-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:doc.id,name:doc.name,path:doc.path})});
+  const payload={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:doc.id,name:doc.name,path:doc.path})};
+  const request=async endpoint=>{
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),90000);
+    try{return await fetch(endpoint,{...payload,signal:controller.signal});}
+    catch(error){
+      if(error.name==='AbortError')throw new Error('Gemini review timed out while reading the document');
+      throw error;
+    }finally{clearTimeout(timeout);}
+  };
+  let response=await request('/api/ai/review-document');
+  if(response.status===404)response=await request('/api/gemini/review-document');
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.error||`Gemini review failed (${response.status})`);
   return result;
 }
 async function autoReviewScannedDocument(doc){
-  try{applyAiReview(doc.id,await requestGeminiReview(doc));return true;}
+  try{applyAiReview(doc.id,await requestGeminiReview(doc),{silent:true});return true;}
   catch(error){doc.aiReview={provider:'gemini',successful:false,error:error.message,failedAt:new Date().toISOString()};save();console.error(`Gemini review failed for ${doc.name}:`,error);return false;}
 }
+async function waitBeforeGeminiRetry(attempt){
+  await new Promise(resolve=>setTimeout(resolve,Math.min(3000*2**attempt,30000)));
+}
+async function reviewScannedDocumentWithRetry(doc,maxAttempts=3){
+  for(let attempt=0;attempt<maxAttempts;attempt++){
+    const reviewed=await autoReviewScannedDocument(doc);
+    if(reviewed)return true;
+    const message=String(doc.aiReview?.error||'');
+    const transient=/timed out|network|failed \(5\d\d\)|429|rate limit|request limit|temporarily|gateway|fetch/i.test(message);
+    if(!transient||attempt===maxAttempts-1)return false;
+    await waitBeforeGeminiRetry(attempt);
+  }
+  return false;
+}
 async function reviewAllScannedDocuments(){
+  if(scannedReviewBatch?.running){toast('Gemini batch review is already running');return;}
   const docs=(DB.scannedDocuments||[]).filter(doc=>doc.canonical&&!doc.existingMatch&&!geminiReviewComplete(doc));
   if(!docs.length){toast('All scanned documents already have Gemini results');return;}
-  toast(`Gemini is reviewing ${docs.length} scanned document(s)…`);
-  const results=await Promise.all(docs.map(doc=>autoReviewScannedDocument(doc)));
-  const completed=results.filter(Boolean).length,failed=results.length-completed;
-  save();render();toast(`Gemini review complete: ${completed} completed${failed?`, ${failed} failed`:''}.`);
+  scannedReviewBatch={running:true,total:docs.length,completed:0,failed:0,current:''};
+  render();
+  for(const doc of docs){
+    if(!scannedReviewBatch?.running)break;
+    scannedReviewBatch.current=doc.name;
+    updateScannedReviewProgress();
+    const reviewed=await reviewScannedDocumentWithRetry(doc);
+    if(reviewed)scannedReviewBatch.completed++;else scannedReviewBatch.failed++;
+    save();
+    updateScannedReviewProgress();
+  }
+  const result=scannedReviewBatch;
+  scannedReviewBatch=null;
+  render();
+  toast(`${result.running===false?'Gemini review stopped':'Gemini review complete'}: ${result.completed} completed${result.failed?`, ${result.failed} failed`:''}.`);
+}
+function cancelScannedReviewBatch(){
+  if(!scannedReviewBatch?.running)return;
+  scannedReviewBatch.running=false;
+  toast('Gemini batch review will stop after the current document finishes');
+}
+function updateScannedReviewProgress(){
+  const node=document.getElementById('scanned-review-progress');
+  if(!node||!scannedReviewBatch)return;
+  const done=scannedReviewBatch.completed+scannedReviewBatch.failed;
+  node.textContent=`Reviewing ${done} of ${scannedReviewBatch.total}${scannedReviewBatch.current?` · ${scannedReviewBatch.current}`:''}`;
 }
 async function storeUploadedScan(file){
   let managed;
@@ -1843,7 +1896,12 @@ function vScanned(c){
     const merchant=d.merchant||d.store||d.business||d.vendor||'—',amount=d.amount===undefined||d.amount===null?'—':R(d.amount);
     return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
   }).join('');
-  c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><label class="btn gold" role="button">＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none" onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Upload JPG, PNG, WEBP, GIF, or PDF scans. Each upload is stored and read back from managed storage before Gemini reviews the document.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
+  const batchRunning=Boolean(scannedReviewBatch?.running);
+  const batchButton=batchRunning
+    ? `<button class="btn gold" type="button" onclick="cancelScannedReviewBatch()">Stop after current</button><span id="scanned-review-progress" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></span>`
+    : '<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button>';
+  c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Upload JPG, PNG, WEBP, GIF, or PDF scans. Each upload is stored, read back from managed storage, then reviewed from the document contents. Batch review runs one document at a time and saves after every result.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
+  if(batchRunning)updateScannedReviewProgress();
 }
 function setScannedCategory(id,category){
   const document=(DB.scannedDocuments||[]).find(item=>String(item.id)===String(id));
