@@ -1744,7 +1744,37 @@ function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>d.canonical&&!
 function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:''}
 function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.includes('invoice')?'Invoice scan':n.includes('receipt')||n.includes('proof')?'Receipt scan':'Unclassified scan'}
 function fnbReviewCandidate(d){const date=d.scanDate||scannedDate(d);if(!date)return null;return (DB.fnbStatements||[]).find(s=>String(s.statementDate||'')>=date)||null}
-function reviewAgainstFnb(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path),statement=found&&fnbReviewCandidate(found);if(!found||!statement){toast('No matching FNB statement period was found; the scan remains unapproved');return}found.fnbReview={statementId:statement.id,statementName:statement.name,reviewedAt:new Date().toISOString(),status:'Reviewed against FNB statement period'};found.reviewStatus='FNB reviewed';found.includedInTotals=false;save();render();toast('Matched to '+statement.name+' — confirm the transaction before approving')}
+function fnbDateValue(value){const parsed=Date.parse(String(value||''));return Number.isFinite(parsed)?parsed:null}
+function fnbTransactionDate(transaction){return transaction.date||transaction.transactionDate||transaction.postedDate||transaction.valueDate||''}
+function fnbTransactionMerchant(transaction){return transaction.merchant||transaction.description||transaction.payee||transaction.name||''}
+function crossReferenceFnbPurchase(document){
+  const date=fnbDateValue(document.scanDate||scannedDate(document)),amount=Number(document.amount),merchant=String(document.merchant||document.vendor||'').trim().toLowerCase();
+  const statements=(DB.fnbStatements||[]).slice().sort((a,b)=>String(a.statementDate||'').localeCompare(String(b.statementDate||'')));
+  const statement=statements.find(item=>date&&date<=fnbDateValue(item.statementDate))||null;
+  const transactions=statements.flatMap(item=>(Array.isArray(item.transactions)?item.transactions:[]).map(transaction=>({...transaction,statementId:item.id,statementName:item.name})));
+  const matches=transactions.filter(transaction=>{
+    const transactionDate=fnbDateValue(fnbTransactionDate(transaction));
+    const transactionAmount=Math.abs(Number(transaction.amount??transaction.debit??transaction.value));
+    const transactionMerchant=fnbTransactionMerchant(transaction).toLowerCase();
+    const dateMatch=!date||!transactionDate||Math.abs(date-transactionDate)<=3*86400000;
+    const amountMatch=Number.isFinite(amount)&&amount>0&&Number.isFinite(transactionAmount)&&Math.abs(amount-transactionAmount)<=0.02;
+    const merchantMatch=!merchant||!transactionMerchant||merchant.split(/\s+/).some(word=>word.length>3&&transactionMerchant.includes(word));
+    return dateMatch&&amountMatch&&merchantMatch;
+  });
+  if(matches.length)return {status:'matched',accountConfirmed:true,statementId:matches[0].statementId,statementName:matches[0].statementName,transaction:matches[0],matchedAt:new Date().toISOString()};
+  if(!transactions.length)return {status:statement?'statement-period-only':'no-statement-detail',accountConfirmed:null,statementId:statement?.id||'',statementName:statement?.name||'',matchedAt:new Date().toISOString()};
+  return {status:'not-matched',accountConfirmed:false,statementId:statement?.id||'',statementName:statement?.name||'',matchedAt:new Date().toISOString()};
+}
+function reviewAgainstFnb(path){
+  const found=(DB.scannedDocuments||[]).find(x=>x.path===path);
+  if(!found)return;
+  const result=crossReferenceFnbPurchase(found);
+  found.fnbReview={...result,reviewedAt:new Date().toISOString(),manual:true};
+  found.reviewStatus='FNB reviewed';
+  found.includedInTotals=false;
+  save();render();
+  toast(result.accountConfirmed===true?'FNB transaction matched — eligible for confirmation':result.accountConfirmed===false?'No matching FNB transaction found — kept out of totals':'FNB statement period found, but transaction detail is unavailable');
+}
 function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
 async function aiReviewDocument(doc){
   if(geminiReviewComplete(doc)){toast(`${doc.name} has already been reviewed by Gemini`);return;}
@@ -1782,6 +1812,8 @@ function applyAiReview(id,result,options={}){
   if(result.notes)found.notes=result.notes;
   if(result.documentType==='invoice')found.category='Invoice scan';
   else if(result.documentType==='receipt')found.category='Receipt scan';
+  found.fnbReview=crossReferenceFnbPurchase(found);
+  found.fnbReview.aiCrossReferencedAt=new Date().toISOString();
   found.reviewStatus='AI reviewed';
   save();
   if(!options.silent){
@@ -1918,6 +1950,7 @@ function vScanned(c){
   const body=rows.map(d=>{
     const approved=d.reviewStatus==='Approved',reviewed=d.reviewStatus==='FNB reviewed',candidate=fnbReviewCandidate(d),payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');
     const action=approved?'':reviewed?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review with FNB</button>`;
+    const fnbStatus=d.fnbReview?.accountConfirmed===true?'FNB matched':d.fnbReview?.accountConfirmed===false?'FNB not matched':d.fnbReview?.status==='statement-period-only'?'FNB period only':'';
     const aiAction=geminiReviewComplete(d)
       ? '<span class="tag paid">Gemini reviewed</span>'
       : ` <button class="btn sm gold" onclick='aiReviewDocument(${payload})'>AI review</button>`;
@@ -1925,7 +1958,7 @@ function vScanned(c){
     const categoryId=String(d.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const categorySelect=`<select class="search" aria-label="Category for ${escapeHtml(d.name)}" onchange="setScannedCategory('${categoryId}',this.value)">${categoryOptions.map(category=>`<option ${d.category===category?'selected':''}>${category}</option>`).join('')}</select>`;
     const merchant=d.merchant||d.store||d.business||d.vendor||'—',amount=d.amount===undefined||d.amount===null?'—':R(d.amount);
-    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
+    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}${fnbStatus?`<small style="display:block;color:${d.fnbReview.accountConfirmed===true?'var(--green)':d.fnbReview.accountConfirmed===false?'var(--amber)':'var(--muted)'}">${fnbStatus}</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.transaction?`${d.fnbReview.transaction.description||d.fnbReview.transaction.merchant||''} · ${d.fnbReview.statementName}`:d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
   }).join('');
   const batchRunning=Boolean(scannedReviewBatch?.running);
   const batchButton=batchRunning
