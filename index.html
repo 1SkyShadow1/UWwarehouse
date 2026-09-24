@@ -429,9 +429,18 @@ const normalizeWageLedger = db => {
   db.wages = (Array.isArray(db.wages) ? db.wages : []).map(wage => ({
     ...wage,
     name: wage.name === 'UW' ? 'Evans' : wage.name,
+    rateDay: wage.name === 'Evans' ? 200 : Number(wage.rateDay) || 0,
     weeks: Array.from({length: 5}, (_, index) => {
       const week = wage.weeks?.[index] || {};
-      return { w: week.w || `Week ${index + 1}`, days: Number(week.days ?? 0) || 0, owed: Number(week.owed ?? 0) || 0 };
+      const historicalDays = Number(week.owed) > 0 && Number(week.days || 0) === 0
+        ? Math.min(6, Math.max(0, Math.round(Number(week.owed) / (Number(wage.rateDay) || 1))))
+        : Number(week.days) || 0;
+      return {
+        w: week.w || `Week ${index + 1}`,
+        days: Math.min(6, Math.max(0, historicalDays)),
+        owed: Math.min(6, Math.max(0, historicalDays)) * (Number(wage.rateDay) || 0),
+        paymentMethod: week.paymentMethod || 'Unpaid',
+      };
     }),
     advances: Number(wage.advances) || 0,
   }));
@@ -1569,12 +1578,18 @@ function vWages(c){
   <div class="card"><div class="lbl">Target Monthly Turnover</div><div class="val gold">${R(200000)}</div><div class="sub">per WAGES sheet</div></div></div>
   <div class="panel"><h3>Payroll Ledger <button class="btn sm gold" onclick="newStaff()">+ Add Staff</button></h3>
   <div style="overflow-x:auto"><table>
-    <tr><th>Staff</th><th>Rate/Day</th><th>Per Week</th><th>Per Month</th><th>Per Year</th>${[1,2,3,4,5].map(w=>`<th>Week ${w}<br><small>Days / Owed</small></th>`).join('')}<th>Advances (−)</th><th class="num">Owed</th><th></th></tr>
+    <tr><th>Staff</th><th>Rate/Day</th><th>Per Week</th><th>Per Month</th><th>Per Year</th>${[1,2,3,4,5].map(w=>`<th>Week ${w}<br><small>Days / Wages / Paid</small></th>`).join('')}<th>Advances (−)</th><th class="num">Owed</th><th></th></tr>
     ${sourceWages.map((w,i)=>{const owed=(w.weeks||[]).reduce((a,x)=>a+(Number(x.owed)||0),0)-(Number(w.advances)||0);
     return `<tr><td><b>${w.name}</b></td>
     <td><input style="width:70px" type="number" value="${w.rateDay}" onchange="DB.wages[${i}].rateDay=+this.value;save()"></td>
-    <td>${R(w.weekly||0)}</td><td>${R(w.monthly||0)}</td><td>${R(w.yearly||0)}</td>
-    ${[0,1,2,3,4].map(wi=>`<td><input aria-label="${w.name} week ${wi+1} days worked" style="width:42px" min="0" max="7" type="number" placeholder="days" value="${w.weeks[wi]?.days||0}" onchange="DB.wages[${i}].weeks[${wi}].days=+this.value||0;save();render()"><input aria-label="${w.name} week ${wi+1} wages owed" style="width:75px" type="number" min="0" placeholder="owed" value="${w.weeks[wi]?.owed||0}" onchange="DB.wages[${i}].weeks[${wi}].owed=+this.value||0;save();render()"></td>`).join('')}
+    <td>${R((Number(w.rateDay)||0)*5)}</td><td>${R((Number(w.rateDay)||0)*21.67)}</td><td>${R((Number(w.rateDay)||0)*260)}</td>
+    ${[0,1,2,3,4].map(wi=>`<td>
+      <input aria-label="${w.name} week ${wi+1} days worked" style="width:42px" min="0" max="6" type="number" placeholder="days" value="${w.weeks[wi]?.days||0}" onchange="const week=DB.wages[${i}].weeks[${wi}];week.days=Math.min(6,Math.max(0,+this.value||0));week.owed=week.days*DB.wages[${i}].rateDay;save();render()">
+      <output aria-label="${w.name} week ${wi+1} calculated wages" style="display:block;color:var(--gold2)">${R(w.weeks[wi]?.owed||0)}</output>
+      <select aria-label="${w.name} week ${wi+1} payment method" onchange="DB.wages[${i}].weeks[${wi}].paymentMethod=this.value;save();render()">
+        ${['Unpaid','Cash','Card','EFT','Other'].map(method=>`<option ${w.weeks[wi]?.paymentMethod===method?'selected':''}>${method}</option>`).join('')}
+      </select>
+    </td>`).join('')}
     <td><input style="width:75px" type="number" value="${w.advances}" onchange="DB.wages[${i}].advances=+this.value;save();render()"></td>
     <td class="num" style="color:var(--gold2)">${R(owed)}</td>
     <td><button class="btn sm danger" onclick="if(confirm('Remove ${w.name}?')){DB.wages.splice(${i},1);save();render()}">✕</button></td></tr>`;}).join('')}
@@ -1587,7 +1602,7 @@ function newStaff(){
     <div class="fld"><label>Role</label><input id="s-role"></div>
   </div>
   <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
-  <button class="btn gold" onclick="const n=fa('s-name');DB.wages.push({name:n,rateDay:+fa('s-rate')||0,days:5,weeks:Array.from({length:5},(_,i)=>({w:'Week '+(i+1),days:0,owed:0})),advances:0});DB.staff.push({name:n,role:fa('s-role'),phone:''});save();closeModal();render()">Save</button></div>`);
+  <button class="btn gold" onclick="const n=fa('s-name');DB.wages.push({name:n,rateDay:+fa('s-rate')||0,days:5,weeks:Array.from({length:5},(_,i)=>({w:'Week '+(i+1),days:0,owed:0,paymentMethod:'Unpaid'})),advances:0});DB.staff.push({name:n,role:fa('s-role'),phone:''});save();closeModal();render()">Save</button></div>`);
 }
 
 /* ---------- JOBS / OPERATIONS ---------- */
