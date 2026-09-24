@@ -244,7 +244,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .template-doc .grand-total{font-weight:bold;border-top:2px solid #222;border-bottom:0}.template-doc .terms{font-size:10px;line-height:1.55;margin-top:18px}.template-doc .signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px;font-size:10px}.template-doc .signature-grid div{border-top:1px solid #222;padding-top:5px}
 .template-doc .signature-grid{row-gap:42px;margin-top:34px}.template-doc .signature-grid div{min-height:32px;padding-top:9px}
 .quote-reference{display:grid;grid-template-columns:290px 1fr;border-top:1px solid #222;border-bottom:1px solid #222;min-height:30px;font-size:13px}.quote-reference b,.quote-reference span{padding:6px 8px}.quote-reference b{border-right:1px solid #222}.quote-introduction{border-bottom:1px solid #222;padding-bottom:10px;font-size:13px;line-height:1.55;white-space:pre-line}
-.doc-viewer{height:calc(100vh - 230px);min-height:520px;max-height:78vh;overflow:auto;background:var(--bg);border:1px solid var(--border);padding:10px}.doc-viewer img{display:block;width:100%;height:auto;max-width:100%;object-fit:contain;transform-origin:top left}.doc-viewer iframe{display:block;width:100%;height:100%;min-width:100%;min-height:100%;border:0}.viewer-tools{display:flex;gap:6px;align-items:center;margin:8px 0}.viewer-tools .btn{min-width:42px}.viewer-scale{font-size:12px;color:var(--muted);min-width:54px;text-align:center}
+.doc-viewer{height:calc(100vh - 230px);min-height:520px;max-height:78vh;overflow:auto;background:var(--bg);border:1px solid var(--border);padding:10px}.doc-viewer img{display:block;width:100%;height:auto;max-width:100%;object-fit:contain;transform-origin:top left}.doc-viewer iframe{display:block;width:100%;height:100%;min-width:100%;min-height:100%;border:0}.viewer-tools{display:flex;gap:6px;align-items:center;margin:8px 0}.viewer-tools .btn{min-width:42px}.viewer-scale{font-size:12px;color:var(--muted);min-width:54px;text-align:center}.scan-dropzone{display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;min-height:86px;margin:10px 0;padding:16px;border:1px dashed var(--gold);border-radius:10px;color:var(--muted);background:rgba(201,162,39,.05);text-align:center}.scan-dropzone strong{color:var(--gold)}.scan-dropzone.drag-over{background:rgba(201,162,39,.16);border-style:solid;box-shadow:0 0 0 2px rgba(201,162,39,.2)}
 .document-loading{height:100%;min-height:360px;display:grid;place-items:center;color:var(--muted);font-size:13px;text-align:center;padding:30px}.document-loading strong{display:block;color:var(--gold2);font-size:15px;margin-bottom:7px}.document-loading .spinner{width:24px;height:24px;border:2px solid rgba(212,175,55,.25);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}@keyframes spin{to{transform:rotate(360deg)}}
 .review-needed{background:rgba(220,70,70,.12)!important;color:#ffb0a8!important}.review-approved{background:rgba(50,180,100,.1)!important;color:#9be7b0!important}
 .quote-top-header{display:grid;grid-template-columns:minmax(0,2fr) minmax(220px,1fr);align-items:center;gap:28px;margin-bottom:8px}
@@ -1820,7 +1820,7 @@ function reviewAgainstFnb(path){
   if(!found)return;
   const result=crossReferenceFnbPurchase(found);
   found.fnbReview={...result,reviewedAt:new Date().toISOString(),manual:true};
-  found.reviewStatus='FNB reviewed';
+  if(!geminiReviewComplete(found))found.reviewStatus='FNB reviewed';
   found.includedInTotals=false;
   save();render();
   toast(result.accountConfirmed===true?'FNB transaction matched — eligible for confirmation':result.accountConfirmed===false?'No matching FNB transaction found — kept out of totals':'FNB statement period found, but transaction detail is unavailable');
@@ -1852,7 +1852,7 @@ function applyPendingAiReview(){
 function applyAiReview(id,result,options={}){
   const found=(DB.scannedDocuments||[]).find(x=>String(x.id)===String(id));
   if(!found){toast('Scanned document record was not found');return}
-  found.aiReview={provider:result.provider,model:result.model,reviewedAt:new Date().toISOString(),successful:true,confidence:result.confidence||0,notes:result.notes||'',fnbCrossReferenced:true};
+  found.aiReview={provider:result.provider,model:result.model,reviewedAt:new Date().toISOString(),successful:true,confidence:result.confidence||0,notes:result.notes||''};
   if(result.documentDate)found.scanDate=result.documentDate;
   if(result.merchant)found.merchant=result.merchant;
   if(result.merchant)found.vendor=result.merchant;
@@ -1862,9 +1862,6 @@ function applyAiReview(id,result,options={}){
   if(result.notes)found.notes=result.notes;
   if(result.documentType==='invoice')found.category='Invoice scan';
   else if(result.documentType==='receipt')found.category='Receipt scan';
-  found.fnbReview=crossReferenceFnbPurchase(found);
-  found.fnbReview.aiCrossReferencedAt=new Date().toISOString();
-  found.aiReview.fnbReview=found.fnbReview;
   found.reviewStatus='AI reviewed';
   save();
   if(!options.silent){
@@ -1954,6 +1951,20 @@ async function reviewAllScannedDocuments(){
   render();
   toast(`${result.running===false?'Gemini review stopped':'Gemini review complete'}: ${result.completed} completed${result.failed?`, ${result.failed} failed`:''}.`);
 }
+async function reviewAllFnbDocuments(){
+  const docs=(DB.scannedDocuments||[]).filter(doc=>doc.canonical&&!doc.existingMatch&&!doc.fnbReview);
+  if(!docs.length){toast('All scanned documents already have FNB review results');return;}
+  toast(`Reviewing ${docs.length} scanned document${docs.length===1?'':'s'} against FNB…`);
+  for(const doc of docs){
+    const result=crossReferenceFnbPurchase(doc);
+    doc.fnbReview={...result,reviewedAt:new Date().toISOString(),manual:true};
+    if(!geminiReviewComplete(doc))doc.reviewStatus='FNB reviewed';
+    doc.includedInTotals=false;
+    save();
+  }
+  render();
+  toast(`FNB review complete: ${docs.length} document${docs.length===1?'':'s'} checked`);
+}
 function cancelScannedReviewBatch(){
   if(!scannedReviewBatch?.running)return;
   scannedReviewBatch.running=false;
@@ -1986,13 +1997,35 @@ async function storeUploadedScan(file){
   }
   save();render();
 }
+function scanFilesFromDataTransfer(dataTransfer){
+  const entries=[...(dataTransfer?.items||[])].map(item=>item.webkitGetAsEntry?.()).filter(Boolean);
+  const direct=[...(dataTransfer?.files||[])].filter(file=>file&&file.size);
+  const walk=entry=>new Promise(resolve=>{
+    if(entry.isFile){entry.file(file=>resolve(file),()=>resolve(null));return}
+    if(!entry.isDirectory){resolve(null);return}
+    const reader=entry.createReader(),files=[];
+    const read=()=>reader.readEntries(async batch=>{
+      if(!batch.length){resolve((await Promise.all(files)).filter(Boolean).flat());return}
+      files.push(...batch.map(walk));read();
+    },()=>resolve([]));
+    read();
+  });
+  return entries.length?Promise.all(entries.map(walk)).then(groups=>groups.flat().filter(file=>file&&file.size)):Promise.resolve(direct);
+}
 async function uploadScannedDocuments(e){
-  const files=[...e.target.files];
-  e.target.value='';
+  const files=e.dataTransfer?await scanFilesFromDataTransfer(e.dataTransfer):[...e.target.files];
+  if(e.target)e.target.value='';
   if(!files.length)return;
   toast(`Uploading ${files.length} scanned document${files.length===1?'':'s'}…`);
   for(const file of files)await storeUploadedScan(file);
 }
+async function handleScannedDrop(e){
+  e.preventDefault();e.stopPropagation();
+  const zone=e.currentTarget;zone.classList.remove('drag-over');
+  await uploadScannedDocuments(e);
+}
+function allowScannedDrop(e){e.preventDefault();e.stopPropagation();e.currentTarget.classList.add('drag-over')}
+function leaveScannedDrop(e){e.currentTarget.classList.remove('drag-over')}
 function uploadSourceDocuments(e){[...e.target.files].forEach(async file=>{try{const managed=await uploadManagedDocument(file);DB.documents.unshift({id:managed.id,name:managed.name,path:managed.url,url:managed.url,data:null,extension:'.'+file.name.split('.').pop().toLowerCase(),bytes:file.size,category:'Uploaded source document',reviewStatus:'Needs review'});save();render();}catch(error){const r=new FileReader();r.onload=()=>{DB.documents.unshift({id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),bytes:file.size,category:'Uploaded source document',reviewStatus:'Needs review'});save();render();};r.readAsDataURL(file);toast(error.message+' Using offline storage.');}});e.target.value='';}
 function vScanned(c){
   const f=docFilterState('scanned');
@@ -2000,7 +2033,7 @@ function vScanned(c){
   const meta=window.UW_SCANNED||{};
   const body=rows.map(d=>{
     const approved=d.reviewStatus==='Approved',reviewed=d.reviewStatus==='FNB reviewed',candidate=fnbReviewCandidate(d),payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');
-    const action=approved?'':reviewed?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review with FNB</button>`;
+    const action=approved?'':d.fnbReview?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review FNB</button>`;
     const fnbStatus=d.fnbReview?.accountConfirmed===true?'FNB matched':d.fnbReview?.accountConfirmed===false?'FNB not matched':d.fnbReview?.status==='statement-period-only'?'FNB period only':'';
     const aiAction=geminiReviewComplete(d)
       ? '<span class="tag paid">Gemini reviewed</span>'
@@ -2014,8 +2047,8 @@ function vScanned(c){
   const batchRunning=Boolean(scannedReviewBatch?.running);
   const batchButton=batchRunning
     ? `<button class="btn gold" type="button" onclick="cancelScannedReviewBatch()">Stop after current</button><span id="scanned-review-progress" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></span>`
-    : '<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button>';
-  c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Upload JPG, PNG, WEBP, GIF, or PDF scans. Each upload is stored, read back from managed storage, then reviewed from the document contents. Batch review runs one document at a time and saves after every result.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
+    : '<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">Review FNB matches</button>';
+  c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><label class="btn" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload folder<input type="file" webkitdirectory directory multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="scan-dropzone" ondragover="allowScannedDrop(event)" ondragleave="leaveScannedDrop(event)" ondrop="handleScannedDrop(event)"><strong>Drop receipt or invoice files/folders here</strong><span>JPG, PNG, WEBP, GIF, and PDF · folders are scanned recursively</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Gemini extraction and FNB reconciliation are separate reviews. Uploads are stored in managed storage and can be reviewed independently.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
   if(batchRunning)updateScannedReviewProgress();
 }
 function setScannedCategory(id,category){
