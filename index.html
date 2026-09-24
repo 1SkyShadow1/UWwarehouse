@@ -457,6 +457,12 @@ let serverSyncInFlight = false;
 let serverSyncAvailable = false;
 let serverConflict = (()=>{try{return JSON.parse(localStorage.getItem('UW_STATE_CONFLICT')||'null')}catch(_){return null}})();
 let pendingAiReview=null;
+function geminiReviewComplete(doc){
+  return Boolean(doc?.aiReview?.successful||(
+    doc?.reviewStatus==='AI reviewed'&&
+    !doc?.aiReview?.error
+  ));
+}
 let remoteDocumentCatalog=[];
 async function initializeServerSync(){
   if(serverSyncInFlight)return;
@@ -631,7 +637,26 @@ function load(){
       }
       if(merged.meta.scannedVersion!==(scanned.version||'')||(merged.scannedDocuments||[]).length<(scanned.documents||[]).length){
         const previous=new Map((merged.scannedDocuments||[]).map(x=>[x.hash,x]));
-        merged.scannedDocuments=(scanned.documents||[]).map(x=>{const old=previous.get(x.hash)||{};return {...x,reviewStatus:old.reviewStatus||x.reviewStatus,includedInTotals:old.includedInTotals||false,reviewedAt:old.reviewedAt||''};});
+        merged.scannedDocuments=(scanned.documents||[]).map(x=>{
+          const old=previous.get(x.hash)||{};
+          const reviewed=old.aiReview?.successful||old.reviewStatus==='AI reviewed';
+          return {...x,
+            reviewStatus:old.reviewStatus||x.reviewStatus,
+            includedInTotals:old.includedInTotals||false,
+            reviewedAt:old.reviewedAt||'',
+            aiReview:old.aiReview||x.aiReview,
+            ...(reviewed?{
+              scanDate:old.scanDate||x.scanDate,
+              category:old.category||x.category,
+              merchant:old.merchant||x.merchant,
+              vendor:old.vendor||x.vendor,
+              amount:old.amount??x.amount,
+              currency:old.currency||x.currency,
+              documentType:old.documentType||x.documentType,
+              notes:old.notes||x.notes
+            }: {})
+          };
+        });
         merged.meta.scannedVersion=scanned.version||'';
         localStorage.setItem(DB_KEY,JSON.stringify(merged));
       }
@@ -1703,7 +1728,7 @@ function fnbReviewCandidate(d){const date=d.scanDate||scannedDate(d);if(!date)re
 function reviewAgainstFnb(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path),statement=found&&fnbReviewCandidate(found);if(!found||!statement){toast('No matching FNB statement period was found; the scan remains unapproved');return}found.fnbReview={statementId:statement.id,statementName:statement.name,reviewedAt:new Date().toISOString(),status:'Reviewed against FNB statement period'};found.reviewStatus='FNB reviewed';found.includedInTotals=false;save();render();toast('Matched to '+statement.name+' — confirm the transaction before approving')}
 function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
 async function aiReviewDocument(doc){
-  if(doc.aiReview?.successful){toast(`${doc.name} has already been reviewed by Gemini`);return;}
+  if(geminiReviewComplete(doc)){toast(`${doc.name} has already been reviewed by Gemini`);return;}
   const resultHost=`ai-review-${String(doc.id||Date.now()).replace(/[^a-z0-9]/gi,'')}`;
   modal(`<h3>Gemini document review</h3><p style="color:var(--muted)">Reading <b>${escapeHtml(doc.name||'document')}</b> and extracting only visible facts. Nothing will be saved until you confirm.</p><pre id="${resultHost}" class="ai-result">Working…</pre><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
   try{
@@ -1756,11 +1781,11 @@ async function autoReviewScannedDocument(doc){
   catch(error){doc.aiReview={provider:'gemini',successful:false,error:error.message,failedAt:new Date().toISOString()};save();console.error(`Gemini review failed for ${doc.name}:`,error);return false;}
 }
 async function reviewAllScannedDocuments(){
-  const docs=(DB.scannedDocuments||[]).filter(doc=>doc.canonical&&!doc.existingMatch&&!doc.aiReview?.successful);
+  const docs=(DB.scannedDocuments||[]).filter(doc=>doc.canonical&&!doc.existingMatch&&!geminiReviewComplete(doc));
   if(!docs.length){toast('All scanned documents already have Gemini results');return;}
   toast(`Gemini is reviewing ${docs.length} scanned document(s)…`);
-  let completed=0,failed=0;
-  for(const doc of docs){if(await autoReviewScannedDocument(doc))completed++;else failed++;}
+  const results=await Promise.all(docs.map(doc=>autoReviewScannedDocument(doc)));
+  const completed=results.filter(Boolean).length,failed=results.length-completed;
   save();render();toast(`Gemini review complete: ${completed} completed${failed?`, ${failed} failed`:''}.`);
 }
 async function storeUploadedScan(file){
@@ -1784,14 +1809,14 @@ function vScanned(c){
   const body=rows.map(d=>{
     const approved=d.reviewStatus==='Approved',reviewed=d.reviewStatus==='FNB reviewed',candidate=fnbReviewCandidate(d),payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');
     const action=approved?'':reviewed?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review with FNB</button>`;
-    const aiAction=d.aiReview?.successful
+    const aiAction=geminiReviewComplete(d)
       ? '<span class="tag paid">Gemini reviewed</span>'
       : ` <button class="btn sm gold" onclick='aiReviewDocument(${payload})'>AI review</button>`;
     const categoryOptions=['Receipt scan','Invoice scan','Unclassified scan','Other'];
     const categoryId=String(d.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const categorySelect=`<select class="search" aria-label="Category for ${escapeHtml(d.name)}" onchange="setScannedCategory('${categoryId}',this.value)">${categoryOptions.map(category=>`<option ${d.category===category?'selected':''}>${category}</option>`).join('')}</select>`;
     const merchant=d.merchant||d.store||d.business||d.vendor||'—',amount=d.amount===undefined||d.amount===null?'—':R(d.amount);
-    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${d.aiReview?.successful?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
+    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
   }).join('');
   c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}<label class="btn gold">＋ Upload scans<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="uploadScannedDocuments(event)"></label><button class="btn" onclick="reviewAllScannedDocuments()">Run Gemini on all unreviewed</button><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Uploads are stored in managed document storage, categorised by filename and Gemini extraction, then remain unapproved until verified.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
 }
