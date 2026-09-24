@@ -78,6 +78,7 @@ const stateVersion = 1;
 const maxDocumentBytes = Number(process.env.UW_MAX_DOCUMENT_BYTES || 25 * 1024 * 1024);
 const allowedDocumentTypes = new Set((process.env.UW_DOCUMENT_MIME_TYPES || [
   'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
+  'image/gif',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain',
@@ -88,6 +89,7 @@ const hasDocumentSignature = (buffer, mimeType) => {
   if (mimeType === 'image/jpeg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
   if (mimeType === 'image/png') return buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
   if (mimeType === 'image/webp') return buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  if (mimeType === 'image/gif') return ['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii'));
   if (mimeType.startsWith('application/vnd.openxmlformats-officedocument.')) return buffer.subarray(0, 2).toString('ascii') === 'PK';
   return mimeType === 'text/plain';
 };
