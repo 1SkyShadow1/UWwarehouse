@@ -12,24 +12,24 @@
       "name": "New invoice",
       "short_name": "Invoice",
       "url": "./?view=invoices&action=new",
-      "icons": [{ "src": "uw-round-logo.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "uw-round-logo.png?v=20260924", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "New quote",
       "short_name": "Quote",
       "url": "./?view=quotes&action=new",
-      "icons": [{ "src": "uw-round-logo.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "uw-round-logo.png?v=20260924", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "icons": [
     {
-      "src": "uw-round-logo.png",
+      "src": "uw-round-logo.png?v=20260924",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "uw-round-logo.png",
+      "src": "uw-round-logo.png?v=20260924",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"

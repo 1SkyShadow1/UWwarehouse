@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#121212">
 <meta name="description" content="Offline-first accounting and operations system for Upholstery Warehouse">
-<link rel="icon" href="uw-round-logo.png" type="image/png" sizes="512x512">
-<link rel="shortcut icon" href="uw-round-logo.png" type="image/png">
-<link rel="apple-touch-icon" href="uw-round-logo.png">
-<meta name="msapplication-TileImage" content="uw-round-logo.png">
+<link rel="icon" href="uw-round-logo.png?v=20260924" type="image/png" sizes="512x512">
+<link rel="shortcut icon" href="uw-round-logo.png?v=20260924" type="image/png">
+<link rel="apple-touch-icon" href="uw-round-logo.png?v=20260924">
+<meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
 <style>
@@ -425,6 +425,21 @@ const seed = {
 };
 
 let DB = load();
+const normalizeWageLedger = db => {
+  db.wages = (Array.isArray(db.wages) ? db.wages : []).map(wage => ({
+    ...wage,
+    name: wage.name === 'UW' ? 'Evans' : wage.name,
+    weeks: Array.from({length: 5}, (_, index) => {
+      const week = wage.weeks?.[index] || {};
+      return { w: week.w || `Week ${index + 1}`, days: Number(week.days ?? 0) || 0, owed: Number(week.owed ?? 0) || 0 };
+    }),
+    advances: Number(wage.advances) || 0,
+  }));
+  db.staff = (Array.isArray(db.staff) ? db.staff : []).map(member => member.name === 'UW' ? {...member, name: 'Evans'} : member);
+  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch (error) { console.warn('Wage ledger migration could not be cached locally:', error); }
+  return db;
+};
+normalizeWageLedger(DB);
 let serverRevision = null;
 let serverSyncTimer;
 let serverRetryTimer;
@@ -449,6 +464,7 @@ async function initializeServerSync(){
     const remoteUpdatedAt=Date.parse(snapshot.updatedAt||'');
     if(snapshot.data&&Object.keys(snapshot.data).length&&(!Number.isFinite(localSavedAt)||!Number.isFinite(remoteUpdatedAt)||remoteUpdatedAt>=localSavedAt)){
       DB={...DB,...snapshot.data,meta:{...DB.meta,...(snapshot.data.meta||{})}};
+      normalizeWageLedger(DB);
       persistLocalSnapshot();
       render();
     }else if(Number.isFinite(localSavedAt)&&(!Number.isFinite(remoteUpdatedAt)||localSavedAt>remoteUpdatedAt)){
@@ -976,17 +992,20 @@ function vDashboard(c){
   const inv=mf?DB.invoices.filter(i=>monthOf(i.date)===mf):DB.invoices;
   const exp=mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses;
   const inc=inv.reduce((s,i)=>s+(i.paid||0),0);
-  const expT=exp.reduce((s,e)=>s+e.amount,0);
+  const wageT=(DB.wages||[]).reduce((sum,wage)=>
+    sum+(wage.weeks||[]).reduce((weekTotal,week)=>weekTotal+(Number(week.owed)||0),0)-(Number(wage.advances)||0),0);
+  const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
   const out=inv.filter(i=>invBalance(i)>0.005);
   const outT=out.reduce((s,i)=>s+invBalance(i),0);
   const qPend=DB.quotes.filter(q=>q.status!=='Accepted').length;
   const cats={};exp.forEach(e=>cats[e.category]=(cats[e.category]||0)+e.amount);
+  if(wageT)cats.Staff=(cats.Staff||0)+wageT;
   const maxC=Math.max(1,...Object.values(cats));
   c.innerHTML=`
   <div class="toolbar">${monthFilterHtml('mf')}</div>
   <div class="cards">
     <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} invoice(s)${mf?' · '+mf:''}</div></div>
-    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} entries</div></div>
+    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} entries + wages</div></div>
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
     <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${DB.quotes.length} total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
@@ -1542,7 +1561,7 @@ const fa=id=>document.getElementById(id).value;
 /* ---------- WAGES ---------- */
 function vWages(c){
   const sourceWages=DB.wages||[];
-  const tot=sourceWages.reduce((s,w)=>s+(w.weeks||[]).reduce((a,x)=>a+x.owed,0)-w.advances,0);
+  const tot=sourceWages.reduce((s,w)=>s+(w.weeks||[]).reduce((a,x)=>a+(Number(x.owed)||0),0)-(Number(w.advances)||0),0);
   const monthly=sourceWages.reduce((s,w)=>s+(w.monthly||0),0);
   c.innerHTML=`
   <div class="cards"><div class="card"><div class="lbl">Monthly Wage Cost</div><div class="val gold">${R(monthly)}</div><div class="sub">from WAGES.xlsx</div></div>
@@ -1550,12 +1569,12 @@ function vWages(c){
   <div class="card"><div class="lbl">Target Monthly Turnover</div><div class="val gold">${R(200000)}</div><div class="sub">per WAGES sheet</div></div></div>
   <div class="panel"><h3>Payroll Ledger <button class="btn sm gold" onclick="newStaff()">+ Add Staff</button></h3>
   <div style="overflow-x:auto"><table>
-    <tr><th>Staff</th><th>Rate/Day</th><th>Per Week</th><th>Per Month</th><th>Per Year</th>${[1,2,3,4,5].map(w=>`<th>Week ${w}</th>`).join('')}<th>Advances (−)</th><th class="num">Owed</th><th></th></tr>
-    ${sourceWages.map((w,i)=>{const owed=(w.weeks||[]).reduce((a,x)=>a+x.owed,0)-w.advances;
+    <tr><th>Staff</th><th>Rate/Day</th><th>Per Week</th><th>Per Month</th><th>Per Year</th>${[1,2,3,4,5].map(w=>`<th>Week ${w}<br><small>Days / Owed</small></th>`).join('')}<th>Advances (−)</th><th class="num">Owed</th><th></th></tr>
+    ${sourceWages.map((w,i)=>{const owed=(w.weeks||[]).reduce((a,x)=>a+(Number(x.owed)||0),0)-(Number(w.advances)||0);
     return `<tr><td><b>${w.name}</b></td>
     <td><input style="width:70px" type="number" value="${w.rateDay}" onchange="DB.wages[${i}].rateDay=+this.value;save()"></td>
     <td>${R(w.weekly||0)}</td><td>${R(w.monthly||0)}</td><td>${R(w.yearly||0)}</td>
-    ${[0,1,2,3,4].map(wi=>`<td><input style="width:75px" type="number" value="${w.weeks[wi]?w.weeks[wi].owed:0}" onchange="if(DB.wages[${i}].weeks[${wi}])DB.wages[${i}].weeks[${wi}].owed=+this.value;else DB.wages[${i}].weeks[${wi}]={w:'',owed:+this.value};save();render()"></td>`).join('')}
+    ${[0,1,2,3,4].map(wi=>`<td><input aria-label="${w.name} week ${wi+1} days worked" style="width:42px" min="0" max="7" type="number" placeholder="days" value="${w.weeks[wi]?.days||0}" onchange="DB.wages[${i}].weeks[${wi}].days=+this.value||0;save();render()"><input aria-label="${w.name} week ${wi+1} wages owed" style="width:75px" type="number" min="0" placeholder="owed" value="${w.weeks[wi]?.owed||0}" onchange="DB.wages[${i}].weeks[${wi}].owed=+this.value||0;save();render()"></td>`).join('')}
     <td><input style="width:75px" type="number" value="${w.advances}" onchange="DB.wages[${i}].advances=+this.value;save();render()"></td>
     <td class="num" style="color:var(--gold2)">${R(owed)}</td>
     <td><button class="btn sm danger" onclick="if(confirm('Remove ${w.name}?')){DB.wages.splice(${i},1);save();render()}">✕</button></td></tr>`;}).join('')}
@@ -1568,7 +1587,7 @@ function newStaff(){
     <div class="fld"><label>Role</label><input id="s-role"></div>
   </div>
   <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
-  <button class="btn gold" onclick="const n=fa('s-name');DB.wages.push({name:n,rateDay:+fa('s-rate')||0,days:5,weeks:[],advances:0});DB.staff.push({name:n,role:fa('s-role'),phone:''});save();closeModal();render()">Save</button></div>`);
+  <button class="btn gold" onclick="const n=fa('s-name');DB.wages.push({name:n,rateDay:+fa('s-rate')||0,days:5,weeks:Array.from({length:5},(_,i)=>({w:'Week '+(i+1),days:0,owed:0})),advances:0});DB.staff.push({name:n,role:fa('s-role'),phone:''});save();closeModal();render()">Save</button></div>`);
 }
 
 /* ---------- JOBS / OPERATIONS ---------- */
