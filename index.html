@@ -1792,21 +1792,28 @@ function fnbTransactionDate(transaction){return transaction.date||transaction.tr
 function fnbTransactionMerchant(transaction){return transaction.merchant||transaction.description||transaction.payee||transaction.name||''}
 function crossReferenceFnbPurchase(document){
   const date=fnbDateValue(document.scanDate||scannedDate(document)),amount=Number(document.amount),merchant=String(document.merchant||document.vendor||'').trim().toLowerCase();
+  const type=String(document.documentType||'').toLowerCase();
   const statements=(DB.fnbStatements||[]).slice().sort((a,b)=>String(a.statementDate||'').localeCompare(String(b.statementDate||'')));
   const statement=statements.find(item=>date&&date<=fnbDateValue(item.statementDate))||null;
   const transactions=statements.flatMap(item=>(Array.isArray(item.transactions)?item.transactions:[]).map(transaction=>({...transaction,statementId:item.id,statementName:item.name})));
   const matches=transactions.filter(transaction=>{
     const transactionDate=fnbDateValue(fnbTransactionDate(transaction));
-    const transactionAmount=Math.abs(Number(transaction.amount??transaction.debit??transaction.value));
+    const rawAmount=Number(transaction.amount??transaction.debit??transaction.value);
+    const transactionAmount=Math.abs(rawAmount);
     const transactionMerchant=fnbTransactionMerchant(transaction).toLowerCase();
+    const debit=Number(transaction.debit)>0||rawAmount<0;
     const dateMatch=!date||!transactionDate||Math.abs(date-transactionDate)<=3*86400000;
     const amountMatch=Number.isFinite(amount)&&amount>0&&Number.isFinite(transactionAmount)&&Math.abs(amount-transactionAmount)<=0.02;
-    const merchantMatch=!merchant||!transactionMerchant||merchant.split(/\s+/).some(word=>word.length>3&&transactionMerchant.includes(word));
-    return dateMatch&&amountMatch&&merchantMatch;
+    const merchantWords=merchant.split(/\s+/).filter(word=>word.length>3);
+    const merchantMatch=!merchant||!transactionMerchant||merchantWords.some(word=>transactionMerchant.includes(word));
+    return debit&&dateMatch&&amountMatch&&merchantMatch;
   });
-  if(matches.length)return {status:'matched',accountConfirmed:true,statementId:matches[0].statementId,statementName:matches[0].statementName,transaction:matches[0],matchedAt:new Date().toISOString()};
+  if(matches.length){
+    matches.sort((a,b)=>Math.abs(fnbDateValue(fnbTransactionDate(a))-(date||0))-Math.abs(fnbDateValue(fnbTransactionDate(b))-(date||0)));
+    return {status:'matched',accountConfirmed:true,statementId:matches[0].statementId,statementName:matches[0].statementName,transaction:matches[0],matchedAt:new Date().toISOString(),evidence:'Matched FNB debit by receipt amount/date/merchant',documentType:type||'receipt'};
+  }
   if(!transactions.length)return {status:statement?'statement-period-only':'no-statement-detail',accountConfirmed:null,statementId:statement?.id||'',statementName:statement?.name||'',matchedAt:new Date().toISOString()};
-  return {status:'not-matched',accountConfirmed:false,statementId:statement?.id||'',statementName:statement?.name||'',matchedAt:new Date().toISOString()};
+  return {status:'not-matched',accountConfirmed:false,statementId:statement?.id||'',statementName:statement?.name||'',matchedAt:new Date().toISOString(),evidence:'No FNB debit matched the receipt amount/date/merchant',documentType:type||'receipt'};
 }
 function reviewAgainstFnb(path){
   const found=(DB.scannedDocuments||[]).find(x=>x.path===path);
@@ -1845,7 +1852,7 @@ function applyPendingAiReview(){
 function applyAiReview(id,result,options={}){
   const found=(DB.scannedDocuments||[]).find(x=>String(x.id)===String(id));
   if(!found){toast('Scanned document record was not found');return}
-  found.aiReview={provider:result.provider,model:result.model,reviewedAt:new Date().toISOString(),successful:true,confidence:result.confidence||0,notes:result.notes||''};
+  found.aiReview={provider:result.provider,model:result.model,reviewedAt:new Date().toISOString(),successful:true,confidence:result.confidence||0,notes:result.notes||'',fnbCrossReferenced:true};
   if(result.documentDate)found.scanDate=result.documentDate;
   if(result.merchant)found.merchant=result.merchant;
   if(result.merchant)found.vendor=result.merchant;
@@ -1857,6 +1864,7 @@ function applyAiReview(id,result,options={}){
   else if(result.documentType==='receipt')found.category='Receipt scan';
   found.fnbReview=crossReferenceFnbPurchase(found);
   found.fnbReview.aiCrossReferencedAt=new Date().toISOString();
+  found.aiReview.fnbReview=found.fnbReview;
   found.reviewStatus='AI reviewed';
   save();
   if(!options.silent){
