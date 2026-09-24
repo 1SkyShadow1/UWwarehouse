@@ -4,10 +4,10 @@
  * transaction is explicitly allocated, preventing double-counting.
  */
 window.UW_FNB_STATEMENTS = {
-  version: "fnb-gold-business-2025-2026-docx-2026-09-15",
+  version: "fnb-gold-business-2025-2026-docx-2026-09-24",
   sourceFolder: "Attached statements / GOLD_BUSINESS_ACCOUNT_1-12.docx",
   extractionMethod: "DOCX text extraction with statement-level reconciliation",
-  extractionStatus: "Imported and reconciled from 12 authoritative FNB statements. Transactions remain unallocated pending category review.",
+  extractionStatus: "Imported and reconciled from 12 authoritative FNB statements. Detailed source rows are bundled for durable Transaction history viewing; transactions remain unallocated pending category review.",
   account: {bank:"First National Bank", product:"Gold Business Account", accountNumber:"63173509557", branchCode:"250655", currency:"ZAR"},
   categories: ["Personal","Fuel","Consumables/Materials","Utilities","Rent","Staff","Marketing","Bank Fees","Loan","Client Receipt/Income","Transfer","Other"],
   reconciliation: {

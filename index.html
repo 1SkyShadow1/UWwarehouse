@@ -480,6 +480,7 @@ async function initializeServerSync(){
     const remoteUpdatedAt=Date.parse(snapshot.updatedAt||'');
     if(snapshot.data&&Object.keys(snapshot.data).length&&(!Number.isFinite(localSavedAt)||!Number.isFinite(remoteUpdatedAt)||remoteUpdatedAt>=localSavedAt)){
       DB={...DB,...snapshot.data,meta:{...DB.meta,...(snapshot.data.meta||{})}};
+      mergeBundledFnbState(DB);
       normalizeWageLedger(DB);
       persistLocalSnapshot();
       render();
@@ -603,6 +604,28 @@ function normalizeQuoteFields(db){
   });
   return db;
 }
+function mergeBundledFnbState(db){
+  const bundled=window.UW_FNB_STATEMENTS||{};
+  if(!Array.isArray(bundled.statements)||!bundled.statements.length)return db;
+  const existing=new Map((db.fnbStatements||[]).map(statement=>[String(statement.id),statement]));
+  db.fnbStatements=bundled.statements.map(source=>{
+    const prior=existing.get(String(source.id))||{};
+    const priorTransactions=new Map((Array.isArray(prior.transactions)?prior.transactions:[]).map(transaction=>[String(transaction.id),transaction]));
+    return {
+      ...source,
+      status:prior.status||source.status,
+      category:prior.category||source.category,
+      storagePath:prior.storagePath||source.storagePath,
+      url:prior.url||source.url,
+      transactions:(source.transactions||[]).map(transaction=>{
+        const saved=priorTransactions.get(String(transaction.id))||{};
+        return {...transaction,category:saved.category||transaction.category||''};
+      })
+    };
+  });
+  db.meta={...(db.meta||{}),fnbVersion:bundled.version||''};
+  return db;
+}
 function load(){
   const imported=window.UW_IMPORTED||{};
   const operations=window.UW_OPERATIONS||{};
@@ -616,6 +639,7 @@ function load(){
     if(raw){
       const parsed=JSON.parse(raw);
       const merged={...base,...parsed,meta:{...base.meta,...(parsed.meta||{}),googleDrive:{...base.meta.googleDrive,...((parsed.meta||{}).googleDrive||{})}}};
+      mergeBundledFnbState(merged);
       const importedNeedsRefresh=merged.meta.importVersion!==(imported.meta||{}).importVersion
         || merged.invoices.length<(imported.invoices||[]).length
         || merged.expenses.length<(imported.expenses||[]).length
@@ -671,11 +695,7 @@ function load(){
         merged.meta.scannedVersion=scanned.version||'';
         localStorage.setItem(DB_KEY,JSON.stringify(merged));
       }
-      if(merged.meta.fnbVersion!==(fnb.version||'')){
-        merged.fnbStatements=fnb.statements||[];
-        merged.meta.fnbVersion=fnb.version||'';
-        localStorage.setItem(DB_KEY,JSON.stringify(merged));
-      }
+      mergeBundledFnbState(merged);
       normalizeQuoteFields(merged);
       localStorage.setItem(DB_KEY,JSON.stringify(merged));
       return merged;
@@ -1741,6 +1761,16 @@ async function loadDocumentViewerAsset(url,kind){
   }
   if(loading)loading.innerHTML=`<div><strong>Document unavailable right now</strong><span>${escapeHtml(lastError)} Please try View again in a moment.</span></div>`;
 }
+function viewFnbSource(statement){
+  const rows=Array.isArray(statement?.transactions)?statement.transactions:[];
+  const body=rows.map(transaction=>{
+    const amount=Number(transaction.amount||0);
+    const debit=transaction.debit??(amount<0?Math.abs(amount):null);
+    const credit=transaction.credit??(amount>0?Math.abs(amount):null);
+    return `<tr><td>${escapeHtml(transaction.date||'—')}</td><td>${escapeHtml(transaction.description||'—')}</td><td class="num">${debit==null?'—':R(debit)}</td><td class="num">${credit==null?'—':R(credit)}</td><td class="num">${R(transaction.balance||0)}</td></tr>`;
+  }).join('');
+  modal(`<h3>${escapeHtml(statement.name||'FNB source statement')}</h3><p style="font-size:12px;color:var(--muted)">Durable source reconstruction from the imported DOCX statement. ${escapeHtml(statement.period||'')} · ${rows.length} source rows. This view remains available even when the original Windows D: path is not mounted on the server.</p><div class="panel" style="max-height:65vh;overflow:auto"><table><tr><th>Date</th><th>Description / merchant</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>${body||'<tr><td colspan="5" class="empty">No source rows are available.</td></tr>'}</table></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`);
+}
 function viewDocument(d){
   const url=documentUrl(d),name=String(d.name||d.path||'Source document'),ext=name.split('.').pop().toLowerCase(),safe=String(d.path||'Source unavailable').replace(/</g,'&lt;'),title=name.replace(/"/g,'&quot;');
   let body;
@@ -1989,14 +2019,14 @@ function setScannedCategory(id,category){
 }
 function vBank(c){
   const meta=window.UW_FNB_STATEMENTS||{},all=DB.fnbStatements||[],f=docFilterState('bank'),rows=all.filter(s=>docMatches(s,'bank','Statement',s.status)&&(!f.appliedQ||String(s.period||'').toLowerCase().includes(f.appliedQ.toLowerCase()))),r=meta.reconciliation||{};
-  const body=rows.map(s=>'<tr class="review-approved"><td><b>'+s.name+'</b><small>'+s.period+'</small></td><td>'+s.pages+'</td><td>'+s.creditTransactions+' cr / '+s.debitTransactions+' dr</td><td class="num">'+R(s.credits)+' / '+R(s.debits)+'</td><td class="num">'+R(s.closingBalance)+'</td><td><b>'+s.status+'</b></td><td><button class="btn sm" onclick=\'viewDocument('+JSON.stringify(s).replace(/'/g,'&#39;')+')\'>View source</button></td></tr>').join('');
+  const body=rows.map(s=>'<tr class="review-approved"><td><b>'+escapeHtml(s.name)+'</b><small>'+escapeHtml(s.period)+'</small></td><td>'+s.pages+'</td><td>'+s.creditTransactions+' cr / '+s.debitTransactions+' dr</td><td class="num">'+R(s.credits)+' / '+R(s.debits)+'</td><td class="num">'+R(s.closingBalance)+'</td><td><b>'+escapeHtml(s.status)+'</b></td><td><button class="btn sm" onclick=\'viewFnbSource('+JSON.stringify(s).replace(/'/g,'&#39;')+')\'>View source</button></td></tr>').join('');
   const transactions=all.flatMap(statement=>(Array.isArray(statement.transactions)?statement.transactions:[]).map((transaction,index)=>({...transaction,statementName:statement.name,statementId:statement.id,rowId:transaction.id||`${statement.id}-${index+1}`})));
   const transactionRows=transactions.map(transaction=>{
     const categoryOptions=(meta.categories||[]).map(category=>`<option ${transaction.category===category?'selected':''}>${category}</option>`).join('');
     return `<tr><td>${transaction.date||transaction.transactionDate||transaction.postedDate||'—'}</td><td>${transaction.description||transaction.merchant||transaction.payee||'—'}</td><td class="num">${transaction.debit||transaction.amount<0?R(Math.abs(Number(transaction.debit||transaction.amount||0))):'—'}</td><td class="num">${transaction.credit||transaction.amount>0?R(Math.abs(Number(transaction.credit||transaction.amount||0))):'—'}</td><td><select class="search" onchange="setFnbTransactionCategory('${transaction.statementId}','${transaction.rowId}',this.value)"><option value="">Unallocated</option>${categoryOptions}</select></td><td>${transaction.statementName}</td></tr>`;
   }).join('');
-  const history=transactions.length?`<table><tr><th>Date</th><th>Description / merchant</th><th class="num">Debit</th><th class="num">Credit</th><th>Category</th><th>Statement</th></tr>${transactionRows}</table>`:`<div class="empty">The source register confirms ${r.extractedRows||0} transactions, but this deployment contains statement-level summaries only; transaction rows must be re-imported from the FNB DOCX extraction before they can be displayed here.</div>`;
-  c.innerHTML='<div class="cards"><div class="card"><div class="lbl">FNB closing balance · 31 Aug 2026</div><div class="val gold">'+R((all[all.length-1]||{}).closingBalance||0)+'</div></div><div class="card"><div class="lbl">Imported turnover credits</div><div class="val green">'+R(r.verifiedCredits||0)+'</div></div><div class="card"><div class="lbl">Imported turnover debits</div><div class="val amber">'+R(r.verifiedDebits||0)+'</div></div><div class="card"><div class="lbl">Statements / transactions</div><div class="val">'+(r.statementCount||0)+' / '+(r.extractedRows||0)+'</div></div></div><div class="toolbar">'+docFilterHtml('bank',[],['Imported'],false)+'<span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' statements shown · '+(r.unmatchedRows||0)+' transactions awaiting allocation</span></div><div class="panel"><h3>FNB Gold Business Account · authoritative register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+' Statement turnover is reconciled here but excluded from invoices, expenses and reports until allocated.</p><table><tr><th>Statement / period</th><th>Pages</th><th>Transactions</th><th>Credits / debits</th><th>Closing balance</th><th>Status</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Transaction history</h3><p style="font-size:11px;color:var(--muted)">All statement transactions remain in the source register until assigned a category and explicitly posted to the operational ledger.</p>'+history+'</div>'
+  const history=transactions.length?`<div style="overflow:auto;max-height:70vh"><table><tr><th>Date</th><th>Description / merchant</th><th class="num">Debit</th><th class="num">Credit</th><th>Category</th><th>Statement</th></tr>${transactionRows}</table></div>`:`<div class="empty">No transaction rows are loaded in the current state.</div>`;
+  c.innerHTML='<div class="cards"><div class="card"><div class="lbl">FNB closing balance · 31 Aug 2026</div><div class="val gold">'+R((all[all.length-1]||{}).closingBalance||0)+'</div></div><div class="card"><div class="lbl">Imported turnover credits</div><div class="val green">'+R(r.verifiedCredits||0)+'</div></div><div class="card"><div class="lbl">Imported turnover debits</div><div class="val amber">'+R(r.verifiedDebits||0)+'</div></div><div class="card"><div class="lbl">Statements / source rows</div><div class="val">'+(r.statementCount||0)+' / '+transactions.length+'</div></div></div><div class="toolbar">'+docFilterHtml('bank',[],['Imported'],false)+'<span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' statements shown · '+transactions.length+' source transactions awaiting allocation</span></div><div class="panel"><h3>FNB Gold Business Account · authoritative register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+' Statement turnover is reconciled here but excluded from invoices, expenses and reports until allocated.</p><table><tr><th>Statement / period</th><th>Pages</th><th>Transactions</th><th>Credits / debits</th><th>Closing balance</th><th>Status</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Transaction history</h3><p style="font-size:11px;color:var(--muted)">All source rows remain in the register until assigned a category and explicitly posted to the operational ledger.</p>'+history+'</div>'
 }
 function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date'));const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved','FNB reviewed'])+'<label class="btn gold">＋ Upload source documents<input type="file" multiple style="display:none" onchange="uploadSourceDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
 function vAssistant(c){
