@@ -1743,10 +1743,7 @@ async function aiReviewDocument(doc){
   const resultHost=`ai-review-${String(doc.id||Date.now()).replace(/[^a-z0-9]/gi,'')}`;
   modal(`<h3>Gemini document review</h3><p style="color:var(--muted)">Reading <b>${escapeHtml(doc.name||'document')}</b> and extracting only visible facts. Nothing will be saved until you confirm.</p><pre id="${resultHost}" class="ai-result">Working…</pre><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
   try{
-    let response=await fetch('/api/ai/review-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:doc.id,name:doc.name,path:doc.path})});
-    if(response.status===404) response=await fetch('/api/gemini/review-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:doc.id,name:doc.name,path:doc.path})});
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(result.error||'Gemini review failed');
+    const result=await requestGeminiReviewWithRetry(doc,3);
     const host=document.getElementById(resultHost);
     if(!host)return;
     host.textContent=`Date: ${result.documentDate||'Not found'}\nStore / business: ${result.merchant||'Not found'}\nAmount paid: ${result.amountPaid===null||result.amountPaid===undefined?'Not found':`${result.currency||'R'} ${Number(result.amountPaid).toFixed(2)}`}\nType: ${result.documentType||'other'}\nConfidence: ${Math.round((result.confidence||0)*100)}%\nNotes: ${result.notes||'None'}`;
@@ -1799,17 +1796,37 @@ async function requestGeminiReview(doc){
   let response=await request('/api/ai/review-document');
   if(response.status===404)response=await request('/api/gemini/review-document');
   const result=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(result.error||`Gemini review failed (${response.status})`);
+  if(!response.ok){
+    const error=new Error(result.error||`Gemini review failed (${response.status})`);
+    error.status=response.status;
+    error.retryAfter=Number(response.headers.get('Retry-After')||0);
+    throw error;
+  }
   return result;
 }
+async function requestGeminiReviewWithRetry(doc,maxAttempts=3){
+  let lastError;
+  for(let attempt=0;attempt<maxAttempts;attempt++){
+    try{return await requestGeminiReview(doc);}
+    catch(error){
+      lastError=error;
+      const status=Number(error.status||0);
+      const retryable=status===408||status===425||status===429||status>=500||/timed out|network|gateway|temporarily|fetch/i.test(error.message);
+      if(!retryable||attempt===maxAttempts-1)throw error;
+      const serverDelay=Number(error.retryAfter)>0?Number(error.retryAfter)*1000:0;
+      await new Promise(resolve=>setTimeout(resolve,Math.max(serverDelay,Math.min(1500*2**attempt,10000))));
+    }
+  }
+  throw lastError||new Error('Gemini review failed');
+}
 async function autoReviewScannedDocument(doc){
-  try{applyAiReview(doc.id,await requestGeminiReview(doc),{silent:true});return true;}
+  try{applyAiReview(doc.id,await requestGeminiReviewWithRetry(doc,3),{silent:true});return true;}
   catch(error){doc.aiReview={provider:'gemini',successful:false,error:error.message,failedAt:new Date().toISOString()};save();console.error(`Gemini review failed for ${doc.name}:`,error);return false;}
 }
 async function waitBeforeGeminiRetry(attempt){
   await new Promise(resolve=>setTimeout(resolve,Math.min(3000*2**attempt,30000)));
 }
-async function reviewScannedDocumentWithRetry(doc,maxAttempts=3){
+async function reviewScannedDocumentWithRetry(doc,maxAttempts=1){
   for(let attempt=0;attempt<maxAttempts;attempt++){
     const reviewed=await autoReviewScannedDocument(doc);
     if(reviewed)return true;
@@ -1826,15 +1843,21 @@ async function reviewAllScannedDocuments(){
   if(!docs.length){toast('All scanned documents already have Gemini results');return;}
   scannedReviewBatch={running:true,total:docs.length,completed:0,failed:0,current:''};
   render();
-  for(const doc of docs){
-    if(!scannedReviewBatch?.running)break;
-    scannedReviewBatch.current=doc.name;
-    updateScannedReviewProgress();
-    const reviewed=await reviewScannedDocumentWithRetry(doc);
-    if(reviewed)scannedReviewBatch.completed++;else scannedReviewBatch.failed++;
-    save();
-    updateScannedReviewProgress();
-  }
+  let nextIndex=0;
+  const worker=async()=>{
+    while(scannedReviewBatch?.running){
+      const index=nextIndex++;
+      if(index>=docs.length)return;
+      const doc=docs[index];
+      scannedReviewBatch.current=doc.name;
+      updateScannedReviewProgress();
+      const reviewed=await reviewScannedDocumentWithRetry(doc);
+      if(reviewed)scannedReviewBatch.completed++;else scannedReviewBatch.failed++;
+      save();
+      updateScannedReviewProgress();
+    }
+  };
+  await Promise.all([worker(),worker(),worker()]);
   const result=scannedReviewBatch;
   scannedReviewBatch=null;
   render();
