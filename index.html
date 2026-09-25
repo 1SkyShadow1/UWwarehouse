@@ -19,6 +19,19 @@
   --green:#4CAF7D; --red:#D9534F; --amber:#E0A800;
   --radius:12px;
 }
+async function removeLegacyBulkScans(){
+  const legacyNames=new Set(['scanned_20260924-1055.pdf','scanned_20260924-1227.pdf']);
+  const before=DB.scannedDocuments||[];
+  const filtered=before.filter(document=>!legacyNames.has(String(document.name||'').toLowerCase()));
+  if(filtered.length!==before.length){
+    DB.scannedDocuments=filtered;
+    localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  }
+  try{
+    const response=await fetch('/api/documents/remove-bulk-scans',{method:'POST',headers:{Accept:'application/json'}});
+    if(response.ok){serverRevision=Number((await response.json()).revision||serverRevision);queueServerStateSave();}
+  }catch(error){console.warn('Legacy bulk scan cleanup unavailable; local cleanup retained.',error);}
+}
 body.light{
   --bg:#f4f1e8; --bg2:#fffdf7; --bg3:#ebe6d8; --card:#fffefa;
   --text:#25251f; --muted:#6c6a60; --line:#d8d1bf; --gold-dim:#a98d2e;
@@ -490,6 +503,7 @@ async function initializeServerSync(){
       queueServerStateSave();
     }
     await synchronizeRemoteDocuments();
+    await removeLegacyBulkScans();
   }catch(error){
     serverSyncAvailable=false;
     console.warn('Server persistence unavailable; continuing offline.',error);

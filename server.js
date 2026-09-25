@@ -1089,6 +1089,38 @@ app.get('/api/documents/catalog', requireApiKey, async (req, res) => {
   }
 });
 
+app.post('/api/documents/remove-bulk-scans', requireApiKey, async (req, res) => {
+  const names = new Set([
+    'scanned_20260924-1055.pdf',
+    'scanned_20260924-1227.pdf',
+  ]);
+  const current = ensureStorage();
+  const documents = current.data.documents || [];
+  const removed = documents.filter(document => names.has(String(document.name || '').toLowerCase()));
+  try {
+    for (const document of removed) {
+      await fs.promises.rm(safeDocumentPath(document.id), { force: true }).catch(() => {});
+      await removeDocumentFromSupabase(document.storagePath);
+    }
+    const remote = await listSupabaseStorage();
+    for (const file of remote.filter(file => names.has(String(file.name || '').toLowerCase()))) {
+      await removeDocumentFromSupabase(file.storagePath);
+    }
+    remoteStorageCache.expiresAt = 0;
+    const next = {
+      version: stateVersion,
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+      data: { ...current.data, documents: documents.filter(document => !names.has(String(document.name || '').toLowerCase())) },
+    };
+    await queueStateWrite(next);
+    return res.json({ removed: removed.map(document => document.name), revision: next.revision });
+  } catch (error) {
+    console.error('Bulk scan cleanup failed:', error.message);
+    return res.status(500).json({ error: 'Bulk scan cleanup failed.' });
+  }
+});
+
 app.get('/api/documents/:id', requireApiKey, async (req, res) => {
   await bootstrapReady;
   const id = String(req.params.id || '');
