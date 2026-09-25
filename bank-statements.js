@@ -9,7 +9,7 @@ window.UW_FNB_STATEMENTS = {
   extractionMethod: "DOCX text extraction with statement-level reconciliation",
   extractionStatus: "Imported and reconciled from 12 authoritative FNB statements. The source register retains 1,569 rows, including six statement charge rows outside the 1,563 verified turnover rows. Each source row is allocated once; transactions remain outside the operational ledger until explicitly posted.",
   account: {bank:"First National Bank", product:"Gold Business Account", accountNumber:"63173509557", branchCode:"250655", currency:"ZAR"},
-  categories: ["Personal","Fuel","Consumables/Materials","Utilities","Rent","Employee wages / Salary","Marketing","Bank Fees","Loan","Client Receipt/Income","Transfer","Other"],
+  categories: ["Personal","Fuel","Consumables","Utilities","Rent","Employee wages / Salary","Marketing","Bank","Loan Account","Client Receipt/Income","Transfer","Other"],
   reconciliation: {
     statementCount: 12,
     pageCount: 44,
