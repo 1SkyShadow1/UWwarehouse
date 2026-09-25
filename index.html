@@ -730,6 +730,32 @@ let serverSyncStartedAt=0;
 let serverConflict = (()=>{try{return JSON.parse(localStorage.getItem('UW_STATE_CONFLICT')||'null')}catch(_){return null}})();
 let pendingAiReview=null;
 let scannedReviewBatch=null;
+const LOCAL_BACKUP_KEY='UW_DB_V1_BACKUP';
+function writeLocalSnapshot(serialized){
+  try{
+    // Free the previous duplicate before replacing the primary snapshot. This
+    // avoids quota failures when the database grows close to localStorage's limit.
+    localStorage.removeItem(LOCAL_BACKUP_KEY);
+    localStorage.setItem(DB_KEY,serialized);
+    try{localStorage.setItem(LOCAL_BACKUP_KEY,serialized);}
+    catch(error){console.warn('Local backup snapshot could not be written; primary snapshot is safe.',error);}
+    return {ok:true,backup:false};
+  }catch(error){
+    return {ok:false,error};
+  }
+}
+async function waitForServerSync(timeout=12000){
+  const deadline=Date.now()+timeout;
+  while(serverSyncInFlight&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
+  return serverSyncAvailable;
+}
+async function refreshAuthSession(){
+  const response=await nativeFetch('/api/auth/session',{headers:{Accept:'application/json'},credentials:'same-origin'});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok||!payload.authenticated)return false;
+  if(payload.csrfToken)sessionStorage.setItem('UW_CSRF_TOKEN',payload.csrfToken);
+  return true;
+}
 function geminiReviewComplete(doc){
   return Boolean(doc?.aiReview?.successful||(
     doc?.reviewStatus==='AI reviewed'&&
@@ -763,18 +789,6 @@ async function initializeServerSync(){
       queueServerStateSave();
     }else{
       queueServerStateSave();
-    }
-    async function waitForServerSync(timeout=12000){
-      const deadline=Date.now()+timeout;
-      while(serverSyncInFlight&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
-      return serverSyncAvailable;
-    }
-    async function refreshAuthSession(){
-      const response=await nativeFetch('/api/auth/session',{headers:{Accept:'application/json'},credentials:'same-origin'});
-      const payload=await response.json().catch(()=>({}));
-      if(!response.ok||!payload.authenticated)return false;
-      if(payload.csrfToken)sessionStorage.setItem('UW_CSRF_TOKEN',payload.csrfToken);
-      return true;
     }
     await synchronizeRemoteDocuments();
     await removeLegacyBulkScans();
@@ -1121,7 +1135,6 @@ function load(){
   localStorage.setItem(DB_KEY,JSON.stringify(initial)); return initial;
 }
 let cloudSyncTimer,driveSyncTimer,periodicSyncTimer;
-const LOCAL_BACKUP_KEY='UW_DB_V1_BACKUP';
 function refreshBundledData(){
   const imported=window.UW_IMPORTED||{},operations=window.UW_OPERATIONS||{};
   if(!confirm('Refresh the current local dataset imported from '+DATA_SOURCE_PATH+'? This replaces the local historical collections with the current bundled D:\\UW snapshot. Export a backup first if needed.'))return;
@@ -1135,12 +1148,11 @@ function save(){
   DB.meta=DB.meta||{};
   DB.meta.localSavedAt=new Date().toISOString();
   const serialized=JSON.stringify(DB);
-  try{
-    localStorage.setItem(DB_KEY,serialized);
-    localStorage.setItem(LOCAL_BACKUP_KEY,serialized);
-  }catch(error){
+  const result=writeLocalSnapshot(serialized);
+  if(!result.ok){
+    const error=result.error;
     console.error('Local database save failed:',error);
-    toast('Local save failed — try Global Save again');
+    toast(`Local save failed (${error?.name||'storage error'}). Free browser storage and try again.`);
     return false;
   }
   queueServerStateSave();
