@@ -1121,6 +1121,24 @@ app.post('/api/documents/remove-bulk-scans', requireApiKey, async (req, res) => 
   }
 });
 
+app.post('/api/documents/delete-duplicates', requireApiKey, async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String).filter(safeDocumentId) : [];
+  const current = ensureStorage();
+  const removed = (current.data.documents || []).filter(document => ids.includes(String(document.id)));
+  try {
+    for (const document of removed) {
+      await fs.promises.rm(safeDocumentPath(document.id), { force: true }).catch(() => {});
+      await removeDocumentFromSupabase(document.storagePath);
+    }
+    const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data: { ...current.data, documents: (current.data.documents || []).filter(document => !ids.includes(String(document.id))) } };
+    await queueStateWrite(next);
+    return res.json({ removed: removed.map(document => document.id), revision: next.revision });
+  } catch (error) {
+    console.error('Duplicate document cleanup failed:', error.message);
+    return res.status(500).json({ error: 'Duplicate document cleanup failed.' });
+  }
+});
+
 app.get('/api/documents/:id', requireApiKey, async (req, res) => {
   await bootstrapReady;
   const id = String(req.params.id || '');

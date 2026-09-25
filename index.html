@@ -1810,6 +1810,36 @@ function viewDocument(d){
 }
 function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
 function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
+function scanDuplicateKey(document){
+  const hash=String(document?.contentHash||document?.hash||'').trim();
+  return hash&&!hash.startsWith('managed-')&&!hash.startsWith('local-')?`hash:${hash}`:`file:${String(document?.name||'').trim().toLowerCase()}|${Number(document?.size||0)}`;
+}
+function scanDuplicateGroups(){
+  const groups=new Map();
+  (DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch).forEach(document=>{
+    const key=scanDuplicateKey(document);
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(document);
+  });
+  return [...groups.values()].filter(group=>group.length>1);
+}
+async function deleteDuplicateScans(){
+  const groups=scanDuplicateGroups(), duplicates=groups.flatMap(group=>group.slice(1));
+  if(!duplicates.length){toast('No duplicate scans found');return;}
+  if(!confirm(`Delete ${duplicates.length} duplicate scan${duplicates.length===1?'':'s'} and keep one canonical copy from each group?`))return;
+  const ids=duplicates.map(document=>String(document.id));
+  DB.scannedDocuments=(DB.scannedDocuments||[]).filter(document=>!ids.includes(String(document.id)));
+  save();
+  try{
+    const response=await fetch('/api/documents/delete-duplicates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+    if(!response.ok)throw new Error('Managed duplicate cleanup failed');
+  }catch(error){console.warn('Managed duplicate cleanup failed; local duplicate records were removed.',error);}
+  render();toast(`Deleted ${duplicates.length} duplicate scan${duplicates.length===1?'':'s'}`);
+}
+async function fileContentHash(file){
+  const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+}
 function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:''}
 function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.includes('invoice')?'Invoice scan':n.includes('receipt')||n.includes('proof')?'Receipt scan':'Unclassified scan'}
 function fnbReviewCandidate(d){const date=d.scanDate||scannedDate(d);if(!date)return null;return (DB.fnbStatements||[]).find(s=>String(s.statementDate||'')>=date)||null}
@@ -2003,16 +2033,22 @@ function updateScannedReviewProgress(){
   node.textContent=`Reviewing ${done} of ${scannedReviewBatch.total}${scannedReviewBatch.current?` · ${scannedReviewBatch.current}`:''}`;
 }
 async function storeUploadedScan(file){
+  const contentHash=await fileContentHash(file).catch(()=>`${file.name}|${file.size}`);
+  const duplicate=(DB.scannedDocuments||[]).find(document=>!isLegacyBulkScan(document)&&(
+    document.contentHash===contentHash ||
+    (Number(document.size)===Number(file.size)&&String(document.name||'').trim().toLowerCase()===String(file.name||'').trim().toLowerCase())
+  ));
+  if(duplicate){duplicate.duplicateCount=Number(duplicate.duplicateCount||1)+1;save();toast(`Duplicate skipped: ${file.name}`);return;}
   let managed;
   try{
     managed=await uploadManagedDocument(file);
   }catch(error){
     const r=new FileReader();
-    r.onload=async()=>{const doc={id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash:'local-'+Date.now()+'-'+file.size,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};DB.scannedDocuments.push(doc);save();render();toast(error.message+' Using offline storage; Gemini requires managed server storage.');};
+    r.onload=async()=>{const doc={id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};DB.scannedDocuments.push(doc);save();render();toast(error.message+' Using offline storage; Gemini requires managed server storage.');};
     r.readAsDataURL(file);
     return;
   }
-  const doc={id:managed.id,name:managed.name,path:managed.url,data:null,url:managed.url,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,hash:'managed-'+managed.id,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};
+  const doc={id:managed.id,name:managed.name,path:managed.url,data:null,url:managed.url,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};
   DB.scannedDocuments.push(doc);save();render();
   try{
     await confirmManagedDocumentReadable(managed);
@@ -2070,6 +2106,7 @@ function vScanned(c){
   const rows=scannedRows().map(d=>({...d,scanDate:d.scanDate||scannedDate(d),category:d.category&&d.category!=='Scanned receipt/invoice image'?d.category:scannedCategory(d)})).filter(d=>docMatches(d,'scanned',d.category,d.reviewStatus,'scanDate'));
   const meta=window.UW_SCANNED||{};
   const body=rows.map(d=>{
+    const duplicate=scanDuplicateGroups().some(group=>group.some(item=>String(item.id)===String(d.id)));
     const approved=d.reviewStatus==='Approved',reviewed=d.reviewStatus==='FNB reviewed',candidate=fnbReviewCandidate(d),payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');
     const action=approved?'':d.fnbReview?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review FNB</button>`;
     const fnbStatus=d.fnbReview?.accountConfirmed===true?'FNB matched':d.fnbReview?.accountConfirmed===false?'FNB not matched':d.fnbReview?.status==='statement-period-only'?'FNB period only':'';
@@ -2080,12 +2117,12 @@ function vScanned(c){
     const categoryId=String(d.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const categorySelect=`<select class="search" aria-label="Category for ${escapeHtml(d.name)}" onchange="setScannedCategory('${categoryId}',this.value)">${categoryOptions.map(category=>`<option ${d.category===category?'selected':''}>${category}</option>`).join('')}</select>`;
     const merchant=d.merchant||d.store||d.business||d.vendor||'—',amount=d.amount===undefined||d.amount===null?'—':R(d.amount);
-    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}${fnbStatus?`<small style="display:block;color:${d.fnbReview.accountConfirmed===true?'var(--green)':d.fnbReview.accountConfirmed===false?'var(--amber)':'var(--muted)'}">${fnbStatus}</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.transaction?`${d.fnbReview.transaction.description||d.fnbReview.transaction.merchant||''} · ${d.fnbReview.statementName}`:d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
+    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}${duplicate?'<small style="display:block;color:var(--amber)">Duplicate candidate · Gemini can still review</small>':''}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}${fnbStatus?`<small style="display:block;color:${d.fnbReview.accountConfirmed===true?'var(--green)':d.fnbReview.accountConfirmed===false?'var(--amber)':'var(--muted)'}">${fnbStatus}</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.transaction?`${d.fnbReview.transaction.description||d.fnbReview.transaction.merchant||''} · ${d.fnbReview.statementName}`:d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
   }).join('');
   const batchRunning=Boolean(scannedReviewBatch?.running);
   const batchButton=batchRunning
     ? `<button class="btn gold" type="button" onclick="cancelScannedReviewBatch()">Stop after current</button><span id="scanned-review-progress" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></span>`
-    : '<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">Review FNB matches</button>';
+    : '<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">Review FNB matches</button><button class="btn" type="button" onclick="deleteDuplicateScans()">Delete duplicates</button>';
   c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><label class="btn" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload folder<input type="file" webkitdirectory directory multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="scan-dropzone" ondragover="allowScannedDrop(event)" ondragleave="leaveScannedDrop(event)" ondrop="handleScannedDrop(event)"><strong>Drop receipt or invoice files/folders here</strong><span>JPG, PNG, WEBP, GIF, and PDF · folders are scanned recursively</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Gemini extraction and FNB reconciliation are separate reviews. Uploads are stored in managed storage and can be reviewed independently.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
   if(batchRunning)updateScannedReviewProgress();
 }
