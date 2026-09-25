@@ -550,7 +550,12 @@ function duplicateExpenseCount(expenses=DB.expenses||[]){
   return Math.max(0,expenses.length-uniqueExpenses(expenses).length);
 }
 function payableKey(payable){
-  return [String(payable.document||payable.description||payable.id||'').trim().toLowerCase(),payable.date||'',Number(payable.amount)||0].join('|');
+  const document=String(payable.document||'').trim().toLowerCase();
+  const description=String(payable.description||'').trim().toLowerCase();
+  const supplier=String(payable.supplier||payable.vendor||'').trim().toLowerCase();
+  const date=payable.date||'',dueDate=payable.dueDate||'',amount=Number(payable.amount)||0;
+  if(!document&&!description)return ['id',String(payable.id||'').trim().toLowerCase(),supplier,date,dueDate,amount].join('|');
+  return [supplier,document||description,date,dueDate,amount].join('|');
 }
 function normalizePayables(db){
   const seen=new Set();
@@ -589,18 +594,50 @@ function deduplicateExpenseLedger(db){
 }
 function fnbExpenseMatches(){
   const expenses=uniqueExpenses(DB.expenses);
-  const used=new Set(),matches=[];
-  expenses.forEach(expense=>{
+  const transactions=fnbSourceTransactions();
+  const candidates=[];
+  expenses.forEach((expense,expenseIndex)=>{
     const expenseAmount=Math.abs(Number(expense.amount)||0),expenseDate=Date.parse(expense.date||'');
-    const match=fnbSourceTransactions().find(transaction=>{
+    if(!expenseAmount||!Number.isFinite(expenseDate))return;
+    transactions.forEach(transaction=>{
       const amount=Math.abs(fnbTransactionAmount(transaction)),txDate=Date.parse(transaction.date||'');
-      return !used.has(transaction.id)&&amount&&Math.abs(amount-expenseAmount)<0.02
-        &&Number.isFinite(txDate)&&Number.isFinite(expenseDate)
-        &&Math.abs(txDate-expenseDate)<=3*86400000;
+      if(!amount||!Number.isFinite(txDate))return;
+      const amountDelta=Math.abs(amount-expenseAmount),dateDelta=Math.abs(txDate-expenseDate);
+      if(amountDelta<0.02&&dateDelta<=3*86400000){
+        candidates.push({expense,transaction,expenseIndex,amountDelta,dateDelta});
+      }
     });
-    if(match){used.add(match.id);matches.push({expense,transaction:match});}
   });
-  return matches;
+  candidates.sort((a,b)=>a.amountDelta-b.amountDelta||a.dateDelta-b.dateDelta
+    ||a.expenseIndex-b.expenseIndex||String(a.transaction.id).localeCompare(String(b.transaction.id)));
+  const byExpense=new Map();
+  candidates.forEach(candidate=>{
+    if(!byExpense.has(candidate.expenseIndex))byExpense.set(candidate.expenseIndex,[]);
+    byExpense.get(candidate.expenseIndex).push(candidate);
+  });
+  const orderedExpenses=[...byExpense.keys()].sort((a,b)=>{
+    const countDelta=byExpense.get(a).length-byExpense.get(b).length;
+    if(countDelta)return countDelta;
+    const aBest=byExpense.get(a)[0],bBest=byExpense.get(b)[0];
+    return aBest.amountDelta-bBest.amountDelta||aBest.dateDelta-bBest.dateDelta||a-b;
+  });
+  const assignedTransactions=new Map(),assignedExpenses=new Map();
+  function assign(expenseIndex,visited){
+    for(const candidate of byExpense.get(expenseIndex)||[]){
+      const transactionId=candidate.transaction.id;
+      if(visited.has(transactionId))continue;
+      visited.add(transactionId);
+      const previousExpense=assignedTransactions.get(transactionId);
+      if(previousExpense===undefined||assign(previousExpense,visited)){
+        assignedTransactions.set(transactionId,expenseIndex);
+        assignedExpenses.set(expenseIndex,candidate);
+        return true;
+      }
+    }
+    return false;
+  }
+  orderedExpenses.forEach(expenseIndex=>assign(expenseIndex,new Set()));
+  return [...assignedExpenses.values()].map(candidate=>({expense:candidate.expense,transaction:candidate.transaction}));
 }
 function fnbExpenseOverlapCount(){
   return fnbExpenseMatches().length;
