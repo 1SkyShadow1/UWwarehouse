@@ -1163,11 +1163,13 @@ app.post('/api/ai/review-document', requireApiKey, async (req, res) => {
   let filePath = '';
   let remoteDocument = null;
   let fileName = name || path.basename(requestedPath);
+  let metadataMimeType = '';
   if (safeDocumentId(id)) {
     const metadata = (ensureStorage().data.documents || []).find(doc => doc.id === id);
     if (metadata) {
       filePath = safeDocumentPath(id);
       fileName = metadata.name || fileName;
+      metadataMimeType = metadata.mimeType || '';
     }
   }
   if (!filePath || !fs.existsSync(filePath)) filePath = findSourceFile(requestedPath, fileName);
@@ -1177,7 +1179,7 @@ app.post('/api/ai/review-document', requireApiKey, async (req, res) => {
   if (stat && !stat.isFile()) return res.status(400).json({ error: 'The source path is not a file.' });
   const documentSize = stat ? stat.size : remoteDocument.buffer.length;
   if (documentSize > 15 * 1024 * 1024) return res.status(413).json({ error: 'This document is too large for AI review. Open it manually or upload a smaller scan.' });
-  const mimeType = filePath ? mimeForFile(filePath) : remoteDocument.mimeType;
+  const mimeType = metadataMimeType || (filePath ? mimeForFile(filePath) : remoteDocument.mimeType);
   if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif'].includes(mimeType)) {
     return res.status(415).json({ error: 'Gemini review supports PDF and image receipts/scans.' });
   }
