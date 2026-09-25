@@ -20,9 +20,8 @@
   --radius:12px;
 }
 async function removeLegacyBulkScans(){
-  const legacyNames=new Set(['scanned_20260924-1055.pdf','scanned_20260924-1227.pdf']);
   const before=DB.scannedDocuments||[];
-  const filtered=before.filter(document=>!legacyNames.has(String(document.name||'').toLowerCase()));
+  const filtered=before.filter(document=>!isLegacyBulkScan(document));
   if(filtered.length!==before.length){
     DB.scannedDocuments=filtered;
     localStorage.setItem(DB_KEY,JSON.stringify(DB));
@@ -357,6 +356,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
    UW ACCOUNTING SYSTEM — Offline-first local persistence layer
    ============================================================ */
 const DB_KEY = 'UW_DB_V1';
+const LEGACY_BULK_SCAN_NAMES = new Set(['scanned_20260924-1055.pdf','scanned_20260924-1227.pdf']);
+function isLegacyBulkScan(document){return LEGACY_BULK_SCAN_NAMES.has(String(document?.name||'').trim().toLowerCase());}
 const DATA_SOURCE_PATH = 'D:\\UW';
 const today = () => new Date().toISOString().slice(0,10);
 
@@ -1099,7 +1100,7 @@ function vDashboard(c){
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
     <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${DB.quotes.length} total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
-    <div class="card"><div class="lbl">Scanned documents awaiting Gemini</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length}</div><div class="sub">Failed and pending scans can be retried</div></div>
+    <div class="card"><div class="lbl">Scanned documents awaiting Gemini</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length}</div><div class="sub">Failed and pending scans can be retried</div></div>
   </div>
   <div class="grid2">
     <div class="panel"><h3>Expense Categories ${mf?'· '+mf:''}</h3>
@@ -1808,7 +1809,7 @@ function viewDocument(d){
   if(url&&ext==='pdf')loadDocumentViewerAsset(url,'pdf');
 }
 function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
-function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
+function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
 function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:''}
 function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.includes('invoice')?'Invoice scan':n.includes('receipt')||n.includes('proof')?'Receipt scan':'Unclassified scan'}
 function fnbReviewCandidate(d){const date=d.scanDate||scannedDate(d);if(!date)return null;return (DB.fnbStatements||[]).find(s=>String(s.statementDate||'')>=date)||null}
@@ -1952,7 +1953,7 @@ async function reviewScannedDocumentWithRetry(doc,maxAttempts=1){
 }
 async function reviewAllScannedDocuments(){
   if(scannedReviewBatch?.running){toast('Gemini batch review is already running');return;}
-  const docs=(DB.scannedDocuments||[]).filter(doc=>doc.canonical&&!doc.existingMatch&&!geminiReviewComplete(doc));
+  const docs=(DB.scannedDocuments||[]).filter(doc=>!isLegacyBulkScan(doc)&&doc.canonical&&!doc.existingMatch&&!geminiReviewComplete(doc));
   if(!docs.length){toast('All scanned documents already have Gemini results');return;}
   scannedReviewBatch={running:true,total:docs.length,completed:0,failed:0,current:''};
   render();
@@ -1977,7 +1978,7 @@ async function reviewAllScannedDocuments(){
   toast(`${result.running===false?'Gemini review stopped':'Gemini review complete'}: ${result.completed} completed${result.failed?`, ${result.failed} failed`:''}.`);
 }
 async function reviewAllFnbDocuments(){
-  const docs=(DB.scannedDocuments||[]).filter(doc=>doc.canonical&&!doc.existingMatch&&!doc.fnbReview);
+  const docs=(DB.scannedDocuments||[]).filter(doc=>!isLegacyBulkScan(doc)&&doc.canonical&&!doc.existingMatch&&!doc.fnbReview);
   if(!docs.length){toast('All scanned documents already have FNB review results');return;}
   toast(`Reviewing ${docs.length} scanned document${docs.length===1?'':'s'} against FNB…`);
   for(const doc of docs){
@@ -2144,7 +2145,7 @@ function vAssistant(c){
   const unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
   const payablesUnreviewed=(DB.payables||[]).filter(p=>p.status==='Unreviewed').length;
   const jobsOpen=(DB.jobs||[]).filter(j=>j.stage!=='Closed').length;
-  const scannedNeedsReview=(DB.scannedDocuments||[]).filter(d=>d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length;
+  const scannedNeedsReview=(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length;
   const fy=DB.meta.fy||new Date().getFullYear();
   const base=[
     'You are acting as an operations and financial review assistant for UW Upholstery Warehouse.',
