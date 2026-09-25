@@ -463,6 +463,58 @@ const normalizeWageLedger = db => {
   return db;
 };
 normalizeWageLedger(DB);
+function wageLedgerAmount(wage){
+  const weeks=(wage.weeks||[]).reduce((sum,week)=>sum+(Number(week.owed)||0),0);
+  const monthly=Number(wage.monthly)||0;
+  return (weeks>0?weeks:monthly)-(Number(wage.advances)||0);
+}
+function employeeWagesTotal(){
+  return (DB.wages||[]).reduce((sum,wage)=>sum+wageLedgerAmount(wage),0);
+}
+function canonicalExpenseCategory(category){
+  return String(category||'').toLowerCase()==='staff'?'Employee wages / Salary':String(category||'Other');
+}
+function expenseKey(expense){
+  return [
+    expense.date, String(expense.vendor||'').trim().toLowerCase(),
+    String(expense.desc||'').trim().toLowerCase(), Number(expense.amount)||0,
+    String(expense.invoiceNo||'').trim().toLowerCase(), String(expense.fundedBy||'').trim().toLowerCase()
+  ].join('|');
+}
+function uniqueExpenses(expenses=DB.expenses||[]){
+  const seen=new Set();
+  return expenses.filter(expense=>{
+    const key=expenseKey(expense);
+    if(seen.has(key))return false;
+    seen.add(key);
+    return true;
+  });
+}
+function duplicateExpenseCount(expenses=DB.expenses||[]){
+  return Math.max(0,expenses.length-uniqueExpenses(expenses).length);
+}
+function deduplicateExpenseLedger(db){
+  const before=(db.expenses||[]).length;
+  db.expenses=uniqueExpenses(db.expenses||[]);
+  db.meta={...(db.meta||{}),expenseDuplicateRecordsRemoved:(db.meta?.expenseDuplicateRecordsRemoved||0)+(before-db.expenses.length)};
+  return db;
+}
+function fnbExpenseOverlapCount(){
+  const expenses=uniqueExpenses(DB.expenses);
+  return fnbSourceTransactions().filter(transaction=>{
+    const amount=Math.abs(fnbTransactionAmount(transaction));
+    if(!amount)return false;
+    const txDate=Date.parse(transaction.date||'');
+    return expenses.some(expense=>{
+      const expenseDate=Date.parse(expense.date||'');
+      return Math.abs(amount-Math.abs(Number(expense.amount)||0))<0.02
+        &&Number.isFinite(txDate)&&Number.isFinite(expenseDate)
+        &&Math.abs(txDate-expenseDate)<=3*86400000;
+    });
+  }).length;
+}
+deduplicateExpenseLedger(DB);
+try{localStorage.setItem(DB_KEY,JSON.stringify(DB));}catch(error){console.warn('Expense ledger audit could not be cached locally:',error);}
 let serverRevision = null;
 let serverSyncTimer;
 let serverRetryTimer;
@@ -496,6 +548,7 @@ async function initializeServerSync(){
       DB={...DB,...snapshot.data,meta:{...DB.meta,...(snapshot.data.meta||{})}};
       mergeBundledFnbState(DB);
       normalizeWageLedger(DB);
+      deduplicateExpenseLedger(DB);
       persistLocalSnapshot();
       render();
     }else if(Number.isFinite(localSavedAt)&&(!Number.isFinite(remoteUpdatedAt)||localSavedAt>remoteUpdatedAt)){
@@ -1159,24 +1212,24 @@ function vDashboard(c){
   state.mfilter=getMF()||state.mfilter;
   const mf=state.mfilter;
   const inv=mf?DB.invoices.filter(i=>monthOf(i.date)===mf):DB.invoices;
-  const exp=mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses;
+  const exp=uniqueExpenses(mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses);
   const fnbCats=fnbAllocatedCategoryTotals(mf);
   const fnbAllocatedTotal=Object.values(fnbCats).reduce((sum,value)=>sum+value,0);
+  const fnbExpenseOverlaps=fnbExpenseOverlapCount();
   const inc=inv.reduce((s,i)=>s+(i.paid||0),0);
-  const wageT=(DB.wages||[]).reduce((sum,wage)=>
-    sum+(wage.weeks||[]).reduce((weekTotal,week)=>weekTotal+(Number(week.owed)||0),0)-(Number(wage.advances)||0),0);
+  const wageT=mf?0:employeeWagesTotal();
   const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
   const out=inv.filter(i=>invBalance(i)>0.005);
   const outT=out.reduce((s,i)=>s+invBalance(i),0);
   const qPend=DB.quotes.filter(q=>q.status!=='Accepted').length;
-  const cats={};exp.forEach(e=>cats[e.category]=(cats[e.category]||0)+e.amount);
-  if(wageT)cats.Staff=(cats.Staff||0)+wageT;
+  const cats={};exp.forEach(e=>{const category=canonicalExpenseCategory(e.category);cats[category]=(cats[category]||0)+Number(e.amount||0);});
+  if(wageT)cats['Employee wages / Salary']=(cats['Employee wages / Salary']||0)+wageT;
   const maxC=Math.max(1,...Object.values(cats));
   c.innerHTML=`
   <div class="toolbar">${monthFilterHtml('mf')}</div>
   <div class="cards">
     <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} invoice(s)${mf?' · '+mf:''}</div></div>
-    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} entries + wages</div></div>
+    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + employee wages':''}</div></div>
     <div class="card"><div class="lbl">Allocated FNB spend</div><div class="val amber">${R(fnbAllocatedTotal)}</div><div class="sub">Source register · not posted to expenses</div></div>
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
@@ -1199,6 +1252,9 @@ function vDashboard(c){
   <div class="panel"><h3>Allocated FNB spend by category ${mf?'· '+mf:''}</h3>
     <p style="font-size:11px;color:var(--muted)">These are categorized bank-source debits shown separately from recorded expenses, so the dashboard does not count the same transaction twice. Explicit ledger posting is required before they enter Total Expenses.</p>
     ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:160px;color:var(--muted)">${k}</span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No allocated FNB debits for this period</div>'}
+  </div>
+  <div class="panel"><h3>Financial data controls</h3>
+    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section. Recorded expenses are deduplicated by date, vendor, description, amount, invoice and funding source. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s) match an existing expense by amount and date; they are not added to Total Expenses because FNB allocations are source-only until explicitly posted.`:'No FNB debit currently matches a recorded expense by amount and date.'} Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
   </div>
   <div class="panel"><h3>Quick Actions</h3>
     <div class="toolbar">
@@ -1600,11 +1656,11 @@ function viewReceipt(receiptNo){
 }
 
 /* ---------- EXPENSES ---------- */
-const EXP_CATS=['Rent','Utilities','Consumables','Office','Marketing','Vehicle','Fuel','Staff','Workshop','Renovations','Loan Account','Bank','Other'];
+const EXP_CATS=['Rent','Utilities','Consumables','Office','Marketing','Vehicle','Fuel','Employee wages / Salary','Workshop','Renovations','Loan Account','Bank','Other'];
 function vExpenses(c){
   const mf=state.mfilter;const el=document.getElementById('mf');const mf2=el?el.value:'';
-  const exp=DB.expenses.filter(e=>(!mf2||monthOf(e.date)===mf2)&&docMatches(e,'expenses',e.category,e.category));
-  const tot=exp.reduce((s,e)=>s+e.amount,0);
+  const exp=uniqueExpenses(DB.expenses).filter(e=>(!mf2||monthOf(e.date)===mf2)&&docMatches(e,'expenses',canonicalExpenseCategory(e.category),canonicalExpenseCategory(e.category)));
+  const tot=exp.reduce((s,e)=>s+Number(e.amount||0),0);
   const budTot=Object.values(DB.budgets).reduce((s,v)=>s+v,0);
   c.innerHTML=`
   <div class="toolbar">${monthFilterHtml('mf')}${docFilterHtml('expenses',EXP_CATS,[])}<span style="font-size:12.5px;color:var(--muted)">Total: <b style="color:var(--gold2)">${R(tot)}</b></span>
@@ -1612,18 +1668,19 @@ function vExpenses(c){
   <div class="grid2">
     <div class="panel"><h3>Expense Ledger</h3><div style="max-height:420px;overflow-y:auto"><table>
       <tr><th>Date</th><th>Vendor</th><th>Description</th><th>Category</th><th>Paid By</th><th class="num">Amount</th><th></th></tr>
-      ${exp.map(e=>`<tr><td>${e.date}</td><td>${e.vendor}</td><td>${e.desc}</td><td>${e.category}</td><td>${e.paidBy}</td><td class="num">${R(e.amount)}</td>
+      ${exp.map(e=>`<tr><td>${e.date}</td><td>${e.vendor}</td><td>${e.desc}</td><td>${canonicalExpenseCategory(e.category)}</td><td>${e.paidBy}</td><td class="num">${R(e.amount)}</td>
       <td><button class="btn sm danger" onclick="del('expenses',${e.id})">✕</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No expenses</td></tr>'}
     </table></div></div>
     <div class="panel"><h3>Budget vs Actual ${mf2?'· '+mf2:''}</h3>
       ${Object.entries(DB.budgets).map(([k,b])=>{
-        const a=exp.filter(e=>e.category.toLowerCase().includes(k.toLowerCase())||k==='Supplies'&&e.category==='Consumables'||k==='Utilities'&&['Office','Electricity'].includes(e.category)).reduce((s,e)=>s+e.amount,0);
+        const a=exp.filter(e=>canonicalExpenseCategory(e.category).toLowerCase().includes(k.toLowerCase())||k==='Supplies'&&canonicalExpenseCategory(e.category)==='Consumables'||k==='Utilities'&&['Office','Electricity'].includes(canonicalExpenseCategory(e.category))).reduce((s,e)=>s+Number(e.amount||0),0);
         const pct=b?Math.min(100,a/b*100):0;
         return `<div class="kv"><span>${k}</span><b>${R(a)} / ${R(b)}</b></div>
         <div class="bar-track" style="margin:-2px 0 8px"><div class="bar-fill" style="width:${pct}%;${pct>100?'background:var(--red)':''}"></div></div>`;}).join('')}
       <div class="kv" style="border-top:1px solid var(--gold-dim);margin-top:6px"><span>Monthly Budget Total</span><b>${R(budTot)}</b></div>
     </div>
-  </div>`;
+  </div>
+  ${duplicateExpenseCount(DB.expenses)?`<p style="font-size:11px;color:var(--amber);margin-top:10px">${duplicateExpenseCount(DB.expenses)} exact duplicate expense record(s) are retained in source data but excluded from totals.</p>`:''}`;
 }
 function newExpense(){
   modal(`<h3>Add Expense</h3><div class="frm">
@@ -1761,16 +1818,13 @@ const fa=id=>document.getElementById(id).value;
 /* ---------- WAGES ---------- */
 function vWages(c){
   const sourceWages=DB.wages||[];
-  const tot=sourceWages.reduce((s,w)=>s+(w.weeks||[]).reduce((a,x)=>a+(Number(x.owed)||0),0)-(Number(w.advances)||0),0);
-  const monthly=sourceWages.reduce((s,w)=>s+(w.monthly||0),0);
+  const tot=employeeWagesTotal();
   c.innerHTML=`
-  <div class="cards"><div class="card"><div class="lbl">Monthly Wage Cost</div><div class="val gold">${R(monthly)}</div><div class="sub">from WAGES.xlsx</div></div>
-  <div class="card"><div class="lbl">Total Wages Owed</div><div class="val ${tot>0?'gold':'green'}">${R(tot)}</div><div class="sub">${sourceWages.length} staff on ledger</div></div>
-  <div class="card"><div class="lbl">Target Monthly Turnover</div><div class="val gold">${R(200000)}</div><div class="sub">per WAGES sheet</div></div></div>
-  <div class="panel"><h3>Payroll Ledger <button class="btn sm gold" onclick="newStaff()">+ Add Staff</button></h3>
+  <div class="cards"><div class="card"><div class="lbl">Employee wages / Salary</div><div class="val ${tot>0?'gold':'green'}">${R(tot)}</div><div class="sub">${sourceWages.length} employee record(s), one canonical wage total</div></div></div>
+  <div class="panel"><h3>Employee wages / Salary ledger <button class="btn sm gold" onclick="newStaff()">+ Add Employee</button></h3>
   <div style="overflow-x:auto"><table>
     <tr><th>Staff</th><th>Rate/Day</th><th>Per Week</th><th>Per Month</th><th>Per Year</th>${[1,2,3,4,5].map(w=>`<th>Week ${w}<br><small>Days / Wages / Paid</small></th>`).join('')}<th>Advances (−)</th><th class="num">Owed</th><th></th></tr>
-    ${sourceWages.map((w,i)=>{const owed=(w.weeks||[]).reduce((a,x)=>a+(Number(x.owed)||0),0)-(Number(w.advances)||0);
+    ${sourceWages.map((w,i)=>{const owed=wageLedgerAmount(w);
     return `<tr><td><b>${w.name}</b></td>
     <td><input style="width:70px" type="number" value="${w.rateDay}" onchange="DB.wages[${i}].rateDay=+this.value;save()"></td>
     <td>${R((Number(w.rateDay)||0)*5)}</td><td>${R((Number(w.rateDay)||0)*21.67)}</td><td>${R((Number(w.rateDay)||0)*260)}</td>
@@ -2236,8 +2290,9 @@ function vBank(c){
 }
 function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date'));const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved','FNB reviewed'])+'<label class="btn gold">＋ Upload source documents<input type="file" multiple style="display:none" onchange="uploadSourceDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
 function vAssistant(c){
-  const inc=DB.invoices.reduce((s,i)=>s+(i.paid||0),0), exp=DB.expenses.reduce((s,e)=>s+(e.amount||0),0), outstanding=DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
-  const category={};DB.expenses.forEach(e=>category[e.category]=(category[e.category]||0)+e.amount);const top=Object.entries(category).sort((a,b)=>b[1]-a[1])[0];
+  const uniqueExpenseRows=uniqueExpenses(DB.expenses);
+  const inc=DB.invoices.reduce((s,i)=>s+(i.paid||0),0), exp=uniqueExpenseRows.reduce((s,e)=>s+(e.amount||0),0), outstanding=DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
+  const category={};uniqueExpenseRows.forEach(e=>category[canonicalExpenseCategory(e.category)]=(category[canonicalExpenseCategory(e.category)]||0)+e.amount);const top=Object.entries(category).sort((a,b)=>b[1]-a[1])[0];
   const insights=[`Collected income is ${R(inc)} against ${R(exp)} recorded expenses, a calculated net of ${R(inc-exp)}.`,`There are ${unpaid.length} unpaid invoices with ${R(outstanding)} outstanding.`,`The largest recorded expense category is ${top?top[0]:'not available'} at ${R(top?top[1]:0)}.`,`There are ${(DB.jobs||[]).filter(j=>j.stage!=='Closed').length} active production jobs and ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length} supplier documents awaiting review.`];
   const sourceGaps=(DB.payables||[]).filter(p=>!p.amount||p.amount===0).length+(DB.stock||[]).filter(s=>!s.quantity).length;const audit=DB.filesystemAudit||{};
   c.innerHTML=`<div class="panel ai-shell">
@@ -2353,7 +2408,7 @@ async function runGemini(){
   const provider=providerEl ? providerEl.value : 'auto';
   try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider,context:buildAiContext()})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=(payload.text||'No response returned.')+(payload.truncated?'\n\n[The response reached the model limit. Ask “continue from where you stopped” to retrieve the remaining details.]':'')}catch(error){result.textContent=error.message;toast('AI request failed')}
 }
-function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(DB.expenses.reduce((s,e)=>s+e.amount,0))}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
+function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(uniqueExpenses(DB.expenses).reduce((s,e)=>s+e.amount,0))}`,`Employee wages / Salary: ${R(employeeWagesTotal())}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
 
 /* ---------- REPORTS ---------- */
 function vReports(c){
@@ -2362,7 +2417,7 @@ function vReports(c){
   const rows=months.map(m=>{
     const inc=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+(i.paid||0),0);
     const qtot=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
-    const exp=DB.expenses.filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
+    const exp=uniqueExpenses(DB.expenses).filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
     return {m,inc,qtot,exp,net:inc-exp};
   });
   const tI=rows.reduce((s,r)=>s+r.inc,0),tE=rows.reduce((s,r)=>s+r.exp,0);
@@ -2386,10 +2441,10 @@ function vReports(c){
 }
 function exportMonthSummary(){
   let csv='Month,Invoiced,Collected,Expenses,Net\n';
-  [...new Set(DB.invoices.map(i=>monthOf(i.date)).concat(DB.expenses.map(e=>monthOf(e.date))))].sort().forEach(m=>{
+  [...new Set(DB.invoices.map(i=>monthOf(i.date)).concat(uniqueExpenses(DB.expenses).map(e=>monthOf(e.date))))].sort().forEach(m=>{
     const inc=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+(i.paid||0),0);
     const q=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
-    const exp=DB.expenses.filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
+    const exp=uniqueExpenses(DB.expenses).filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
     csv+=`${m},${q},${inc},${exp},${inc-exp}\n`;});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='UW_MONTH_END_'+today()+'.csv';a.click();toast('Summary exported');
 }
