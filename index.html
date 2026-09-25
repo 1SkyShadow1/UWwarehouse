@@ -604,6 +604,7 @@ function syncExpenseEvidence(db){
     }
   });
   const matchedIds=new Set(fnbExpenseMatches().map(match=>String(match.transaction.id)));
+  matchedIds.forEach(transactionId=>markFnbLedgerPosted(transactionId));
   fnbSourceTransactions().filter(transaction=>fnbTransactionAmount(transaction)<0&&!transaction.ledgerPosted&&!transaction.allocationNeedsReview&&!matchedIds.has(String(transaction.id))).forEach(transaction=>{
     const category=canonicalExpenseCategory(canonicalFnbCategory(transaction.category));
     if(['Transfer','Client Receipt/Income','Loan Account','Other'].includes(category))return;
@@ -943,6 +944,20 @@ function fnbAllocatedCategoryTotals(month=''){
   });
   return totals;
 }
+function fnbReconciliationSummary(month=''){
+  const eligible=fnbSourceTransactions().filter(transaction=>{
+    const amount=fnbTransactionAmount(transaction);
+    const category=canonicalExpenseCategory(canonicalFnbCategory(transaction.category));
+    return amount<0&&!transaction.allocationNeedsReview&&!['Transfer','Client Receipt/Income','Loan Account','Other'].includes(category)
+      &&(!month||String(transaction.date||'').slice(0,7)===month);
+  });
+  return {
+    eligible,
+    total:eligible.reduce((sum,transaction)=>sum+Math.abs(fnbTransactionAmount(transaction)),0),
+    posted:eligible.filter(transaction=>transaction.ledgerPosted).reduce((sum,transaction)=>sum+Math.abs(fnbTransactionAmount(transaction)),0),
+    unposted:eligible.filter(transaction=>!transaction.ledgerPosted).reduce((sum,transaction)=>sum+Math.abs(fnbTransactionAmount(transaction)),0)
+  };
+}
 function mergeBundledFnbState(db){
   const bundled=window.UW_FNB_STATEMENTS||{};
   if(!Array.isArray(bundled.statements)||!bundled.statements.length)return db;
@@ -958,7 +973,14 @@ function mergeBundledFnbState(db){
       url:prior.url||source.url,
       transactions:(source.transactions||[]).map(transaction=>{
         const saved=priorTransactions.get(String(transaction.id))||{};
-        return {...transaction,category:saved.category||transaction.category||''};
+        return {
+          ...transaction,
+          category:saved.category||transaction.category||'',
+          ledgerPosted:Boolean(saved.ledgerPosted||transaction.ledgerPosted),
+          allocationSource:saved.allocationSource||transaction.allocationSource,
+          allocationConfidence:saved.allocationConfidence||transaction.allocationConfidence,
+          allocationNeedsReview:saved.allocationNeedsReview??transaction.allocationNeedsReview
+        };
       })
     };
   });
@@ -1246,6 +1268,18 @@ async function disconnectGoogleDrive(){
 const R = n => 'R ' + Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
 const invTotal = inv => inv.items.reduce((s,i)=>s+i.qty*i.price,0);
 const invBalance = inv => invTotal(inv) - (inv.paid||0) - (inv.deposit||0);
+function uniqueRecords(records=[]){
+  const seen=new Set();
+  return records.filter(record=>{
+    const key=String(record?.id??'');
+    if(!key||seen.has(key))return false;
+    seen.add(key);
+    return true;
+  });
+}
+function uniqueInvoices(){return uniqueRecords(DB.invoices||[]);}
+function uniqueQuotes(){return uniqueRecords(DB.quotes||[]);}
+function invoiceCollectedAmount(invoice){return Number(invoice?.paid||0)+Number(invoice?.deposit||0);}
 function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
 function applyTheme(theme){
   const selected=theme==='light'?'light':'dark';
@@ -1397,30 +1431,31 @@ function render(){
 function vDashboard(c){
   state.mfilter=getMF()||state.mfilter;
   const mf=state.mfilter;
-  const inv=mf?DB.invoices.filter(i=>monthOf(i.date)===mf):DB.invoices;
+  const inv=uniqueInvoices().filter(i=>!mf||monthOf(i.date)===mf);
   const exp=uniqueExpenses(mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses);
+  const fnbSummary=fnbReconciliationSummary(mf);
   const fnbCats=fnbAllocatedCategoryTotals(mf);
-  const fnbAllocatedTotal=Object.values(fnbCats).reduce((sum,value)=>sum+value,0);
+  const fnbAllocatedTotal=fnbSummary.unposted;
   const fnbExpenseOverlaps=fnbExpenseOverlapCount();
   const fnbExpenseOverlapTotal=fnbExpenseOverlapAmount();
-  const inc=inv.reduce((s,i)=>s+(i.paid||0),0);
+  const inc=inv.reduce((s,i)=>s+invoiceCollectedAmount(i),0);
   const wageT=mf?0:employeeWagesTotal();
   const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
   const out=inv.filter(i=>invBalance(i)>0.005);
   const outT=out.reduce((s,i)=>s+invBalance(i),0);
-  const qPend=DB.quotes.filter(q=>q.status!=='Accepted').length;
+  const qPend=uniqueQuotes().filter(q=>q.status!=='Accepted').length;
   const cats={};exp.forEach(e=>{const category=canonicalExpenseCategory(e.category);cats[category]=(cats[category]||0)+Number(e.amount||0);});
   if(wageT)cats['Employee wages / Salary']=(cats['Employee wages / Salary']||0)+wageT;
   const maxC=Math.max(1,...Object.values(cats));
   c.innerHTML=`
   <div class="toolbar">${monthFilterHtml('mf')}</div>
   <div class="cards">
-    <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} invoice(s)${mf?' · '+mf:''}</div></div>
+    <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} unique invoice(s)${mf?' · '+mf:''} · paid + deposits</div></div>
     <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + employee wages':''}</div></div>
-    <div class="card"><div class="lbl">Unposted FNB source spend</div><div class="val amber">${R(fnbAllocatedTotal)}</div><div class="sub">Bank register only · excluded from expenses</div></div>
+    <div class="card"><div class="lbl">FNB reconciled spend</div><div class="val amber">${R(fnbSummary.total)}</div><div class="sub">${R(fnbSummary.posted)} posted once · ${R(fnbAllocatedTotal)} still unposted</div></div>
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
-    <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${DB.quotes.length} total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
+    <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${uniqueQuotes().length} unique total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
     <div class="card"><div class="lbl">Scanned documents awaiting Gemini</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length}</div><div class="sub">Failed and pending scans can be retried</div></div>
   </div>
   <div class="grid2">
@@ -1432,16 +1467,16 @@ function vDashboard(c){
     </div>
     <div class="panel"><h3>Recent Invoices</h3>
       <table><tr><th>No</th><th>Customer</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th></tr>
-      ${DB.invoices.slice(0,6).map(i=>`<tr><td>${i.id}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R(invBalance(i))}</td><td>${statusBadge(i.status)}</td></tr>`).join('')}
+      ${uniqueInvoices().slice(0,6).map(i=>`<tr><td>${i.id}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R(invBalance(i))}</td><td>${statusBadge(i.status)}</td></tr>`).join('')}
       </table>
     </div>
   </div>
   <div class="panel"><h3>FNB source register · unposted bank debits ${mf?'· '+mf:''}</h3>
-    <p style="font-size:11px;color:var(--muted)">This is a bank-source reconciliation view, not a second expense ledger. A label such as <b>FNB · Fuel</b> is the bank allocation awaiting review/posting; it is not added to the recorded <b>Fuel</b> expense total.</p>
+    <p style="font-size:11px;color:var(--muted)">This is a bank-source reconciliation view, not a second expense ledger. FNB spend is shown once in the reconciled total; posted rows are already represented in Total Expenses and only unposted rows remain in the category breakdown below.</p>
     ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:190px;color:var(--muted)">FNB · ${k} <small>(unposted)</small></span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No unposted FNB debits for this period</div>'}
   </div>
   <div class="panel"><h3>Financial data controls</h3>
-    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB source register below contains bank allocations only. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s), totaling ${R(fnbExpenseOverlapTotal)}, match recorded expenses by amount and date; they are evidence matches, not extra expenses.`:'No FNB debit currently matches a recorded expense by amount and date.'} FNB allocations are never added to Total Expenses unless explicitly posted. Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
+    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB reconciled total contains eligible bank debits exactly once: ${R(fnbSummary.posted)} are posted into the ledger and ${R(fnbSummary.unposted)} remain unposted source evidence. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s), totaling ${R(fnbExpenseOverlapTotal)}, match recorded expenses by amount and date; they are not added again.`:'No FNB debit currently matches a recorded expense by amount and date.'} Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
   </div>
   <div class="panel"><h3>Quick Actions</h3>
     <div class="toolbar">
@@ -2636,17 +2671,18 @@ function exportAssistantReport(){const text=['UW Accounting Local AI Review',tod
 
 /* ---------- REPORTS ---------- */
 function vReports(c){
+  const invoices=uniqueInvoices();
   const start=new Date(2024,0,1), end=new Date(); end.setDate(1); const months=[];
   for(let d=new Date(start);d<=end;d.setMonth(d.getMonth()+1)) months.push(d.toISOString().slice(0,7));
   const rows=months.map(m=>{
-    const inc=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+(i.paid||0),0);
-    const qtot=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
+    const inc=invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invoiceCollectedAmount(i),0);
+    const qtot=invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
     const exp=uniqueExpenses(DB.expenses).filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
     return {m,inc,qtot,exp,net:inc-exp};
   });
   const tI=rows.reduce((s,r)=>s+r.inc,0),tE=rows.reduce((s,r)=>s+r.exp,0)+employeeWagesTotal();
-  const y25=DB.invoices.filter(i=>i.fy==='2025').reduce((s,i)=>s+(i.paid||0),0);
-  const y26=DB.invoices.filter(i=>i.fy==='2026').reduce((s,i)=>s+(i.paid||0),0);
+  const y25=invoices.filter(i=>i.fy==='2025').reduce((s,i)=>s+invoiceCollectedAmount(i),0);
+  const y26=invoices.filter(i=>i.fy==='2026').reduce((s,i)=>s+invoiceCollectedAmount(i),0);
   const maxN=Math.max(1,...rows.map(r=>Math.abs(r.net)));
   c.innerHTML=`
   <div class="cards">
