@@ -732,17 +732,20 @@ let pendingAiReview=null;
 let scannedReviewBatch=null;
 const LOCAL_BACKUP_KEY='UW_DB_V1_BACKUP';
 function writeLocalSnapshot(serialized){
+  // The backup is disposable. Never let its quota failure turn a successful
+  // primary save into a failed Global Save.
+  try{localStorage.removeItem(LOCAL_BACKUP_KEY);}catch(_){}
   try{
-    // Free the previous duplicate before replacing the primary snapshot. This
-    // avoids quota failures when the database grows close to localStorage's limit.
-    localStorage.removeItem(LOCAL_BACKUP_KEY);
     localStorage.setItem(DB_KEY,serialized);
-    try{localStorage.setItem(LOCAL_BACKUP_KEY,serialized);}
-    catch(error){console.warn('Local backup snapshot could not be written; primary snapshot is safe.',error);}
-    return {ok:true,backup:false};
   }catch(error){
-    return {ok:false,error};
+    // Conflict data is useful for recovery but is not required for the next
+    // save. Remove it if the browser is already at its storage limit.
+    try{localStorage.removeItem('UW_STATE_CONFLICT');localStorage.setItem(DB_KEY,serialized);}
+    catch(retryError){return {ok:false,error:retryError};}
   }
+  try{localStorage.setItem(LOCAL_BACKUP_KEY,serialized);}
+  catch(error){console.warn('Local backup snapshot could not be written; primary snapshot is safe.',error);}
+  return {ok:true,backup:false};
 }
 async function waitForServerSync(timeout=12000){
   const deadline=Date.now()+timeout;
@@ -1191,12 +1194,9 @@ async function globalSave(){
   }
 }
 function persistLocalSnapshot(){
-  try{
-    const serialized=JSON.stringify(DB);
-    localStorage.setItem(DB_KEY,serialized);
-    localStorage.setItem(LOCAL_BACKUP_KEY,serialized);
-    queueServerStateSave();
-  }catch(error){console.error('Periodic local save failed:',error);}
+  const result=writeLocalSnapshot(JSON.stringify(DB));
+  if(result.ok)queueServerStateSave();
+  else console.error('Periodic local save failed:',result.error);
 }
 function startPeriodicSync(){
   clearInterval(periodicSyncTimer);
