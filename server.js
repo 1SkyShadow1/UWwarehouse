@@ -918,7 +918,7 @@ app.post('/api/auth/login', async (req, res) => {
     console.error('Durable session could not be saved:', error.message);
     return res.status(503).json({ error: 'Sign-in could not be completed because durable session storage is unavailable.' });
   }
-  res.set('Set-Cookie', `uw_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${AUTH_SESSION_TTL_MS / 1000}${isProduction ? '; Secure' : ''}`);
+  res.set('Set-Cookie', `uw_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${isProduction ? 'None' : 'Lax'}; Max-Age=${AUTH_SESSION_TTL_MS / 1000}${isProduction ? '; Secure' : ''}`);
   return res.json({ ok: true, user: { email, name: String(user.name || email), role: String(user.role || 'Operator') }, csrfToken });
 });
 app.post('/api/auth/logout', async (req, res) => {

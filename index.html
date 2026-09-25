@@ -368,7 +368,7 @@ window.fetch=(input,options={})=>{
   const headers=new Headers(options.headers||{});
   const csrf=sessionStorage.getItem('UW_CSRF_TOKEN');
   if(csrf&&!['GET','HEAD','OPTIONS'].includes(method))headers.set('x-csrf-token',csrf);
-  options={...options,headers,credentials:options.credentials||'same-origin'};
+  options={...options,headers,credentials:options.credentials||'include'};
   return nativeFetch(input,options);
 };
 
@@ -771,7 +771,10 @@ async function initializeServerSync(){
   serverSyncInFlight=true;
   serverSyncStartedAt=Date.now();
   try{
-    const response=await fetch('/api/state',{headers:{Accept:'application/json'}});
+    let response=await fetch('/api/state',{headers:{Accept:'application/json'},credentials:'include'});
+    if(response.status===401&&await refreshAuthSession()){
+      response=await fetch('/api/state',{headers:{Accept:'application/json'},credentials:'include'});
+    }
     if(!response.ok) throw new Error('server state unavailable');
     const snapshot=await response.json();
     serverRevision=Number(snapshot.revision||0);
@@ -837,9 +840,9 @@ async function syncServerState(force=false,silent=false){
   if((!serverSyncAvailable&&!force)||serverSyncInFlight)return false;
   serverSyncInFlight=true;
   try{
-    let response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision,data:DB})});
+    let response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
     if([401,403].includes(response.status)&&await refreshAuthSession()){
-      response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision,data:DB})});
+      response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
     }
     const payload=await response.json().catch(()=>({}));
     if(response.status===409&&payload.snapshot){
@@ -2959,7 +2962,7 @@ function initializeAccessFlow(){
     submitButton.disabled=true;
     submitButton.textContent='Verifying…';
     try{
-      const response = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:userValue,password:passValue}),signal:AbortSignal.timeout(15000)});
+      const response = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email:userValue,password:passValue}),signal:AbortSignal.timeout(15000)});
       const result = await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(result.error||`Sign-in failed (${response.status}).`);
       sessionStorage.setItem('UW_CSRF_TOKEN',result.csrfToken||'');
