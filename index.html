@@ -1264,14 +1264,14 @@ function vDashboard(c){
   <div class="cards">
     <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} invoice(s)${mf?' · '+mf:''}</div></div>
     <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + employee wages':''}</div></div>
-    <div class="card"><div class="lbl">Allocated FNB spend</div><div class="val amber">${R(fnbAllocatedTotal)}</div><div class="sub">Source register · not posted to expenses</div></div>
+    <div class="card"><div class="lbl">Unposted FNB source spend</div><div class="val amber">${R(fnbAllocatedTotal)}</div><div class="sub">Bank register only · excluded from expenses</div></div>
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
     <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${DB.quotes.length} total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
     <div class="card"><div class="lbl">Scanned documents awaiting Gemini</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length}</div><div class="sub">Failed and pending scans can be retried</div></div>
   </div>
   <div class="grid2">
-    <div class="panel"><h3>Expense Categories ${mf?'· '+mf:''}</h3>
+    <div class="panel"><h3>Recorded expense ledger · categories ${mf?'· '+mf:''}</h3>
       ${Object.keys(cats).length?Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
         <div class="bar-row"><span style="width:110px;color:var(--muted)">${k}</span>
         <div class="bar-track"><div class="bar-fill" style="width:${(v/maxC*100).toFixed(1)}%"></div></div>
@@ -1283,12 +1283,12 @@ function vDashboard(c){
       </table>
     </div>
   </div>
-  <div class="panel"><h3>Allocated FNB spend by category ${mf?'· '+mf:''}</h3>
-    <p style="font-size:11px;color:var(--muted)">These are categorized bank-source debits shown separately from recorded expenses, so the dashboard does not count the same transaction twice. Explicit ledger posting is required before they enter Total Expenses.</p>
-    ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:160px;color:var(--muted)">${k}</span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No allocated FNB debits for this period</div>'}
+  <div class="panel"><h3>FNB source register · unposted bank debits ${mf?'· '+mf:''}</h3>
+    <p style="font-size:11px;color:var(--muted)">This is a bank-source reconciliation view, not a second expense ledger. A label such as <b>FNB · Fuel</b> is the bank allocation awaiting review/posting; it is not added to the recorded <b>Fuel</b> expense total.</p>
+    ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:190px;color:var(--muted)">FNB · ${k} <small>(unposted)</small></span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No unposted FNB debits for this period</div>'}
   </div>
   <div class="panel"><h3>Financial data controls</h3>
-    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section. Recorded expenses are deduplicated by date, vendor, description, amount, invoice and funding source. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s) match an existing expense by amount and date; they are not added to Total Expenses because FNB allocations are source-only until explicitly posted.`:'No FNB debit currently matches a recorded expense by amount and date.'} Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
+    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section. The expense category panel contains recorded operational expenses only. The FNB source register below contains bank allocations only. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s) match an existing expense by amount and date; they are not added to Total Expenses because FNB allocations are source-only until explicitly posted.`:'No FNB debit currently matches a recorded expense by amount and date.'} Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
   </div>
   <div class="panel"><h3>Quick Actions</h3>
     <div class="toolbar">
