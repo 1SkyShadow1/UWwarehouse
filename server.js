@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { google } = require('googleapis');
 const multer = require('multer');
 const PDFDocument = require('pdfkit');
+const { PDFDocument: PDFLibDocument } = require('pdf-lib');
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -993,6 +994,36 @@ app.post('/api/documents/export-pdf', requireApiKey, async (req, res) => {
     console.error('PDF export failed:', error.message);
     return res.status(500).json({ error: 'The document PDF could not be generated.' });
   }
+});
+
+app.post('/api/documents/split-pdf', requireApiKey, (req, res) => {
+  upload.single('file')(req, res, async error => {
+    if (error) {
+      const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return res.status(status).json({ error: status === 413 ? 'Document is too large.' : error.message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'A PDF file is required.' });
+    try {
+      if (req.file.mimetype !== 'application/pdf') return res.status(415).json({ error: 'Only PDF files can be split.' });
+      const signature = await documentBufferPrefix(req.file.path);
+      if (!hasDocumentSignature(signature, req.file.mimetype)) return res.status(415).json({ error: 'The file signature does not match a PDF.' });
+      const source = await PDFLibDocument.load(await fs.promises.readFile(req.file.path), { ignoreEncryption: false });
+      if (source.getPageCount() < 2) return res.json({ pages: [] });
+      const pages = [];
+      for (let index = 0; index < source.getPageCount(); index += 1) {
+        const output = await PDFLibDocument.create();
+        const [page] = await output.copyPages(source, [index]);
+        output.addPage(page);
+        pages.push({ index: index + 1, data: Buffer.from(await output.save()).toString('base64') });
+      }
+      return res.json({ pages });
+    } catch (splitError) {
+      console.error('PDF split failed:', splitError.message);
+      return res.status(422).json({ error: 'This PDF could not be split into separate pages.' });
+    } finally {
+      await fs.promises.rm(req.file.path, { force: true }).catch(() => {});
+    }
+  });
 });
 
 app.post('/api/documents', requireApiKey, (req, res) => {

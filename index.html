@@ -584,6 +584,17 @@ async function uploadManagedDocument(file){
   if(!response.ok) throw new Error(payload.error||'Document upload failed');
   return payload;
 }
+async function splitScannedPdf(file){
+  const form=new FormData();form.append('file',file);
+  const response=await fetch('/api/documents/split-pdf',{method:'POST',body:form});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(payload.error||'The PDF could not be split into separate pages.');
+  return (payload.pages||[]).map(page=>{
+    const binary=atob(page.data),bytes=new Uint8Array(binary.length);
+    for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);
+    return new File([bytes],`${file.name.replace(/\.pdf$/i,'')}-page-${String(page.index).padStart(2,'0')}.pdf`,{type:'application/pdf'});
+  });
+}
 async function confirmManagedDocumentReadable(document){
   const response=await fetch(document.url,{method:'GET',headers:{Accept:'application/pdf,image/*'},cache:'no-store'});
   if(!response.ok)throw new Error(`Uploaded scan could not be read (${response.status}).`);
@@ -2017,7 +2028,19 @@ async function uploadScannedDocuments(e){
   if(e.target)e.target.value='';
   if(!files.length)return;
   toast(`Uploading ${files.length} scanned document${files.length===1?'':'s'}…`);
-  for(const file of files)await storeUploadedScan(file);
+  for(const file of files){
+    if(file.type==='application/pdf'){
+      try{
+        const pages=await splitScannedPdf(file);
+        if(pages.length>1){
+          toast(`Separating ${file.name} into ${pages.length} invoices…`);
+          for(const page of pages)await storeUploadedScan(page);
+          continue;
+        }
+      }catch(error){console.warn(`PDF splitting failed for ${file.name}:`,error);}
+    }
+    await storeUploadedScan(file);
+  }
 }
 async function handleScannedDrop(e){
   e.preventDefault();e.stopPropagation();
