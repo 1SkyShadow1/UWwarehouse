@@ -472,7 +472,40 @@ function employeeWagesTotal(){
   return (DB.wages||[]).reduce((sum,wage)=>sum+wageLedgerAmount(wage),0);
 }
 function canonicalExpenseCategory(category){
-  return String(category||'').toLowerCase()==='staff'?'Employee wages / Salary':String(category||'Other');
+  const raw=String(category||'').trim();
+  const key=raw.toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ');
+  const aliases={
+    'staff':'Employee wages / Salary',
+    'salary':'Employee wages / Salary',
+    'weekly salary':'Employee wages / Salary',
+    'weekly salary out':'Employee wages / Salary',
+    'employee wages':'Employee wages / Salary',
+    'rental':'Rent',
+    'rent':'Rent',
+    'office supplies':'Office',
+    'office':'Office',
+    'vehicles':'Vehicle',
+    'vehicle':'Vehicle',
+    'material':'Consumables',
+    'materials':'Consumables',
+    'consumable':'Consumables',
+    'consumables':'Consumables',
+    'electricity':'Utilities',
+    'fuel':'Fuel',
+    'marketing':'Marketing',
+    'renovations':'Renovations',
+    'workshop':'Workshop',
+    'loan account':'Loan Account',
+    'bank':'Bank',
+    'bank fees':'Bank',
+    'food':'Personal',
+    'pvt':'Personal',
+    'rent deposit':'Rent deposit',
+    'credit':'Credit',
+    'ccma':'CCMA',
+    'moving':'Moving'
+  };
+  return aliases[key]||raw||'Other';
 }
 function expenseKey(expense){
   return [
@@ -495,7 +528,8 @@ function duplicateExpenseCount(expenses=DB.expenses||[]){
 }
 function deduplicateExpenseLedger(db){
   const before=(db.expenses||[]).length;
-  db.expenses=uniqueExpenses(db.expenses||[]);
+  db.expenses=(db.expenses||[]).map(expense=>({...expense,category:canonicalExpenseCategory(expense.category)}));
+  db.expenses=uniqueExpenses(db.expenses);
   db.meta={...(db.meta||{}),expenseDuplicateRecordsRemoved:(db.meta?.expenseDuplicateRecordsRemoved||0)+(before-db.expenses.length)};
   return db;
 }
@@ -867,7 +901,7 @@ const LOCAL_BACKUP_KEY='UW_DB_V1_BACKUP';
 function refreshBundledData(){
   const imported=window.UW_IMPORTED||{},operations=window.UW_OPERATIONS||{};
   if(!confirm('Refresh the current local dataset imported from '+DATA_SOURCE_PATH+'? This replaces the local historical collections with the current bundled D:\\UW snapshot. Export a backup first if needed.'))return;
-  DB.invoices=imported.invoices||[];DB.quotes=imported.quotes||[];DB.expenses=imported.expenses||[];
+  DB.invoices=imported.invoices||[];DB.quotes=imported.quotes||[];DB.expenses=imported.expenses||[];deduplicateExpenseLedger(DB);
   DB.priceBook=imported.priceBook||DB.priceBook;DB.fabrics=imported.fabrics||DB.fabrics;
   ['suppliers','stock','documents','filesystemFiles','filesystemAudit','payables','bankStatements','jobs','aiNotes','wages','wageOperationalCosts'].forEach(k=>{if(operations[k])DB[k]=operations[k];});
   DB.meta={...DB.meta,...(imported.meta||{}),...(operations.meta||{})};save();toast('Current D:\\UW dataset loaded locally');render();
@@ -1656,7 +1690,7 @@ function viewReceipt(receiptNo){
 }
 
 /* ---------- EXPENSES ---------- */
-const EXP_CATS=['Rent','Utilities','Consumables','Office','Marketing','Vehicle','Fuel','Employee wages / Salary','Workshop','Renovations','Loan Account','Bank','Other'];
+const EXP_CATS=['Rent','Rent deposit','Utilities','Consumables','Office','Marketing','Vehicle','Fuel','Employee wages / Salary','Personal','Workshop','Renovations','Loan Account','Bank','Credit','CCMA','Moving','Other'];
 function vExpenses(c){
   const mf=state.mfilter;const el=document.getElementById('mf');const mf2=el?el.value:'';
   const exp=uniqueExpenses(DB.expenses).filter(e=>(!mf2||monthOf(e.date)===mf2)&&docMatches(e,'expenses',canonicalExpenseCategory(e.category),canonicalExpenseCategory(e.category)));
