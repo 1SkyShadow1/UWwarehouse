@@ -365,12 +365,10 @@ const today = () => new Date().toISOString().slice(0,10);
 const nativeFetch=window.fetch.bind(window);
 window.fetch=(input,options={})=>{
   const method=String(options.method||'GET').toUpperCase();
-  if(!['GET','HEAD','OPTIONS'].includes(method)){
-    const headers=new Headers(options.headers||{});
-    const csrf=sessionStorage.getItem('UW_CSRF_TOKEN');
-    if(csrf)headers.set('x-csrf-token',csrf);
-    options={...options,headers,credentials:'same-origin'};
-  }
+  const headers=new Headers(options.headers||{});
+  const csrf=sessionStorage.getItem('UW_CSRF_TOKEN');
+  if(csrf&&!['GET','HEAD','OPTIONS'].includes(method))headers.set('x-csrf-token',csrf);
+  options={...options,headers,credentials:options.credentials||'same-origin'};
   return nativeFetch(input,options);
 };
 
@@ -728,6 +726,7 @@ let serverRetryTimer;
 let serverRetryAttempt = 0;
 let serverSyncInFlight = false;
 let serverSyncAvailable = false;
+let serverSyncStartedAt=0;
 let serverConflict = (()=>{try{return JSON.parse(localStorage.getItem('UW_STATE_CONFLICT')||'null')}catch(_){return null}})();
 let pendingAiReview=null;
 let scannedReviewBatch=null;
@@ -741,6 +740,7 @@ let remoteDocumentCatalog=[];
 async function initializeServerSync(){
   if(serverSyncInFlight)return;
   serverSyncInFlight=true;
+  serverSyncStartedAt=Date.now();
   try{
     const response=await fetch('/api/state',{headers:{Accept:'application/json'}});
     if(!response.ok) throw new Error('server state unavailable');
@@ -763,6 +763,18 @@ async function initializeServerSync(){
       queueServerStateSave();
     }else{
       queueServerStateSave();
+    }
+    async function waitForServerSync(timeout=12000){
+      const deadline=Date.now()+timeout;
+      while(serverSyncInFlight&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
+      return serverSyncAvailable;
+    }
+    async function refreshAuthSession(){
+      const response=await nativeFetch('/api/auth/session',{headers:{Accept:'application/json'},credentials:'same-origin'});
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok||!payload.authenticated)return false;
+      if(payload.csrfToken)sessionStorage.setItem('UW_CSRF_TOKEN',payload.csrfToken);
+      return true;
     }
     await synchronizeRemoteDocuments();
     await removeLegacyBulkScans();
@@ -808,7 +820,10 @@ async function syncServerState(force=false,silent=false){
   if((!serverSyncAvailable&&!force)||serverSyncInFlight)return false;
   serverSyncInFlight=true;
   try{
-    const response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision,data:DB})});
+    let response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision,data:DB})});
+    if([401,403].includes(response.status)&&await refreshAuthSession()){
+      response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision,data:DB})});
+    }
     const payload=await response.json().catch(()=>({}));
     if(response.status===409&&payload.snapshot){
       serverRevision=payload.snapshot.revision;
@@ -1144,7 +1159,10 @@ async function globalSave(){
   try{
     if(!save())throw new Error('The local workspace could not be written.');
     clearTimeout(serverSyncTimer);
-    if(!serverSyncAvailable||serverRevision===null)await initializeServerSync();
+    if(!serverSyncAvailable||serverRevision===null){
+      await initializeServerSync();
+      await waitForServerSync();
+    }
     if(serverSyncAvailable&&serverRevision!==null){
       const synced=await syncServerState(true,true);
       if(synced)toast('Global save complete — local and database copies updated');
