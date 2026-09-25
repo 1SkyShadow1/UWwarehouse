@@ -505,6 +505,7 @@ async function initializeServerSync(){
     }
     await synchronizeRemoteDocuments();
     await removeLegacyBulkScans();
+    setTimeout(()=>queueServerStateSave(),0);
   }catch(error){
     serverSyncAvailable=false;
     console.warn('Server persistence unavailable; continuing offline.',error);
@@ -630,6 +631,80 @@ function normalizeQuoteFields(db){
   });
   return db;
 }
+function fnbTransactionAmount(transaction){
+  const amount=Number(transaction?.amount);
+  if(Number.isFinite(amount)&&amount!==0)return amount;
+  const debit=Number(transaction?.debit),credit=Number(transaction?.credit);
+  return debit>0?-Math.abs(debit):credit>0?Math.abs(credit):0;
+}
+function fnbAllocationRule(transaction){
+  const description=String(transaction?.description||transaction?.merchant||'').toLowerCase();
+  const amount=fnbTransactionAmount(transaction);
+  const credit=amount>0;
+  if(credit)return /transfer from|payment from|rtc express pmt to uw capitec|payshap.*bs/i.test(description)
+    ? {category:'Transfer',confidence:'high',needsReview:false}
+    : {category:'Client Receipt/Income',confidence:'high',needsReview:false};
+  if(/channel service fee|monthly account fee|service fee|bank fee|bank charge|vat on fee|cash deposit fee/i.test(description))
+    return {category:'Bank Fees',confidence:'high',needsReview:false};
+  if(/yusuf.*salary|rodney.*salary|freeman.*salary|salary|wages?|staff/i.test(description))
+    return {category:'Staff',confidence:'high',needsReview:false};
+  if(/loan/i.test(description))return {category:'Loan',confidence:'high',needsReview:false};
+  if(/rent|landlord/i.test(description))return {category:'Rent',confidence:'high',needsReview:false};
+  if(/fuel|petrol|diesel|engen|shell|caltex|astron|sasol|bp\b/i.test(description))
+    return {category:'Fuel',confidence:'high',needsReview:false};
+  if(/electricity|prepaid airtime|airtime|rain\b|telkom|internet|water|municipal|dstv/i.test(description))
+    return {category:'Utilities',confidence:'high',needsReview:false};
+  if(/sullies|upholstery|african leather|hertex|chamdor|leroy merlin|paint|foam|fabric|material|hardware|building|furniture|autopaint|auto paints|central building/i.test(description))
+    return {category:'Consumables/Materials',confidence:'high',needsReview:false};
+  if(/facebook|google ads|marketing|advert/i.test(description))
+    return {category:'Marketing',confidence:'high',needsReview:false};
+  if(/fnb app payment to|send money app dr|transfer to|cash withdrawal|atm cash|cash advanc/i.test(description))
+    return {category:'Transfer',confidence:'medium',needsReview:true};
+  if(/liquor|salon|restaurant|cafe|uber eats|mcd |smoke shop|dispensary|sp*r|tops |chicken licken|supermarket|spar\b/i.test(description))
+    return {category:'Personal',confidence:'medium',needsReview:true};
+  return {category:'Other',confidence:'low',needsReview:true};
+}
+function normalizeFnbAllocations(db){
+  const seen=new Set();
+  (db.fnbStatements||[]).forEach(statement=>{
+    const unique=[];
+    (statement.transactions||[]).forEach((transaction,index)=>{
+      const id=String(transaction.id||`${statement.id}-${index+1}`);
+      if(seen.has(id))return;
+      seen.add(id);
+      const rule=fnbAllocationRule(transaction);
+      transaction.id=transaction.id||id;
+      if(!transaction.category){
+        transaction.category=rule.category;
+        transaction.allocationSource='auto-rule';
+        transaction.allocationConfidence=rule.confidence;
+        transaction.allocationNeedsReview=rule.needsReview;
+      }
+      transaction.ledgerPosted=Boolean(transaction.ledgerPosted);
+      unique.push(transaction);
+    });
+    statement.transactions=unique;
+  });
+  db.meta={...(db.meta||{}),fnbAllocationVersion:'rules-2026-09-25'};
+  return db;
+}
+function fnbSourceTransactions(){
+  const seen=new Set();
+  return (DB.fnbStatements||[]).flatMap(statement=>(statement.transactions||[]).map((transaction,index)=>{
+    const id=String(transaction.id||`${statement.id}-${index+1}`);
+    if(seen.has(id))return null;
+    seen.add(id);
+    return {...transaction,id,statementId:statement.id,statementName:statement.name};
+  }).filter(Boolean));
+}
+function fnbAllocatedCategoryTotals(month=''){
+  const totals={};
+  fnbSourceTransactions().filter(transaction=>transaction.category&&!transaction.ledgerPosted&&(!month||String(transaction.date||'').slice(0,7)===month)).forEach(transaction=>{
+    const amount=fnbTransactionAmount(transaction);
+    if(amount<0)totals[transaction.category]=(totals[transaction.category]||0)+Math.abs(amount);
+  });
+  return totals;
+}
 function mergeBundledFnbState(db){
   const bundled=window.UW_FNB_STATEMENTS||{};
   if(!Array.isArray(bundled.statements)||!bundled.statements.length)return db;
@@ -650,6 +725,7 @@ function mergeBundledFnbState(db){
     };
   });
   db.meta={...(db.meta||{}),fnbVersion:bundled.version||''};
+  normalizeFnbAllocations(db);
   return db;
 }
 function load(){
@@ -666,6 +742,7 @@ function load(){
       const parsed=JSON.parse(raw);
       const merged={...base,...parsed,meta:{...base.meta,...(parsed.meta||{}),googleDrive:{...base.meta.googleDrive,...((parsed.meta||{}).googleDrive||{})}}};
       mergeBundledFnbState(merged);
+      normalizeFnbAllocations(merged);
       const importedNeedsRefresh=merged.meta.importVersion!==(imported.meta||{}).importVersion
         || merged.invoices.length<(imported.invoices||[]).length
         || merged.expenses.length<(imported.expenses||[]).length
@@ -729,6 +806,7 @@ function load(){
   }catch(e){console.warn('Local database could not be loaded',e);}
   const initial={...base,meta:{...base.meta,cloud:{url:'',key:'',table:'uw_accounting_data',workspace:'default'}}};
   normalizeQuoteFields(initial);
+  normalizeFnbAllocations(initial);
   localStorage.setItem(DB_KEY,JSON.stringify(initial)); return initial;
 }
 let cloudSyncTimer,driveSyncTimer,periodicSyncTimer;
@@ -1082,6 +1160,8 @@ function vDashboard(c){
   const mf=state.mfilter;
   const inv=mf?DB.invoices.filter(i=>monthOf(i.date)===mf):DB.invoices;
   const exp=mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses;
+  const fnbCats=fnbAllocatedCategoryTotals(mf);
+  const fnbAllocatedTotal=Object.values(fnbCats).reduce((sum,value)=>sum+value,0);
   const inc=inv.reduce((s,i)=>s+(i.paid||0),0);
   const wageT=(DB.wages||[]).reduce((sum,wage)=>
     sum+(wage.weeks||[]).reduce((weekTotal,week)=>weekTotal+(Number(week.owed)||0),0)-(Number(wage.advances)||0),0);
@@ -1097,6 +1177,7 @@ function vDashboard(c){
   <div class="cards">
     <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} invoice(s)${mf?' · '+mf:''}</div></div>
     <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} entries + wages</div></div>
+    <div class="card"><div class="lbl">Allocated FNB spend</div><div class="val amber">${R(fnbAllocatedTotal)}</div><div class="sub">Source register · not posted to expenses</div></div>
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
     <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${DB.quotes.length} total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
@@ -1114,6 +1195,10 @@ function vDashboard(c){
       ${DB.invoices.slice(0,6).map(i=>`<tr><td>${i.id}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R(invBalance(i))}</td><td>${statusBadge(i.status)}</td></tr>`).join('')}
       </table>
     </div>
+  </div>
+  <div class="panel"><h3>Allocated FNB spend by category ${mf?'· '+mf:''}</h3>
+    <p style="font-size:11px;color:var(--muted)">These are categorized bank-source debits shown separately from recorded expenses, so the dashboard does not count the same transaction twice. Explicit ledger posting is required before they enter Total Expenses.</p>
+    ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:160px;color:var(--muted)">${k}</span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No allocated FNB debits for this period</div>'}
   </div>
   <div class="panel"><h3>Quick Actions</h3>
     <div class="toolbar">
@@ -1214,6 +1299,9 @@ function setFnbTransactionCategory(statementId,rowId,category){
   const transaction=(statement?.transactions||[]).find((item,index)=>String(item.id||`${statementId}-${index+1}`)===String(rowId));
   if(!transaction)return;
   transaction.category=category;
+  transaction.allocationSource=category?'manual':'unallocated';
+  transaction.allocationConfidence=category?'manual':'';
+  transaction.allocationNeedsReview=!category;
   save();render();
 }
 function newInvoice(mode='invoice'){
@@ -2136,13 +2224,15 @@ function setScannedCategory(id,category){
 function vBank(c){
   const meta=window.UW_FNB_STATEMENTS||{},all=DB.fnbStatements||[],f=docFilterState('bank'),rows=all.filter(s=>docMatches(s,'bank','Statement',s.status)&&(!f.appliedQ||String(s.period||'').toLowerCase().includes(f.appliedQ.toLowerCase()))),r=meta.reconciliation||{};
   const body=rows.map(s=>'<tr class="review-approved"><td><b>'+escapeHtml(s.name)+'</b><small>'+escapeHtml(s.period)+'</small></td><td>'+s.pages+'</td><td>'+s.creditTransactions+' cr / '+s.debitTransactions+' dr</td><td class="num">'+R(s.credits)+' / '+R(s.debits)+'</td><td class="num">'+R(s.closingBalance)+'</td><td><b>'+escapeHtml(s.status)+'</b></td><td><button class="btn sm" onclick=\'viewFnbSource('+JSON.stringify(s).replace(/'/g,'&#39;')+')\'>View source</button></td></tr>').join('');
-  const transactions=all.flatMap(statement=>(Array.isArray(statement.transactions)?statement.transactions:[]).map((transaction,index)=>({...transaction,statementName:statement.name,statementId:statement.id,rowId:transaction.id||`${statement.id}-${index+1}`})));
+  const transactions=fnbSourceTransactions().filter(transaction=>all.some(statement=>String(statement.id)===String(transaction.statementId)));
   const transactionRows=transactions.map(transaction=>{
     const categoryOptions=(meta.categories||[]).map(category=>`<option ${transaction.category===category?'selected':''}>${category}</option>`).join('');
-    return `<tr><td>${transaction.date||transaction.transactionDate||transaction.postedDate||'—'}</td><td>${transaction.description||transaction.merchant||transaction.payee||'—'}</td><td class="num">${transaction.debit||transaction.amount<0?R(Math.abs(Number(transaction.debit||transaction.amount||0))):'—'}</td><td class="num">${transaction.credit||transaction.amount>0?R(Math.abs(Number(transaction.credit||transaction.amount||0))):'—'}</td><td><select class="search" onchange="setFnbTransactionCategory('${transaction.statementId}','${transaction.rowId}',this.value)"><option value="">Unallocated</option>${categoryOptions}</select></td><td>${transaction.statementName}</td></tr>`;
+    const amount=fnbTransactionAmount(transaction),needsReview=transaction.allocationNeedsReview?' · review needed':'';
+    return `<tr><td>${transaction.date||transaction.transactionDate||transaction.postedDate||'—'}</td><td>${transaction.description||transaction.merchant||transaction.payee||'—'}</td><td class="num">${amount<0?R(Math.abs(amount)):'—'}</td><td class="num">${amount>0?R(amount):'—'}</td><td><select class="search" onchange="setFnbTransactionCategory('${transaction.statementId}','${transaction.id}',this.value)"><option value="">Unallocated</option>${categoryOptions}</select><small style="display:block;color:${needsReview?'var(--amber)':'var(--muted)'}">${transaction.category||'Unallocated'}${needsReview}</small></td><td>${transaction.statementName}</td></tr>`;
   }).join('');
   const history=transactions.length?`<div style="overflow:auto;max-height:70vh"><table><tr><th>Date</th><th>Description / merchant</th><th class="num">Debit</th><th class="num">Credit</th><th>Category</th><th>Statement</th></tr>${transactionRows}</table></div>`:`<div class="empty">No transaction rows are loaded in the current state.</div>`;
-  c.innerHTML='<div class="cards"><div class="card"><div class="lbl">FNB closing balance · 31 Aug 2026</div><div class="val gold">'+R((all[all.length-1]||{}).closingBalance||0)+'</div></div><div class="card"><div class="lbl">Imported turnover credits</div><div class="val green">'+R(r.verifiedCredits||0)+'</div></div><div class="card"><div class="lbl">Imported turnover debits</div><div class="val amber">'+R(r.verifiedDebits||0)+'</div></div><div class="card"><div class="lbl">Statements / source rows</div><div class="val">'+(r.statementCount||0)+' / '+transactions.length+'</div></div></div><div class="toolbar">'+docFilterHtml('bank',[],['Imported'],false)+'<span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' statements shown · '+transactions.length+' source transactions awaiting allocation</span></div><div class="panel"><h3>FNB Gold Business Account · authoritative register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+' Statement turnover is reconciled here but excluded from invoices, expenses and reports until allocated.</p><table><tr><th>Statement / period</th><th>Pages</th><th>Transactions</th><th>Credits / debits</th><th>Closing balance</th><th>Status</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Transaction history</h3><p style="font-size:11px;color:var(--muted)">All source rows remain in the register until assigned a category and explicitly posted to the operational ledger.</p>'+history+'</div>'
+  const needsReview=transactions.filter(transaction=>transaction.allocationNeedsReview&&!transaction.ledgerPosted).length;
+  c.innerHTML='<div class="cards"><div class="card"><div class="lbl">FNB closing balance · 31 Aug 2026</div><div class="val gold">'+R((all[all.length-1]||{}).closingBalance||0)+'</div></div><div class="card"><div class="lbl">Imported turnover credits</div><div class="val green">'+R(r.verifiedCredits||0)+'</div></div><div class="card"><div class="lbl">Imported turnover debits</div><div class="val amber">'+R(r.verifiedDebits||0)+'</div></div><div class="card"><div class="lbl">Statements / source rows</div><div class="val">'+(r.statementCount||0)+' / '+transactions.length+'</div></div></div><div class="toolbar">'+docFilterHtml('bank',[],['Imported'],false)+'<span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' statements shown · '+transactions.length+' unique source transactions · '+needsReview+' need allocation review</span></div><div class="panel"><h3>FNB Gold Business Account · authoritative register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+' Every unique source row has one category. Allocated source debits remain outside the operational ledger until explicitly posted, preventing duplicate expense counts.</p><table><tr><th>Statement / period</th><th>Pages</th><th>Transactions</th><th>Credits / debits</th><th>Closing balance</th><th>Status</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Transaction history</h3><p style="font-size:11px;color:var(--muted)">Each source row is retained once with its logical allocation. Only explicitly posted rows may enter the operational ledger.</p>'+history+'</div>'
 }
 function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date'));const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved','FNB reviewed'])+'<label class="btn gold">＋ Upload source documents<input type="file" multiple style="display:none" onchange="uploadSourceDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
 function vAssistant(c){
