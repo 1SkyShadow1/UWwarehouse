@@ -468,20 +468,15 @@ function wageLedgerAmount(wage){
   const monthly=Number(wage.monthly)||0;
   return (weeks>0?weeks:monthly)-(Number(wage.advances)||0);
 }
-function isEmployeeWageExpense(expense){
-  return canonicalExpenseCategory(expense?.category)==='Employee wages / Salary';
-}
-function recordedEmployeeWagesTotal(month=''){
-  return uniqueExpenses(DB.expenses).filter(expense=>isEmployeeWageExpense(expense)&&(!month||monthOf(expense.date)===month))
-    .reduce((sum,expense)=>sum+(Number(expense.amount)||0),0);
-}
-function employeeWagesSource(){
-  return recordedEmployeeWagesTotal()>0?'recorded-expenses':'payroll-ledger';
-}
 function employeeWagesTotal(){
-  return employeeWagesSource()==='recorded-expenses'
-    ? recordedEmployeeWagesTotal()
-    : (DB.wages||[]).reduce((sum,wage)=>sum+wageLedgerAmount(wage),0);
+  return (DB.wages||[]).reduce((sum,wage)=>sum+wageLedgerAmount(wage),0);
+}
+function recordedEmployeeWagesTotal(){
+  return uniqueExpenses(DB.expenses).reduce((sum,expense)=>
+    sum+(canonicalExpenseCategory(expense.category)==='Employee wages / Salary'?Number(expense.amount)||0:0),0);
+}
+function consolidatedEmployeeWagesTotal(){
+  return recordedEmployeeWagesTotal()+employeeWagesTotal();
 }
 function canonicalExpenseCategory(category){
   const raw=String(category||'').trim();
@@ -773,7 +768,8 @@ function normalizeFnbAllocations(db){
       seen.add(id);
       const rule=fnbAllocationRule(transaction);
       transaction.id=transaction.id||id;
-      if(transaction.category==='Staff')transaction.category='Employee wages / Salary';
+      if(['staff','salary','weekly salary','weekly salary out'].includes(String(transaction.category||'').trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ')))
+        transaction.category='Employee wages / Salary';
       if(!transaction.category){
         transaction.category=rule.category;
         transaction.allocationSource='auto-rule';
@@ -1178,7 +1174,7 @@ const NAV=[
  {id:'loans',ico:'⇄',lbl:'Loan Tracker'},
  {id:'pricing',ico:'∑',lbl:'Pricing Calculator'},
  {id:'fabrics',ico:'▦',lbl:'Fabric Price Lists'},
- {id:'wages',ico:'👷',lbl:'Employee wages / Salary'},
+ {id:'wages',ico:'👷',lbl:'Staff & Wages'},
  {id:'jobs',ico:'▸',lbl:'Jobs & Production'},
  {id:'suppliers',ico:'♙',lbl:'Suppliers & Stock'},
  {id:'payables',ico:'⇩',lbl:'Purchases & Payables'},
@@ -1259,14 +1255,12 @@ function vDashboard(c){
   state.mfilter=getMF()||state.mfilter;
   const mf=state.mfilter;
   const inv=mf?DB.invoices.filter(i=>monthOf(i.date)===mf):DB.invoices;
-  const wageSource=employeeWagesSource();
-  const allExpenses=uniqueExpenses(mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses);
-  const exp=wageSource==='recorded-expenses'?allExpenses.filter(e=>!isEmployeeWageExpense(e)):allExpenses;
+  const exp=uniqueExpenses(mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses);
   const fnbCats=fnbAllocatedCategoryTotals(mf);
   const fnbAllocatedTotal=Object.values(fnbCats).reduce((sum,value)=>sum+value,0);
   const fnbExpenseOverlaps=fnbExpenseOverlapCount();
   const inc=inv.reduce((s,i)=>s+(i.paid||0),0);
-  const wageT=wageSource==='payroll-ledger'&&!mf?employeeWagesTotal():wageSource==='recorded-expenses'?recordedEmployeeWagesTotal(mf):0;
+  const wageT=mf?0:employeeWagesTotal();
   const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
   const out=inv.filter(i=>invBalance(i)>0.005);
   const outT=out.reduce((s,i)=>s+invBalance(i),0);
@@ -1278,7 +1272,7 @@ function vDashboard(c){
   <div class="toolbar">${monthFilterHtml('mf')}</div>
   <div class="cards">
     <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} invoice(s)${mf?' · '+mf:''}</div></div>
-    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique non-wage entries + Employee wages / Salary once</div></div>
+    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + employee wages':''}</div></div>
     <div class="card"><div class="lbl">Unposted FNB source spend</div><div class="val amber">${R(fnbAllocatedTotal)}</div><div class="sub">Bank register only · excluded from expenses</div></div>
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
@@ -1303,7 +1297,7 @@ function vDashboard(c){
     ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:190px;color:var(--muted)">FNB · ${k} <small>(unposted)</small></span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No unposted FNB debits for this period</div>'}
   </div>
   <div class="panel"><h3>Financial data controls</h3>
-    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is one field and one total. Salary payments are sourced from the dated expense ledger when available; the payroll ledger is only the fallback, so the same wages are never added twice. The FNB source register below contains bank allocations only. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s) match an existing expense by amount and date; they are not added to Total Expenses because FNB allocations are source-only until explicitly posted.`:'No FNB debit currently matches a recorded expense by amount and date.'}</p>
+    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB source register below contains bank allocations only. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s) match an existing expense by amount and date; they are not added to Total Expenses because FNB allocations are source-only until explicitly posted.`:'No FNB debit currently matches a recorded expense by amount and date.'} Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
   </div>
   <div class="panel"><h3>Quick Actions</h3>
     <div class="toolbar">
@@ -1867,9 +1861,11 @@ const fa=id=>document.getElementById(id).value;
 /* ---------- WAGES ---------- */
 function vWages(c){
   const sourceWages=DB.wages||[];
-  const tot=employeeWagesTotal();
+  const ledgerTotal=employeeWagesTotal();
+  const recordedTotal=recordedEmployeeWagesTotal();
+  const tot=recordedTotal+ledgerTotal;
   c.innerHTML=`
-  <div class="cards"><div class="card"><div class="lbl">Employee wages / Salary</div><div class="val ${tot>0?'gold':'green'}">${R(tot)}</div><div class="sub">One canonical total · source: ${employeeWagesSource()==='recorded-expenses'?'recorded salary payments':'payroll ledger'}</div></div></div>
+  <div class="cards"><div class="card"><div class="lbl">Employee wages / Salary</div><div class="val ${tot>0?'gold':'green'}">${R(tot)}</div><div class="sub">One consolidated total · ${R(recordedTotal)} recorded payments + ${R(ledgerTotal)} payroll ledger</div></div></div>
   <div class="panel"><h3>Employee wages / Salary ledger <button class="btn sm gold" onclick="newStaff()">+ Add Employee</button></h3>
   <div style="overflow-x:auto"><table>
     <tr><th>Staff</th><th>Rate/Day</th><th>Per Week</th><th>Per Month</th><th>Per Year</th>${[1,2,3,4,5].map(w=>`<th>Week ${w}<br><small>Days / Wages / Paid</small></th>`).join('')}<th>Advances (−)</th><th class="num">Owed</th><th></th></tr>
@@ -2457,7 +2453,7 @@ async function runGemini(){
   const provider=providerEl ? providerEl.value : 'auto';
   try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider,context:buildAiContext()})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=(payload.text||'No response returned.')+(payload.truncated?'\n\n[The response reached the model limit. Ask “continue from where you stopped” to retrieve the remaining details.]':'')}catch(error){result.textContent=error.message;toast('AI request failed')}
 }
-function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(uniqueExpenses(DB.expenses).reduce((s,e)=>s+e.amount,0))}`,`Employee wages / Salary: ${R(employeeWagesTotal())}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
+function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(uniqueExpenses(DB.expenses).reduce((s,e)=>s+e.amount,0))}`,`Employee wages / Salary: ${R(consolidatedEmployeeWagesTotal())}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
 
 /* ---------- REPORTS ---------- */
 function vReports(c){
