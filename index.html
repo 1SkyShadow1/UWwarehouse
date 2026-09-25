@@ -584,9 +584,38 @@ function extractedDocumentDate(document){
   const review=document.aiReview||document.extraction||{};
   return String(review.documentDate||review.date||document.date||'').slice(0,10);
 }
+function scanFnbMatch(document, transactions=fnbSourceTransactions()){
+  const amount=extractedDocumentAmount(document), date=Date.parse(extractedDocumentDate(document));
+  if(!(amount>0)||!Number.isFinite(date))return null;
+  return transactions
+    .map(transaction=>({
+      transaction,
+      amountDelta:Math.abs(Math.abs(fnbTransactionAmount(transaction))-amount),
+      dateDelta:Math.abs(Date.parse(String(transaction.date||''))-date)
+    }))
+    .filter(candidate=>fnbTransactionAmount(candidate.transaction)<0&&candidate.amountDelta<0.02&&candidate.dateDelta<=3*86400000)
+    .sort((a,b)=>a.amountDelta-b.amountDelta||a.dateDelta-b.dateDelta)[0]||null;
+}
+function crossReferenceSummary(month=''){
+  const scans=scannedExpenseEvidence().filter(document=>geminiReviewComplete(document));
+  const reviewedScans=scans.filter(document=>extractedDocumentAmount(document)>0&&extractedDocumentDate(document));
+  const matchedScans=reviewedScans.map(document=>({document,match:scanFnbMatch(document)})).filter(row=>row.match);
+  const fnb=fnbReconciliationSummary(month);
+  return {
+    scanCount:scans.length,
+    reviewedScanCount:reviewedScans.length,
+    matchedScanCount:matchedScans.length,
+    matchedScanAmount:matchedScans.reduce((sum,row)=>sum+extractedDocumentAmount(row.document),0),
+    unmatchedScanAmount:reviewedScans.filter(document=>!scanFnbMatch(document)).reduce((sum,document)=>sum+extractedDocumentAmount(document),0),
+    fnb,
+    fnbExpenseMatchCount:fnbExpenseOverlapCount(month),
+    fnbExpenseMatchAmount:fnbExpenseOverlapAmount(month)
+  };
+}
 function syncExpenseEvidence(db){
   const existingSources=new Set((db.expenses||[]).filter(expense=>expense.sourceType&&expense.sourceId).map(expense=>`${expense.sourceType}:${expense.sourceId}`));
   const additions=[];
+  const sourceTransactions=fnbSourceTransactions();
   const add=(expense,sourceType,sourceId)=>{
     const sourceKey=`${sourceType}:${sourceId}`;
     if(existingSources.has(sourceKey)||!expense.date||!(Number(expense.amount)>0))return;
@@ -600,12 +629,19 @@ function syncExpenseEvidence(db){
   (db.scannedDocuments||[]).filter(document=>!isLegacyBulkScan(document)&&document.canonical&&!document.existingMatch&&geminiReviewComplete(document)).forEach(document=>{
     const amount=extractedDocumentAmount(document),date=extractedDocumentDate(document),review=document.aiReview||document.extraction||{};
     if(amount>0&&date&&Number(review.confidence||0)>=0.65){
+      const cardMatch=scanFnbMatch(document,sourceTransactions);
+      if(cardMatch){
+        document.reconciliationStatus='Matched to FNB card transaction';
+        document.reconciliationSource=cardMatch.transaction.id;
+        return;
+      }
+      document.reconciliationStatus='Receipt-only expense candidate';
       add({date,vendor:review.merchant||document.name||'Scanned receipt',desc:review.invoiceNumber?`Receipt / invoice ${review.invoiceNumber}`:'Scanned receipt',category:canonicalExpenseCategory(document.category||'Other'),paidBy:'Scanned document',amount,invoiceNo:review.invoiceNumber||''},'scan',document.id||document.hash||document.name);
     }
   });
   const matchedIds=new Set(fnbExpenseMatches().map(match=>String(match.transaction.id)));
   matchedIds.forEach(transactionId=>markFnbLedgerPosted(transactionId));
-  fnbSourceTransactions().filter(transaction=>fnbTransactionAmount(transaction)<0&&!transaction.ledgerPosted&&!transaction.allocationNeedsReview&&!matchedIds.has(String(transaction.id))).forEach(transaction=>{
+  sourceTransactions.filter(transaction=>fnbTransactionAmount(transaction)<0&&!transaction.ledgerPosted&&!transaction.allocationNeedsReview&&!matchedIds.has(String(transaction.id))).forEach(transaction=>{
     const category=canonicalExpenseCategory(canonicalFnbCategory(transaction.category));
     if(['Transfer','Client Receipt/Income','Loan Account','Other'].includes(category))return;
     add({date:String(transaction.date||'').slice(0,10),vendor:String(transaction.description||'FNB transaction').slice(0,200),desc:`FNB: ${String(transaction.description||'').slice(0,200)}`,category,paidBy:'FNB reconciliation',amount:Math.abs(fnbTransactionAmount(transaction)),invoiceNo:''},'fnb',transaction.id);
@@ -628,8 +664,8 @@ function deduplicateExpenseLedger(db){
   db.meta={...(db.meta||{}),expenseDuplicateRecordsRemoved:(db.meta?.expenseDuplicateRecordsRemoved||0)+(before-db.expenses.length)};
   return db;
 }
-function fnbExpenseMatches(){
-  const expenses=uniqueExpenses(DB.expenses);
+function fnbExpenseMatches(month=''){
+  const expenses=uniqueExpenses(DB.expenses).filter(expense=>!month||monthOf(expense.date)===month);
   const transactions=fnbSourceTransactions();
   const candidates=[];
   expenses.forEach((expense,expenseIndex)=>{
@@ -675,11 +711,11 @@ function fnbExpenseMatches(){
   orderedExpenses.forEach(expenseIndex=>assign(expenseIndex,new Set()));
   return [...assignedExpenses.values()].map(candidate=>({expense:candidate.expense,transaction:candidate.transaction}));
 }
-function fnbExpenseOverlapCount(){
-  return fnbExpenseMatches().length;
+function fnbExpenseOverlapCount(month=''){
+  return fnbExpenseMatches(month).length;
 }
-function fnbExpenseOverlapAmount(){
-  return fnbExpenseMatches().reduce((sum,match)=>sum+Math.abs(Number(match.expense.amount)||0),0);
+function fnbExpenseOverlapAmount(month=''){
+  return fnbExpenseMatches(month).reduce((sum,match)=>sum+Math.abs(Number(match.expense.amount)||0),0);
 }
 deduplicateExpenseLedger(DB);
 normalizePayables(DB);
@@ -1434,10 +1470,11 @@ function vDashboard(c){
   const inv=uniqueInvoices().filter(i=>!mf||monthOf(i.date)===mf);
   const exp=uniqueExpenses(mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses);
   const fnbSummary=fnbReconciliationSummary(mf);
+  const crossRef=crossReferenceSummary(mf);
   const fnbCats=fnbAllocatedCategoryTotals(mf);
   const fnbAllocatedTotal=fnbSummary.unposted;
-  const fnbExpenseOverlaps=fnbExpenseOverlapCount();
-  const fnbExpenseOverlapTotal=fnbExpenseOverlapAmount();
+  const fnbExpenseOverlaps=crossRef.fnbExpenseMatchCount;
+  const fnbExpenseOverlapTotal=crossRef.fnbExpenseMatchAmount;
   const inc=inv.reduce((s,i)=>s+invoiceCollectedAmount(i),0);
   const wageT=mf?0:employeeWagesTotal();
   const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
@@ -1453,6 +1490,7 @@ function vDashboard(c){
     <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} unique invoice(s)${mf?' · '+mf:''} · paid + deposits</div></div>
     <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + employee wages':''}</div></div>
     <div class="card"><div class="lbl">FNB reconciled spend</div><div class="val amber">${R(fnbSummary.total)}</div><div class="sub">${R(fnbSummary.posted)} posted once · ${R(fnbAllocatedTotal)} still unposted</div></div>
+    <div class="card"><div class="lbl">Receipt/card cross-reference</div><div class="val">${crossRef.matchedScanCount}</div><div class="sub">${R(crossRef.matchedScanAmount)} receipt evidence matched · ${crossRef.reviewedScanCount} reviewed</div></div>
     <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
     <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${uniqueQuotes().length} unique total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
@@ -1476,7 +1514,7 @@ function vDashboard(c){
     ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:190px;color:var(--muted)">FNB · ${k} <small>(unposted)</small></span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No unposted FNB debits for this period</div>'}
   </div>
   <div class="panel"><h3>Financial data controls</h3>
-    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB reconciled total contains eligible bank debits exactly once: ${R(fnbSummary.posted)} are posted into the ledger and ${R(fnbSummary.unposted)} remain unposted source evidence. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s), totaling ${R(fnbExpenseOverlapTotal)}, match recorded expenses by amount and date; they are not added again.`:'No FNB debit currently matches a recorded expense by amount and date.'} Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
+    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB reconciled total contains eligible bank debits exactly once: ${R(fnbSummary.posted)} are posted into the ledger and ${R(fnbSummary.unposted)} remain unposted source evidence. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s), totaling ${R(fnbExpenseOverlapTotal)}, match recorded expenses by amount and date; they are not added again.`:'No FNB debit currently matches a recorded expense by amount and date.'} Receipt cross-reference: ${crossRef.matchedScanCount} reviewed receipt(s) match card debits for ${R(crossRef.matchedScanAmount)}; ${crossRef.reviewedScanCount-crossRef.matchedScanCount} reviewed receipt(s) remain unmatched for review. Unreviewed scans never affect totals. Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
   </div>
   <div class="panel"><h3>Quick Actions</h3>
     <div class="toolbar">
