@@ -1225,6 +1225,13 @@ const getGeminiModelAttempts = (configuredModel) => {
   return [...new Set(attempts)];
 };
 
+const shouldFailOverGeminiModel = (error, response) => {
+  const status = Number(response?.status || error?.statusCode || 0);
+  const message = String(error?.message || '').toLowerCase();
+  return [408, 429, 500, 502, 503, 504].includes(status)
+    || /quota|rate.?limit|resource exhausted|too many requests|temporar|overloaded|capacity|unavailable|not found|no longer available|model not found/.test(message);
+};
+
 const extractAiText = payload => {
   return (payload?.candidates || [])
     .flatMap(candidate => candidate.content?.parts || [])
@@ -1308,12 +1315,11 @@ const callGeminiChat = async (prompt, requestContext = null) => {
       const payload = await response.json();
       if (!response.ok) {
         const message = payload?.error?.message || 'Gemini request failed.';
-        const isRetiredModelError = /no longer available|not found|404|Model not found/i.test(message);
-        if (isRetiredModelError && model !== modelAttempts[modelAttempts.length - 1]) {
+        const error = new Error(message);
+        if (shouldFailOverGeminiModel(error, response) && model !== modelAttempts[modelAttempts.length - 1]) {
           lastError = new Error(message);
           continue;
         }
-        const error = new Error(message);
         error.statusCode = response.status >= 400 && response.status < 500 ? response.status : 502;
         throw error;
       }
@@ -1330,8 +1336,7 @@ const callGeminiChat = async (prompt, requestContext = null) => {
       };
     } catch (error) {
       lastError = error;
-      const shouldRetry = error?.message && /no longer available|not found|404|Model not found/i.test(error.message);
-      if (shouldRetry && model !== modelAttempts[modelAttempts.length - 1]) {
+      if (shouldFailOverGeminiModel(error) && model !== modelAttempts[modelAttempts.length - 1]) {
         continue;
       }
       throw error;
@@ -1393,7 +1398,7 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const error = new Error(payload?.error?.message || 'Gemini document review failed.');
-        if (/not found|no longer available|404|model/i.test(error.message) && model !== modelAttempts[modelAttempts.length - 1]) {
+        if (shouldFailOverGeminiModel(error, response) && model !== modelAttempts[modelAttempts.length - 1]) {
           lastError = error;
           continue;
         }
@@ -1416,7 +1421,7 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
       };
     } catch (error) {
       lastError = error;
-      if (!/not found|no longer available|404|model/i.test(String(error.message || '')) || model === modelAttempts[modelAttempts.length - 1]) throw error;
+      if (!shouldFailOverGeminiModel(error) || model === modelAttempts[modelAttempts.length - 1]) throw error;
     }
   }
   throw lastError || new Error('Gemini document review failed.');

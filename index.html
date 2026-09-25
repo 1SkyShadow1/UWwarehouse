@@ -263,8 +263,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .quote-top-header .template-logo{width:100%;height:116px;margin:0;object-fit:contain;object-position:left center}
 .quote-top-header .company-details{margin:0;text-align:right;font-size:13px;line-height:1.55}
 .quote-doc-heading{display:block;text-align:center;border-bottom:1px solid #222;padding:8px 0 10px;margin-bottom:14px}
-.quote-doc-heading h1{font-size:25px;text-decoration:underline;margin:0 0 4px;letter-spacing:1px;color:#111}
-.quote-doc-heading .doc-number{font-size:10px;line-height:1.45}
+.quote-doc-heading h1{font-size:20px;text-decoration:underline;margin:0 0 5px;letter-spacing:1px;color:#111}
+.quote-doc-heading .doc-number{display:flex;justify-content:space-between;align-items:center;gap:14px;font-size:10px;line-height:1.45;text-align:left}
+.quote-doc-heading .quote-dates{text-align:right}
 @media(max-width:680px){.quote-top-header{grid-template-columns:1fr;gap:8px}.quote-top-header .template-logo{height:88px}.quote-top-header .company-details{text-align:left}}
 @media print{
   .template-doc{box-shadow:none;max-width:none;padding:12mm 14mm}
@@ -577,7 +578,41 @@ function scannedExpenseEvidence(){
 }
 function extractedDocumentAmount(document){
   const review=document.aiReview||document.extraction||{};
-  return Number(review.amount??review.total??document.amount??0)||0;
+  return Number(review.amountPaid??review.amount??review.total??document.amount??0)||0;
+}
+function extractedDocumentDate(document){
+  const review=document.aiReview||document.extraction||{};
+  return String(review.documentDate||review.date||document.date||'').slice(0,10);
+}
+function syncExpenseEvidence(db){
+  const existingSources=new Set((db.expenses||[]).filter(expense=>expense.sourceType&&expense.sourceId).map(expense=>`${expense.sourceType}:${expense.sourceId}`));
+  const additions=[];
+  const add=(expense,sourceType,sourceId)=>{
+    const sourceKey=`${sourceType}:${sourceId}`;
+    if(existingSources.has(sourceKey)||!expense.date||!(Number(expense.amount)>0))return;
+    const duplicate=(db.expenses||[]).some(row=>row.date===expense.date&&Math.abs(Number(row.amount||0)-Number(expense.amount))<0.02
+      &&String(row.vendor||'').trim().toLowerCase()===String(expense.vendor||'').trim().toLowerCase()
+      &&String(row.sourceType||'')!==sourceType);
+    if(duplicate)return;
+    additions.push({...expense,sourceType,sourceId,postedFromEvidence:true});
+    existingSources.add(sourceKey);
+  };
+  (db.scannedDocuments||[]).filter(document=>!isLegacyBulkScan(document)&&document.canonical&&!document.existingMatch&&geminiReviewComplete(document)).forEach(document=>{
+    const amount=extractedDocumentAmount(document),date=extractedDocumentDate(document),review=document.aiReview||document.extraction||{};
+    if(amount>0&&date&&Number(review.confidence||0)>=0.65){
+      add({date,vendor:review.merchant||document.name||'Scanned receipt',desc:review.invoiceNumber?`Receipt / invoice ${review.invoiceNumber}`:'Scanned receipt',category:canonicalExpenseCategory(document.category||'Other'),paidBy:'Scanned document',amount,invoiceNo:review.invoiceNumber||''},'scan',document.id||document.hash||document.name);
+    }
+  });
+  const matchedIds=new Set(fnbExpenseMatches().map(match=>String(match.transaction.id)));
+  fnbSourceTransactions().filter(transaction=>fnbTransactionAmount(transaction)<0&&!transaction.ledgerPosted&&!transaction.allocationNeedsReview&&!matchedIds.has(String(transaction.id))).forEach(transaction=>{
+    const category=canonicalExpenseCategory(canonicalFnbCategory(transaction.category));
+    if(['Transfer','Client Receipt/Income','Loan Account','Other'].includes(category))return;
+    add({date:String(transaction.date||'').slice(0,10),vendor:String(transaction.description||'FNB transaction').slice(0,200),desc:`FNB: ${String(transaction.description||'').slice(0,200)}`,category,paidBy:'FNB reconciliation',amount:Math.abs(fnbTransactionAmount(transaction)),invoiceNo:''},'fnb',transaction.id);
+    if(existingSources.has(`fnb:${transaction.id}`))markFnbLedgerPosted(transaction.id);
+  });
+  if(additions.length)db.expenses=[...(db.expenses||[]),...additions];
+  db.meta={...(db.meta||{}),expenseEvidenceSyncVersion:'2026-09-25'};
+  return additions.length;
 }
 function documentRegisterExpenseEvidence(){
   return (DB.documents||[]).filter(document=>/receipt|invoice|expense|supplier|purchase/i.test(`${document.category||''} ${document.name||''}`));
@@ -647,6 +682,8 @@ function fnbExpenseOverlapAmount(){
 }
 deduplicateExpenseLedger(DB);
 normalizePayables(DB);
+syncExpenseEvidence(DB);
+deduplicateExpenseLedger(DB);
 try{localStorage.setItem(DB_KEY,JSON.stringify(DB));}catch(error){console.warn('Expense ledger audit could not be cached locally:',error);}
 let serverRevision = null;
 let serverSyncTimer;
@@ -887,6 +924,13 @@ function fnbSourceTransactions(){
     seen.add(id);
     return {...transaction,id,statementId:statement.id,statementName:statement.name};
   }).filter(Boolean));
+}
+function markFnbLedgerPosted(transactionId){
+  for(const statement of DB.fnbStatements||[]){
+    const transaction=(statement.transactions||[]).find(row=>String(row.id||'')===String(transactionId));
+    if(transaction){transaction.ledgerPosted=true;return true;}
+  }
+  return false;
 }
 function fnbAllocatedCategoryTotals(month=''){
   const totals={};
@@ -1730,7 +1774,7 @@ function viewQuote(id){
   const q=DB.quotes.find(x=>x.id===id),m=DB.meta,t=q.items.reduce((s,i)=>s+i.qty*i.price,0);
   modal(`<h3>Quotation ${q.id}</h3>${viewerControls('quote-preview')}<div class="doc-viewer"><div class="template-doc" id="quote-preview" data-scale="1">
     <div class="quote-top-header"><img class="template-logo" src="uw-official-logo.png" alt="Upholstery Warehouse"><div class="company-details"><b>Upholstery Warehouse (Pty) Ltd</b><br>077 412 8367<br>4, 5th Avenue, Edenvale,<br>Johannesburg.<br>info@upholsterywarehouse.co.za</div></div>
-    <div class="quote-doc-heading"><h1>QUOTATION</h1><div class="doc-number"><b>Quote number:</b> ${q.id} &nbsp; <b>Date generated:</b> ${q.date} &nbsp; <b>Expiry date:</b> ${q.expiry||''}</div></div>
+    <div class="quote-doc-heading"><h1>QUOTATION</h1><div class="doc-number"><span><b>Quote number:</b> ${q.id}</span><span class="quote-dates"><b>Date generated:</b> ${q.date} &nbsp; <b>Expiry date:</b> ${q.expiry||''}</span></div></div>
     <div class="field-grid"><div class="field"><b>Client account name:</b> ${q.customer||''}</div><div class="field"><b>Prepared by:</b> ${q.preparedBy||'Brian Raymond'}</div><div class="field"><b>Client contact name:</b> ${q.contact||''}</div><div class="field"><b>Contact mobile:</b> ${q.phone||''}</div><div class="field"><b>Client telephone:</b> ${q.phone||''}</div><div class="field"><b>Contact email:</b> ${q.email||'info@upholsterywarehouse.co.za'}</div><div class="field"><b>Client email:</b> ${q.email||''}</div></div>
     <div class="quote-reference"><b>Project Reference</b><span>${q.projectReference||''}</span><b>Work type</b><span>${q.workType||'Reupholster'}</span><b>Colour</b><span>${q.colour||'—'}</span></div>
     <div class="template-section">Introduction, notes and specifications</div><div class="quote-introduction">${q.introduction||q.notes||''}</div><div class="template-section">Quote line items</div>
@@ -1942,8 +1986,16 @@ function quoteFromCalc(){
   const g=id=>+document.getElementById(id).value||0;
   const p=DB.priceBook[+document.getElementById('pc-item').value];
   const r=priceCalc(p,g('pc-fqty'),g('pc-fab'),g('pc-mtr'),g('pc-mqty'),g('pc-mat'),g('pc-lqty'),g('pc-lrate'),g('pc-lhrs'),g('pc-mu'),g('pc-extra'));
-  const qid=genNo('GM');
-  DB.quotes.push({id:qid,date:today(),customer:'',contact:'',expiry:'',items:[{desc:`Fabric ${r.fabricQuantity} item(s) + Labor ${r.laborQuantity} item(s) — ${p.desc}`,qty:1,price:r.sell}],notes:'',status:'Draft',terms:true});
+  const qid=nextQuoteNo(today());
+  const items=[
+    {item:'Fabric',desc:`${p.desc} - Fabric`,qty:r.fabricQuantity,price:g('pc-fab')},
+    {item:'Consumables',desc:`${p.desc} - Consumables`,qty:r.consumableQuantity,price:g('pc-mat')},
+    {item:'Labour',desc:`${p.desc} - Labour`,qty:r.laborQuantity,price:g('pc-lrate')*g('pc-lhrs')},
+    ...(g('pc-extra')>0?[{item:'Other',desc:`${p.desc} - Transport / extras`,qty:1,price:g('pc-extra')}]:[]),
+  ];
+  const detailTotal=items.reduce((sum,item)=>sum+item.qty*item.price,0);
+  if(r.sell-detailTotal>0.005)items.push({item:'Other',desc:`${p.desc} - Pricing margin (${g('pc-mu')}%)`,qty:1,price:r.sell-detailTotal});
+  DB.quotes.unshift({id:qid,date:today(),customer:'',contact:'',email:'',expiry:'',projectReference:'',workType:'Reupholster',colour:'',introduction:`${p.desc} pricing calculation. ${r.fabricQuantity} fabric item(s), ${r.laborQuantity} labour item(s), ${r.consumableQuantity} consumables item(s).`,notes:'',items,status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false,calculator:{markup:Number(document.getElementById('pc-mu').value)||0,total:r.sell}});
   save();toast('Quote '+qid+' created from calculation');go('quotes');
 }
 
