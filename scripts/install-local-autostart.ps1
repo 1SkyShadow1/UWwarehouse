@@ -96,7 +96,8 @@ $backupScript = Join-Path $InstallRoot "scripts\backup-local-data.ps1"
 if (-not (Test-Path $backupScript)) {
   throw "The local backup script was not installed at $backupScript."
 }
-$backupAction = New-ScheduledTaskAction -Execute $powershellPath -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$backupScript`""
+$appDataRoot = Join-Path $InstallRoot "data"
+$backupAction = New-ScheduledTaskAction -Execute $powershellPath -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$backupScript`" -AppRoot `"$InstallRoot`" -DataRoot `"$appDataRoot`" -EnvironmentFile `"$InstallRoot\.env`" -SourceRoots `"D:\UW`""
 $backupTrigger = New-ScheduledTaskTrigger -Daily -At "1:00PM"
 $backupSettings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
@@ -110,7 +111,7 @@ Register-ScheduledTask `
   -Trigger $backupTrigger `
   -Settings $backupSettings `
   -Principal $principal `
-  -Description "Creates a daily local backup of UW Accounting state and managed documents, retaining 30 copies." `
+  -Description "Creates a daily verified local backup of UW Accounting state, managed documents, saved PDFs, and source library, retaining 30 copies." `
   -Force | Out-Null
 
 Write-Host "Installed the UW Accounting app at $InstallRoot"
@@ -121,11 +122,10 @@ if ($listener) {
   Start-ScheduledTask -TaskName $taskName
   Write-Host "Registered and started the per-user '$taskName' task. It will also start automatically at sign-in."
 }
-& $powershellPath -NoProfile -ExecutionPolicy Bypass -File $backupScript
+& $powershellPath -NoProfile -ExecutionPolicy Bypass -File $backupScript -AppRoot $InstallRoot -DataRoot $appDataRoot -EnvironmentFile (Join-Path $InstallRoot ".env") -SourceRoots "D:\UW"
 if ($LASTEXITCODE -ne 0) {
   throw "The app is installed, but the immediate local backup failed."
 }
-Start-ScheduledTask -TaskName $backupTaskName
 $desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
 $shortcutPath = Join-Path $desktop "UW Accounting System.lnk"
 $launcher = Join-Path $InstallRoot "scripts\launch-local-app.ps1"
@@ -137,5 +137,5 @@ $shortcut.IconLocation = Join-Path $InstallRoot "public\uw-accounting.ico"
 $shortcut.Description = "Start UW Accounting locally and open the app."
 $shortcut.Save()
 Write-Host "Created the desktop shortcut: $shortcutPath"
-Write-Host "Registered daily backups to D:\UW FOREVER\Local Backups (30 copies retained). Invoices and quotes are saved to their dedicated folders."
+Write-Host "Registered daily verified backups to D:\UW FOREVER\Local Backups (30 copies retained), including installed app files, D:\UW, local data, saved PDFs, and DPAPI-encrypted local configuration."
 Write-Host "Task controls: powershell -NoProfile -ExecutionPolicy Bypass -File `"$InstallRoot\scripts\local-server-task.ps1`" Status|Start|Stop|Uninstall"
