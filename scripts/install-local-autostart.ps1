@@ -11,6 +11,27 @@ if ($InstallRoot -eq $sourceRoot) {
 }
 
 $taskName = "UW Accounting Local Server"
+$backupTaskName = "UW Accounting Daily Local Backup"
+$backupRoot = "D:\UW FOREVER"
+$backupFolders = @(
+  $backupRoot,
+  (Join-Path $backupRoot "Saved Invoices"),
+  (Join-Path $backupRoot "Saved Quotes"),
+  (Join-Path $backupRoot "Local Backups")
+)
+foreach ($folder in $backupFolders) {
+  New-Item -ItemType Directory -Path $folder -Force | Out-Null
+}
+$sourceAccount = "$env:USERDOMAIN\$env:USERNAME"
+& icacls.exe $backupRoot /grant "${sourceAccount}:(OI)(CI)F" /T /C
+if ($LASTEXITCODE -ne 0) {
+  throw "Could not grant $sourceAccount full access to $backupRoot (icacls exit code $LASTEXITCODE)."
+}
+foreach ($folder in $backupFolders) {
+  $probe = Join-Path $folder ".uw-write-check-$PID"
+  [System.IO.File]::WriteAllText($probe, "ok")
+  Remove-Item -LiteralPath $probe -Force
+}
 $alreadyInstalled = Test-Path $InstallRoot
 if ($alreadyInstalled -and -not $Update) {
   throw "The installation folder already exists. Use -Update to update code without overwriting its data."
@@ -71,6 +92,27 @@ Register-ScheduledTask `
   -Description "Starts and restarts the localhost-only UW Accounting server at user sign-in." `
   -Force | Out-Null
 
+$backupScript = Join-Path $InstallRoot "scripts\backup-local-data.ps1"
+if (-not (Test-Path $backupScript)) {
+  throw "The local backup script was not installed at $backupScript."
+}
+$backupAction = New-ScheduledTaskAction -Execute $powershellPath -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$backupScript`""
+$backupTrigger = New-ScheduledTaskTrigger -Daily -At "2:00AM"
+$backupSettings = New-ScheduledTaskSettingsSet `
+  -StartWhenAvailable `
+  -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
+  -MultipleInstances IgnoreNew `
+  -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries
+Register-ScheduledTask `
+  -TaskName $backupTaskName `
+  -Action $backupAction `
+  -Trigger $backupTrigger `
+  -Settings $backupSettings `
+  -Principal $principal `
+  -Description "Creates a daily local backup of UW Accounting state and managed documents, retaining 30 copies." `
+  -Force | Out-Null
+
 Write-Host "Installed the UW Accounting app at $InstallRoot"
 $listener = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue
 if ($listener) {
@@ -79,6 +121,11 @@ if ($listener) {
   Start-ScheduledTask -TaskName $taskName
   Write-Host "Registered and started the per-user '$taskName' task. It will also start automatically at sign-in."
 }
+& $powershellPath -NoProfile -ExecutionPolicy Bypass -File $backupScript
+if ($LASTEXITCODE -ne 0) {
+  throw "The app is installed, but the immediate local backup failed."
+}
+Start-ScheduledTask -TaskName $backupTaskName
 $desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
 $shortcutPath = Join-Path $desktop "UW Accounting System.lnk"
 $launcher = Join-Path $InstallRoot "scripts\launch-local-app.ps1"
@@ -90,4 +137,5 @@ $shortcut.IconLocation = Join-Path $InstallRoot "public\uw-accounting.ico"
 $shortcut.Description = "Start UW Accounting locally and open the app."
 $shortcut.Save()
 Write-Host "Created the desktop shortcut: $shortcutPath"
+Write-Host "Registered daily backups to D:\UW FOREVER\Local Backups (30 copies retained). Invoices and quotes are saved to their dedicated folders."
 Write-Host "Task controls: powershell -NoProfile -ExecutionPolicy Bypass -File `"$InstallRoot\scripts\local-server-task.ps1`" Status|Start|Stop|Uninstall"

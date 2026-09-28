@@ -54,7 +54,9 @@ Open `http://localhost:8080`. Use the same `local-server-task.ps1` with `Status`
 
 The **UW Accounting System** desktop shortcut starts the scheduled server if the local app is not responding, waits for it to become healthy, and opens it in your browser. Use it after closing the browser or if the server was stopped.
 
-The app stores its accounting state and managed documents under `%LOCALAPPDATA%\UWAccountingSystem\data`. The JSON state has a server-side `.bak`, but documents need their own backup. Periodically back up the complete `data` folder to a separate drive or trusted cloud storage. Keep the app open only on a trusted Windows user account; local mode does not require operator sign-in.
+The app stores its accounting state and managed documents under `%LOCALAPPDATA%\UWAccountingSystem\data`; state is atomically written to disk and mirrored to Supabase when available. On sign-in, the installer creates a backup immediately and registers a daily backup task to `D:\UW FOREVER\Local Backups`, retaining 30 timestamped copies of the local state, state `.bak`, managed documents, and saved invoice/quote PDFs. Runtime logs, upload temp files, and `.env` secrets are excluded. Invoice and quote PDFs are separately written under `D:\UW FOREVER\Saved Invoices` and `D:\UW FOREVER\Saved Quotes` whenever records are created or changed and whenever PDFs are exported. These folders are independent of the app installation, so code updates and server restarts do not replace them. The app runs as the current Windows user and the installer verifies that account can read, write, update, and delete files under `D:\UW FOREVER`. Continue to keep an additional backup on a separate physical device or trusted cloud storage for protection against drive failure.
+
+The local server searches both `D:\UW` and `D:\UW FOREVER` when resolving reference files. The installed server process has full access to the latter using the current Windows account; place reference material anywhere below that folder. Keep the app open only on a trusted Windows user account; local mode does not require operator sign-in.
 
 #### Configure the existing local login, Supabase, and Google Drive
 
@@ -67,6 +69,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\UWAcc
 Enter each existing passphrase twice in the hidden prompts. Then provide the Supabase service-role key, Google OAuth client secret, and the existing `UW_TOKEN_ENCRYPTION_KEY` from the prior deployment settings. The Supabase project URL defaults to this system's configured project; the wizard checks the state, session, secret, and document tables plus the private storage bucket before it writes configuration. The local `.env` is ACL-restricted to this Windows user, SYSTEM, and Administrators; secrets are not printed or sent through chat. The wizard restarts the local service and tests both sign-ins, Supabase status, and the Google OAuth redirect. It preserves other local settings such as the Gemini key.
 
 Use the same Supabase workspace (`default` for the existing configuration) and especially the same encryption key to recover saved Google Drive credentials. If the previous key is unavailable, the wizard requires confirmation that Drive must be reauthorized. Run the existing SQL migrations if the table or bucket checks report they are missing. In Google Cloud Console, register `http://localhost:8080` as an authorized JavaScript origin and `http://localhost:8080/api/google-drive/callback` as an authorized redirect URI. After setup, choose **Sign in with Google Drive** in the app if no saved Drive authorization was restored. The local server restores an existing Supabase snapshot into a new empty local data folder before it can synchronize local state, preventing an empty first-run datastore from replacing the cloud backup.
+
+#### Configure Gemini AI on the local server
+
+If AI reviews report that Gemini is not configured, revoke any Gemini key previously pasted into chat or otherwise exposed, create a replacement key, and set it locally without pasting it into chat:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\UWAccountingSystem\scripts\configure-local-gemini.ps1"
+```
+
+Enter the replacement key at the hidden prompt. The script stores it only in the ACL-restricted local `.env`, restarts the local server, and confirms the server recognizes Gemini without printing or sending the key. AI requests are sent from the server directly to Google Gemini; document-review requests include the selected document bytes.
 
 ## Deploying on Vercel
 
@@ -129,7 +141,7 @@ The **Income & Receipts** page is the payment register. Issued receipts use `BBY
 
 Run `supabase/migrations/001_uw_accounting.sql`, `002_document_id_text.sql`, `003_document_workspace_indexes.sql`, and `004_auth_sessions_and_secrets.sql` in the Supabase SQL Editor before enabling production sync. Migration 004 creates the server-only durable session and encrypted-secret tables. The migration intentionally grants no direct table or bucket access to `anon` or `authenticated`; the server uses the service-role secret after the application request has passed its server authorization layer.
 
-Configure the deployment with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_WORKSPACE`, and `SUPABASE_STATE_TABLE`. The service-role secret must exist only in Render/server environment secrets and must never be placed in `index.html`, browser localStorage, or the public repository. Server state writes remain local-first and are asynchronously replicated to Supabase; startup selects the newer valid snapshot by timestamp/revision. The browser continues to use localStorage as an offline cache and calls the application API for cloud save/restore.
+Configure the deployment with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_WORKSPACE`, and `SUPABASE_STATE_TABLE`. The service-role secret must exist only in server environment secrets and must never be placed in `index.html`, browser localStorage, or the public repository. State writes are saved locally first, then queued for Supabase replication. Failed cloud writes remain queued on the server and retry automatically with exponential backoff; `/api/supabase/status` reports whether the latest state is synced or pending. Global Save only reports a completed database save after the server confirms the Supabase upsert. Startup selects the newer valid snapshot by timestamp/revision, preserving local work when Supabase is temporarily unavailable.
 
 For production authentication, also configure `UW_AUTH_USERS_JSON` and `UW_TOKEN_ENCRYPTION_KEY`. Generate the account JSON locally with `node scripts/generate-auth-config.js "LeatherGold2026" "WarehouseSunrise"` and paste the resulting one-line JSON into Render. Generate the encryption key with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` and save it as a private Render secret. Never commit either value. Sessions and Google Drive refresh credentials are encrypted at rest in the Supabase tables using this key; changing the key intentionally invalidates existing durable sessions and stored Drive credentials, requiring reconnection.
 

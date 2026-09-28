@@ -13,6 +13,10 @@ $env:HOST = "127.0.0.1"
 $env:PORT = "8080"
 $env:UW_DATA_DIR = $dataRoot
 $env:UW_DOCUMENTS_DIR = Join-Path $dataRoot "documents"
+$env:UW_SOURCE_DIR = "D:\UW"
+$env:UW_SOURCE_DIRS = "D:\UW FOREVER"
+$env:UW_INVOICES_DIR = "D:\UW FOREVER\Saved Invoices"
+$env:UW_QUOTES_DIR = "D:\UW FOREVER\Saved Quotes"
 Set-Location $root
 
 while ($true) {

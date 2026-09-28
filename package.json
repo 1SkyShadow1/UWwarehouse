@@ -9,8 +9,8 @@
     "dev": "node server.js",
     "install:local-autostart": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-local-autostart.ps1",
     "configure:local-integrations": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-integrations.ps1",
-    "test": "node scripts/test-local-auth-hashing.js && node scripts/supabase-bootstrap-test.js && node scripts/vercel-smoke-test.js && node scripts/smoke-test.js",
-    "test:local-setup": "node scripts/test-local-auth-hashing.js && node scripts/supabase-bootstrap-test.js",
+    "test": "node scripts/test-local-auth-hashing.js && node scripts/supabase-bootstrap-test.js && node scripts/supabase-state-sync-test.js && node scripts/persistence-test.js && node scripts/vercel-smoke-test.js && node scripts/smoke-test.js",
+    "test:local-setup": "node scripts/test-local-auth-hashing.js && node scripts/supabase-bootstrap-test.js && node scripts/supabase-state-sync-test.js",
     "test:server": "node scripts/smoke-test.js",
     "test:vercel": "node scripts/vercel-smoke-test.js",
     "test:documents": "node scripts/smoke-test.js"

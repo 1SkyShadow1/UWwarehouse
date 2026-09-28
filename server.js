@@ -16,9 +16,14 @@ const isVercel = process.env.VERCEL === '1';
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
+const additionalSourceRoots = String(process.env.UW_SOURCE_DIRS || '')
+  .split(';')
+  .map(root => root.trim())
+  .filter(Boolean);
 const adjacentSourceRoot = path.resolve(rootDir, '..', '..', '..', 'UWwarehouse');
 const sourceRoots = [...new Set([
   sourceRoot,
+  ...additionalSourceRoots,
   adjacentSourceRoot,
   path.join(adjacentSourceRoot, 'UW'),
   path.join(adjacentSourceRoot, 'UW INVOICES-RECEIPTS&EXPENSES'),
@@ -54,6 +59,15 @@ const documentsRoot = canUseDirectory(configuredDocumentsRoot)
   ? configuredDocumentsRoot
   : (console.warn(`UW_DOCUMENTS_DIR is not writable: ${configuredDocumentsRoot}. Falling back to ${path.join(dataRoot, 'documents')}.`), path.join(dataRoot, 'documents'));
 const documentsRootFallback = path.resolve(documentsRoot) !== path.resolve(configuredDocumentsRoot);
+const invoiceOutputRoot = process.env.UW_INVOICES_DIR || path.join(dataRoot, 'invoices');
+const quoteOutputRoot = process.env.UW_QUOTES_DIR || path.join(dataRoot, 'quotes');
+const resolveWritableOutputDirectory = (configured, fallback, label) => {
+  if (canUseDirectory(configured)) return configured;
+  console.warn(`${label} output directory is unavailable: ${configured}. Falling back to ${fallback}.`);
+  return canUseDirectory(fallback) ? fallback : configured;
+};
+const invoiceOutputDir = resolveWritableOutputDirectory(invoiceOutputRoot, path.join(dataRoot, 'invoices'), 'Invoice');
+const quoteOutputDir = resolveWritableOutputDirectory(quoteOutputRoot, path.join(dataRoot, 'quotes'), 'Quote');
 const sourceSearchCache = new Map();
 let sourceFileIndex;
 let sourceStemIndex;
@@ -201,6 +215,13 @@ let stateSnapshot;
 let stateWrite = Promise.resolve();
 let bootstrapReady = Promise.resolve();
 let bootstrapComplete = true;
+let pendingSupabaseSnapshot = null;
+let supabaseRetryTimer = null;
+let supabaseSyncInFlight = false;
+let supabaseRetryAttempt = 0;
+let supabaseLastSyncedRevision = null;
+let supabaseLastSyncedAt = null;
+let supabaseLastSyncError = '';
 const ensureStorage = () => {
   fs.mkdirSync(dataRoot, { recursive: true });
   fs.mkdirSync(documentsRoot, { recursive: true });
@@ -228,16 +249,48 @@ const atomicWrite = (snapshot) => {
   fs.writeFileSync(temp, JSON.stringify(snapshot, null, 2), { encoding: 'utf8', flag: 'wx' });
   fs.renameSync(temp, stateFile);
 };
+const safeExportId = id => String(id || '').trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/[. ]+$/g, '').slice(0, 100) || 'document';
+const writeInvoiceQuotePdf = async (kind, record, meta) => {
+  const outputDir = kind === 'invoice' ? invoiceOutputDir : quoteOutputDir;
+  const filename = `${kind}-${safeExportId(record.id)}.pdf`;
+  const destination = path.join(outputDir, filename);
+  const temporary = `${destination}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  const pdf = await createDocumentPdf({ kind, record, meta });
+  try {
+    fs.writeFileSync(temporary, pdf, { flag: 'wx' });
+    fs.renameSync(temporary, destination);
+    return destination;
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
+};
+const persistInvoiceQuoteDocuments = async (previousData, nextData) => {
+  const exports = { invoices: 0, quotes: 0, errors: [] };
+  const meta = nextData.meta || {};
+  for (const [kind, collection] of [['invoice', 'invoices'], ['quote', 'quotes']]) {
+    const previousById = new Map((Array.isArray(previousData[collection]) ? previousData[collection] : [])
+      .map(record => [String(record?.id || ''), JSON.stringify(record)]));
+    const records = Array.isArray(nextData[collection]) ? nextData[collection] : [];
+    for (const record of records) {
+      if (!record || !record.id || previousById.get(String(record.id)) === JSON.stringify(record)) continue;
+      try {
+        await writeInvoiceQuotePdf(kind, record, meta);
+        exports[collection] += 1;
+      } catch (error) {
+        exports.errors.push(`${kind} ${safeExportId(record.id)}: ${error.message}`);
+      }
+    }
+  }
+  return exports;
+};
 const queueStateWrite = (next) => {
-  stateWrite = stateWrite.then(() => {
+  const write = stateWrite.then(() => {
     atomicWrite(next);
     stateSnapshot = next;
-    return syncSnapshotToSupabase(next).catch(error => {
-      console.error(error.message);
-      return next;
-    });
+    return next;
   });
-  return stateWrite;
+  stateWrite = write.catch(() => {});
+  return write;
 };
 const supabaseConfigured = () => Boolean(supabaseUrl && supabaseServiceKey);
 const supabaseHeaders = () => ({
@@ -354,6 +407,61 @@ const syncSnapshotToSupabase = async snapshot => {
   if (!response.ok) throw new Error(`Supabase state sync failed (${response.status}).`);
   return snapshot;
 };
+const supabaseSyncStatus = () => ({
+  configured: supabaseConfigured(),
+  status: !supabaseConfigured()
+    ? 'not_configured'
+    : pendingSupabaseSnapshot || supabaseSyncInFlight
+      ? 'pending'
+      : supabaseLastSyncError
+        ? 'pending'
+        : supabaseLastSyncedRevision !== null && supabaseLastSyncedRevision === stateSnapshot?.revision
+          ? 'synced'
+          : 'idle',
+  pendingRevision: pendingSupabaseSnapshot?.revision ?? null,
+  lastSyncedRevision: supabaseLastSyncedRevision,
+  lastSyncedAt: supabaseLastSyncedAt,
+  lastError: supabaseLastSyncError || null,
+});
+const scheduleSupabaseRetry = delay => {
+  if (supabaseRetryTimer || !pendingSupabaseSnapshot) return;
+  supabaseRetryTimer = setTimeout(() => {
+    supabaseRetryTimer = null;
+    void flushPendingSupabaseSnapshot();
+  }, delay);
+  supabaseRetryTimer.unref?.();
+};
+const enqueueSupabaseSnapshot = snapshot => {
+  if (!supabaseConfigured()) return;
+  if (!pendingSupabaseSnapshot || snapshot.revision >= pendingSupabaseSnapshot.revision) {
+    pendingSupabaseSnapshot = snapshot;
+  }
+  scheduleSupabaseRetry(0);
+};
+const flushPendingSupabaseSnapshot = async () => {
+  if (supabaseSyncInFlight || !pendingSupabaseSnapshot || !supabaseConfigured()) return;
+  const snapshot = pendingSupabaseSnapshot;
+  supabaseSyncInFlight = true;
+  try {
+    await syncSnapshotToSupabase(snapshot);
+    supabaseLastSyncedRevision = snapshot.revision;
+    supabaseLastSyncedAt = new Date().toISOString();
+    supabaseLastSyncError = '';
+    if (pendingSupabaseSnapshot?.revision <= snapshot.revision) pendingSupabaseSnapshot = null;
+    supabaseRetryAttempt = 0;
+    if (pendingSupabaseSnapshot) scheduleSupabaseRetry(0);
+  } catch (error) {
+    supabaseLastSyncError = error.message || 'Supabase state sync failed.';
+    console.error(supabaseLastSyncError);
+    if (!pendingSupabaseSnapshot || pendingSupabaseSnapshot.revision < snapshot.revision) {
+      pendingSupabaseSnapshot = snapshot;
+    }
+    supabaseRetryAttempt = Math.min(supabaseRetryAttempt + 1, 6);
+    scheduleSupabaseRetry(Math.min(60000, 1000 * (2 ** (supabaseRetryAttempt - 1))));
+  } finally {
+    supabaseSyncInFlight = false;
+  }
+};
 const restoreSnapshotFromSupabase = async () => {
   if (!supabaseConfigured()) return;
   const response = await fetch(
@@ -378,6 +486,8 @@ const restoreSnapshotFromSupabase = async () => {
       data: remote.data,
     };
     atomicWrite(stateSnapshot);
+    supabaseLastSyncedRevision = stateSnapshot.revision;
+    supabaseLastSyncedAt = stateSnapshot.updatedAt;
     console.log('Supabase data restored into a new local installation.');
     return;
   }
@@ -391,11 +501,16 @@ const restoreSnapshotFromSupabase = async () => {
       data: remote.data,
     };
     atomicWrite(stateSnapshot);
+    supabaseLastSyncedRevision = stateSnapshot.revision;
+    supabaseLastSyncedAt = stateSnapshot.updatedAt;
     return;
   }
   if (local.revision > Number(remote.revision || 0) || localUpdated > remoteUpdated) {
-    await syncSnapshotToSupabase(local);
+    enqueueSupabaseSnapshot(local);
+    return;
   }
+  supabaseLastSyncedRevision = local.revision;
+  supabaseLastSyncedAt = local.updatedAt;
 };
 const syncDocumentToSupabase = async (id, file) => {
   if (!supabaseConfigured()) return '';
@@ -691,6 +806,8 @@ const findSourceFile = (requestedPath, requestedName = '') => {
   if (sourceSearchCache.has(cacheKey)) return sourceSearchCache.get(cacheKey);
   const candidates = [];
   if (rawPath && !/^attached statement$/i.test(rawPath)) {
+    const absolutePath = path.resolve(rawPath);
+    if (path.isAbsolute(rawPath) && sourcePathWithin(absolutePath)) candidates.push(absolutePath);
     const relative = rawPath.replace(/^[A-Za-z]:[\\/]+/i, '').replace(/^UW[\\/]+/i, '').replace(/\\/g, '/').replace(/^\/+/, '');
     sourceRoots.forEach(root => candidates.push(path.join(root, relative)));
   }
@@ -710,6 +827,7 @@ const findSourceFile = (requestedPath, requestedName = '') => {
       while (stack.length) {
         const directory = stack.pop();
         for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+          if (entry.isDirectory() && entry.name.toLowerCase() === 'local backups') continue;
           const candidate = path.join(directory, entry.name);
           if (entry.isDirectory()) stack.push(candidate);
           else if (entry.isFile()) {
@@ -964,7 +1082,12 @@ app.put('/api/state', requireApiKey, async (req, res) => {
   try {
     const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data };
     await queueStateWrite(next);
-    res.json(next);
+    enqueueSupabaseSnapshot(next);
+    const documentExports = await persistInvoiceQuoteDocuments(current.data, next.data);
+    if (documentExports.errors.length) {
+      console.warn('Some invoice/quote PDFs could not be saved:', documentExports.errors.join('; '));
+    }
+    res.json({ ...next, documentExports, supabaseSync: supabaseSyncStatus() });
   } catch (error) {
     console.error('State write failed:', error);
     res.status(500).json({ error: 'State could not be saved.' });
@@ -987,7 +1110,12 @@ app.post('/api/state/restore', requireApiKey, async (req, res) => {
   try {
     const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data: incoming.data };
     await queueStateWrite(next);
-    res.json(next);
+    enqueueSupabaseSnapshot(next);
+    const documentExports = await persistInvoiceQuoteDocuments(current.data, next.data);
+    if (documentExports.errors.length) {
+      console.warn('Some restored invoice/quote PDFs could not be saved:', documentExports.errors.join('; '));
+    }
+    res.json({ ...next, documentExports, supabaseSync: supabaseSyncStatus() });
   } catch (error) {
     res.status(500).json({ error: 'State restore failed.' });
   }
@@ -1000,10 +1128,11 @@ app.post('/api/documents/export-pdf', requireApiKey, async (req, res) => {
     return res.status(400).json({ error: 'A valid invoice or quote is required for PDF export.' });
   }
   try {
-    const pdf = await createDocumentPdf({ kind, record, meta: ensureStorage().data.meta || {} });
-    const safeId = String(record.id).replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80);
+    const snapshot = ensureStorage();
+    const outputPath = await writeInvoiceQuotePdf(kind, record, snapshot.data.meta || {});
+    const pdf = await fs.promises.readFile(outputPath);
     res.type('application/pdf');
-    res.set('Content-Disposition', `attachment; filename="${kind}-${safeId}.pdf"`);
+    res.set('Content-Disposition', `attachment; filename="${path.basename(outputPath)}"`);
     res.set('Cache-Control', 'no-store');
     return res.send(pdf);
   } catch (error) {
@@ -1541,7 +1670,14 @@ app.get('/api/supabase/status', requireApiKey, async (_, res) => {
       { headers: supabaseHeaders(), signal: AbortSignal.timeout(10000) },
     );
     if (!response.ok) return res.status(502).json({ configured: true, connected: false, error: `Supabase returned ${response.status}.` });
-    return res.json({ configured: true, connected: true, workspace: supabaseWorkspace, stateTable: supabaseStateTable, documentBucket: supabaseDocumentBucket });
+    return res.json({
+      configured: true,
+      connected: true,
+      workspace: supabaseWorkspace,
+      stateTable: supabaseStateTable,
+      documentBucket: supabaseDocumentBucket,
+      stateSync: supabaseSyncStatus(),
+    });
   } catch (error) {
     return res.status(502).json({ configured: true, connected: false, error: error.message || 'Supabase connection failed.' });
   }

@@ -727,6 +727,7 @@ let serverRetryAttempt = 0;
 let serverSyncInFlight = false;
 let serverSyncAvailable = false;
 let serverSyncStartedAt=0;
+let serverSyncError=null;
 let serverConflict = (()=>{try{return JSON.parse(localStorage.getItem('UW_STATE_CONFLICT')||'null')}catch(_){return null}})();
 let pendingAiReview=null;
 let scannedReviewBatch=null;
@@ -759,6 +760,12 @@ async function refreshAuthSession(){
   if(payload.csrfToken)sessionStorage.setItem('UW_CSRF_TOKEN',payload.csrfToken);
   return true;
 }
+async function stateRequestError(response,fallback){
+  const payload=await response.json().catch(()=>({}));
+  const error=new Error(`${payload.error||fallback} (HTTP ${response.status})`);
+  error.status=response.status;
+  return error;
+}
 function geminiReviewComplete(doc){
   return Boolean(doc?.aiReview?.successful||(
     doc?.reviewStatus==='AI reviewed'&&
@@ -775,10 +782,11 @@ async function initializeServerSync(){
     if(response.status===401&&await refreshAuthSession()){
       response=await fetch('/api/state',{headers:{Accept:'application/json'},credentials:'include'});
     }
-    if(!response.ok) throw new Error('server state unavailable');
+    if(!response.ok) throw await stateRequestError(response,'Server state unavailable');
     const snapshot=await response.json();
     serverRevision=Number(snapshot.revision||0);
     serverSyncAvailable=true;
+    serverSyncError=null;
     serverRetryAttempt=0;
     clearTimeout(serverRetryTimer);
     const localSavedAt=Date.parse(DB.meta?.localSavedAt||'');
@@ -801,6 +809,7 @@ async function initializeServerSync(){
     setTimeout(()=>queueServerStateSave(),0);
   }catch(error){
     serverSyncAvailable=false;
+    serverSyncError=error;
     console.warn('Server persistence unavailable; continuing offline.',error);
     clearTimeout(serverRetryTimer);
     const delay=Math.min(30000,2000*2**serverRetryAttempt);
@@ -852,12 +861,28 @@ async function syncServerState(force=false,silent=false){
       serverSyncAvailable=false;
       if(!silent)toast('A newer server copy exists. Your local changes were preserved; review the conflict in Settings.');
       return false;
-    }else if(!response.ok) throw new Error(payload.error||'Server save failed');
-    else {serverRevision=payload.revision;serverSyncAvailable=true;return true;}
+    }else if(!response.ok) throw await stateRequestError(response,'Server save failed');
+    else {
+      serverRevision=payload.revision;
+      serverSyncAvailable=true;
+      serverSyncError=null;
+      const exportErrors=payload.documentExports?.errors;
+      if(Array.isArray(exportErrors)&&exportErrors.length){
+        console.error('Invoice/quote PDFs could not be saved:',exportErrors);
+        if(!silent)toast('Accounting data was saved, but an invoice or quote PDF could not be saved to its folder');
+      }
+      const cloudSync=payload.supabaseSync||{configured:false,status:'not_configured'};
+      return {
+        serverSaved:true,
+        supabaseConfigured:Boolean(cloudSync.configured),
+        cloudSynced:Boolean(cloudSync.configured&&cloudSync.status==='synced'),
+      };
+    }
   }catch(error){
     serverSyncAvailable=false;
+    serverSyncError=error;
     console.warn('Server save failed; offline fallback enabled.',error);
-    if(!silent)toast('Saved locally; server sync is unavailable');
+    if(!silent)toast(error.status===401?'Saved locally — sign in again to sync with the server':'Saved locally; server sync is unavailable');
     clearTimeout(serverRetryTimer);
     serverRetryTimer=setTimeout(initializeServerSync,Math.min(30000,2000*2**serverRetryAttempt));
     return false;
@@ -1183,11 +1208,15 @@ async function globalSave(){
     }
     if(serverSyncAvailable&&serverRevision!==null){
       const synced=await syncServerState(true,true);
-      if(synced)toast('Global save complete — local and database copies updated');
+      if(synced?.cloudSynced)toast('Global save complete — local and database copies updated');
+      else if(synced?.serverSaved&&synced.supabaseConfigured)toast('Saved locally and on this computer — database sync is queued and will retry');
+      else if(synced?.serverSaved)toast('Saved locally and on this computer — Supabase is not configured');
       else if(serverConflict)toast('Saved locally — a database conflict needs review in Settings');
-      else toast('Saved locally — database sync is temporarily unavailable');
+      else if(serverSyncError?.status===401)toast('Saved locally — sign in again to sync with the server');
+      else toast('Saved locally — server sync is unavailable and will retry');
     }else{
-      toast('Saved locally — database sync is temporarily unavailable');
+      if(serverSyncError?.status===401)toast('Saved locally — sign in again to sync with the server');
+      else toast('Saved locally — server sync is unavailable and will retry');
     }
   }catch(error){
     console.error('Global save failed:',error);
@@ -1216,7 +1245,9 @@ async function cloudSync(direction){
       const payload=await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(payload.error||'Cloud save failed');
       serverRevision=Number(payload.revision||serverRevision||0);
-      toast('Supabase-backed cloud state saved');
+      if(payload.supabaseSync?.configured&&payload.supabaseSync.status==='synced')toast('Supabase-backed cloud state saved');
+      else if(payload.supabaseSync?.configured)toast('Saved on this computer — Supabase sync is queued and will retry');
+      else toast('Saved on this computer — Supabase is not configured');
     }else{
       const response=await fetch('/api/state',{headers:{Accept:'application/json'}});
       const payload=await response.json().catch(()=>({}));
@@ -1240,7 +1271,12 @@ async function supabaseStatus(){
     const response=await fetch('/api/supabase/status',{headers:{Accept:'application/json'}});
     const data=await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(data.error||`Supabase connection failed (${response.status})`);
-    toast(`Supabase connected · ${data.stateTable} · workspace ${data.workspace}`);
+    const syncMessage=data.stateSync?.status==='pending'
+      ? ' · latest save is queued for retry'
+      : data.stateSync?.status==='synced'
+        ? ' · latest save is synced'
+        : '';
+    toast(`Supabase connected · ${data.stateTable} · workspace ${data.workspace}${syncMessage}`);
     render();
     return data;
   }catch(error){toast(error.message||'Supabase connection failed');return null;}
