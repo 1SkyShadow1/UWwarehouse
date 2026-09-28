@@ -1351,30 +1351,61 @@ const getAiModel = (providerOverride) => {
   return configured;
 };
 
+const geminiModelCooldowns = new Map();
+const GEMINI_DEFAULT_MODEL_COOLDOWN_MS = 60 * 1000;
+const GEMINI_MODEL_UNAVAILABLE_COOLDOWN_MS = 30 * 60 * 1000;
+
 const getGeminiModelAttempts = (configuredModel) => {
-  const attempts = [];
   const preferred = String(configuredModel || '').trim();
   const validFallbacks = [
-    'gemini-3.6-flash',
     'gemini-flash-latest',
+    'gemini-3.8-flash',
+    'gemini-3.7-flash',
     'gemini-3.5-flash',
+    'gemini-2.5-flash',
+    'gemini-flash-lite-latest',
+    'gemini-3.1-flash-lite',
     'gemini-3.5-flash-lite',
+    'gemini-2.5-flash-lite',
   ];
-
-  if (preferred) attempts.push(preferred);
-  for (const candidate of validFallbacks) {
-    if (candidate !== preferred) attempts.push(candidate);
-  }
-
-  if (!attempts.length) attempts.push('gemini-3.6-flash');
-  return [...new Set(attempts)];
+  const attempts = [...new Set([preferred || 'gemini-3.6-flash', ...validFallbacks])];
+  const available = attempts.filter(model => (geminiModelCooldowns.get(model) || 0) <= Date.now());
+  if (available.length) return available;
+  const earliestCooldownModel = attempts.reduce((earliest, model) => (
+    (geminiModelCooldowns.get(model) || 0) < (geminiModelCooldowns.get(earliest) || 0) ? model : earliest
+  ), attempts[0]);
+  return [earliestCooldownModel];
 };
 
 const shouldFailOverGeminiModel = (error, response) => {
   const status = Number(response?.status || error?.statusCode || 0);
   const message = String(error?.message || '').toLowerCase();
+  if ([400, 401, 403].includes(status)) return false;
   return [408, 429, 500, 502, 503, 504].includes(status)
-    || /quota|rate.?limit|resource exhausted|too many requests|temporar|overloaded|capacity|unavailable|not found|no longer available|model not found/.test(message);
+    || error?.name === 'AbortError'
+    || /quota|rate.?limit|resource exhausted|too many requests|temporar|overloaded|capacity|unavailable|timed? ?out|fetch failed|not found|no longer available|model not found/.test(message);
+};
+
+const geminiRetryDelayMs = (errorPayload, response, unavailable = false) => {
+  const retryAfterHeader = response?.headers?.get?.('retry-after') || '';
+  const retryAfter = Number(retryAfterHeader);
+  if (retryAfter > 0) return Math.min(24 * 60 * 60 * 1000, retryAfter * 1000);
+  const retryAfterDate = Date.parse(retryAfterHeader);
+  if (Number.isFinite(retryAfterDate) && retryAfterDate > Date.now()) {
+    return Math.min(24 * 60 * 60 * 1000, retryAfterDate - Date.now());
+  }
+  const retryInfo = (errorPayload?.error?.details || []).find(detail =>
+    /RetryInfo/i.test(String(detail?.['@type'] || '')),
+  );
+  const retryDelay = String(retryInfo?.retryDelay || '').match(/^(\d+(?:\.\d+)?)s$/);
+  if (retryDelay) return Math.min(24 * 60 * 60 * 1000, Number(retryDelay[1]) * 1000);
+  return unavailable ? GEMINI_MODEL_UNAVAILABLE_COOLDOWN_MS : GEMINI_DEFAULT_MODEL_COOLDOWN_MS;
+};
+
+const coolDownGeminiModel = (model, error, response, errorPayload) => {
+  const status = Number(response?.status || error?.statusCode || 0);
+  const unavailable = status === 404 || /\bnot found\b|no longer available/.test(String(error?.message || '').toLowerCase());
+  geminiModelCooldowns.set(model, Date.now() + geminiRetryDelayMs(errorPayload, response, unavailable));
 };
 
 const extractAiText = payload => {
@@ -1461,7 +1492,9 @@ const callGeminiChat = async (prompt, requestContext = null) => {
       if (!response.ok) {
         const message = payload?.error?.message || 'Gemini request failed.';
         const error = new Error(message);
-        if (shouldFailOverGeminiModel(error, response) && model !== modelAttempts[modelAttempts.length - 1]) {
+        const shouldFailOver = shouldFailOverGeminiModel(error, response);
+        if (shouldFailOver) coolDownGeminiModel(model, error, response, payload);
+        if (shouldFailOver && model !== modelAttempts[modelAttempts.length - 1]) {
           lastError = new Error(message);
           continue;
         }
@@ -1482,6 +1515,7 @@ const callGeminiChat = async (prompt, requestContext = null) => {
     } catch (error) {
       lastError = error;
       if (shouldFailOverGeminiModel(error) && model !== modelAttempts[modelAttempts.length - 1]) {
+        coolDownGeminiModel(model, error);
         continue;
       }
       throw error;
@@ -1543,7 +1577,9 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const error = new Error(payload?.error?.message || 'Gemini document review failed.');
-        if (shouldFailOverGeminiModel(error, response) && model !== modelAttempts[modelAttempts.length - 1]) {
+        const shouldFailOver = shouldFailOverGeminiModel(error, response);
+        if (shouldFailOver) coolDownGeminiModel(model, error, response, payload);
+        if (shouldFailOver && model !== modelAttempts[modelAttempts.length - 1]) {
           lastError = error;
           continue;
         }
@@ -1567,6 +1603,7 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
     } catch (error) {
       lastError = error;
       if (!shouldFailOverGeminiModel(error) || model === modelAttempts[modelAttempts.length - 1]) throw error;
+      coolDownGeminiModel(model, error);
     }
   }
   throw lastError || new Error('Gemini document review failed.');

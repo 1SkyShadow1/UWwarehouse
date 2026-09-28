@@ -580,24 +580,22 @@ function extractedDocumentAmount(document){
 }
 function extractedDocumentDate(document){
   const review=document.aiReview||document.extraction||{};
-  return String(review.documentDate||review.date||document.date||'').slice(0,10);
+  return String(review.documentDate||review.date||document.scanDate||document.date||scannedDate(document)||'').slice(0,10);
 }
 function scanFnbMatch(document, transactions=fnbSourceTransactions()){
-  const amount=extractedDocumentAmount(document), date=Date.parse(extractedDocumentDate(document));
-  if(!(amount>0)||!Number.isFinite(date))return null;
-  return transactions
-    .map(transaction=>({
-      transaction,
-      amountDelta:Math.abs(Math.abs(fnbTransactionAmount(transaction))-amount),
-      dateDelta:Math.abs(Date.parse(String(transaction.date||''))-date)
-    }))
-    .filter(candidate=>fnbTransactionAmount(candidate.transaction)<0&&candidate.amountDelta<0.02&&candidate.dateDelta<=3*86400000)
-    .sort((a,b)=>a.amountDelta-b.amountDelta||a.dateDelta-b.dateDelta)[0]||null;
+  const result=crossReferenceFnbPurchase(document,transactions);
+  return result.accountConfirmed===true?{transaction:result.transaction}:null;
 }
 function crossReferenceSummary(month=''){
   const scans=scannedExpenseEvidence().filter(document=>geminiReviewComplete(document));
   const reviewedScans=scans.filter(document=>extractedDocumentAmount(document)>0&&extractedDocumentDate(document));
-  const matchedScans=reviewedScans.map(document=>({document,match:scanFnbMatch(document)})).filter(row=>row.match);
+  const matchedTransactionIds=new Set();
+  const matchedScans=reviewedScans.map(document=>({document,match:scanFnbMatch(document)})).filter(row=>{
+    const transactionId=String(row.match?.transaction?.id||'');
+    if(!transactionId||matchedTransactionIds.has(transactionId))return false;
+    matchedTransactionIds.add(transactionId);
+    return true;
+  });
   const fnb=fnbReconciliationSummary(month);
   return {
     scanCount:scans.length,
@@ -725,6 +723,8 @@ let serverSyncTimer;
 let serverRetryTimer;
 let serverRetryAttempt = 0;
 let serverSyncInFlight = false;
+let serverSyncPromise = null;
+let serverSyncPending = false;
 let serverSyncAvailable = false;
 let serverSyncStartedAt=0;
 let serverSyncError=null;
@@ -841,52 +841,79 @@ async function synchronizeRemoteDocuments(){
   }catch(error){console.warn('Remote document catalog unavailable; source resolver remains active.',error);}
 }
 function queueServerStateSave(){
+  serverSyncPending=true;
   if(!serverSyncAvailable||serverSyncInFlight)return;
   clearTimeout(serverSyncTimer);
   serverSyncTimer=setTimeout(syncServerState,900);
 }
 async function syncServerState(force=false,silent=false){
-  if((!serverSyncAvailable&&!force)||serverSyncInFlight)return false;
+  if(serverSyncPromise){
+    serverSyncPending=true;
+    if(!force)return false;
+    await serverSyncPromise;
+    if(serverConflict)return false;
+    clearTimeout(serverSyncTimer);
+    return syncServerState(force,silent);
+  }
+  if((!serverSyncAvailable&&!force)){serverSyncPending=true;return false;}
+  if(serverSyncInFlight){serverSyncPending=true;return false;}
+  clearTimeout(serverSyncTimer);
   serverSyncInFlight=true;
-  try{
-    let response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
-    if([401,403].includes(response.status)&&await refreshAuthSession()){
-      response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
-    }
-    const payload=await response.json().catch(()=>({}));
-    if(response.status===409&&payload.snapshot){
-      serverRevision=payload.snapshot.revision;
-      serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:payload.snapshot.data||{},revision:payload.snapshot.revision};
-      localStorage.setItem('UW_STATE_CONFLICT',JSON.stringify(serverConflict));
-      serverSyncAvailable=false;
-      if(!silent)toast('A newer server copy exists. Your local changes were preserved; review the conflict in Settings.');
-      return false;
-    }else if(!response.ok) throw await stateRequestError(response,'Server save failed');
-    else {
-      serverRevision=payload.revision;
-      serverSyncAvailable=true;
-      serverSyncError=null;
-      const exportErrors=payload.documentExports?.errors;
-      if(Array.isArray(exportErrors)&&exportErrors.length){
-        console.error('Invoice/quote PDFs could not be saved:',exportErrors);
-        if(!silent)toast('Accounting data was saved, but an invoice or quote PDF could not be saved to its folder');
+  serverSyncPending=false;
+  const syncPromise=(async()=>{
+    try{
+      let response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
+      if([401,403].includes(response.status)&&await refreshAuthSession()){
+        response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
       }
-      const cloudSync=payload.supabaseSync||{configured:false,status:'not_configured'};
-      return {
-        serverSaved:true,
-        supabaseConfigured:Boolean(cloudSync.configured),
-        cloudSynced:Boolean(cloudSync.configured&&cloudSync.status==='synced'),
-      };
+      const payload=await response.json().catch(()=>({}));
+      if(response.status===409&&payload.snapshot){
+        serverRevision=payload.snapshot.revision;
+        serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:payload.snapshot.data||{},revision:payload.snapshot.revision};
+        localStorage.setItem('UW_STATE_CONFLICT',JSON.stringify(serverConflict));
+        serverSyncAvailable=false;
+        serverSyncPending=false;
+        if(!silent)toast('A newer server copy exists. Your local changes were preserved; review the conflict in Settings.');
+        return false;
+      }else if(!response.ok) throw await stateRequestError(response,'Server save failed');
+      else {
+        serverRevision=payload.revision;
+        serverSyncAvailable=true;
+        serverSyncError=null;
+        const exportErrors=payload.documentExports?.errors;
+        if(Array.isArray(exportErrors)&&exportErrors.length){
+          console.error('Invoice/quote PDFs could not be saved:',exportErrors);
+          if(!silent)toast('Accounting data was saved, but an invoice or quote PDF could not be saved to its folder');
+        }
+        const cloudSync=payload.supabaseSync||{configured:false,status:'not_configured'};
+        return {
+          serverSaved:true,
+          supabaseConfigured:Boolean(cloudSync.configured),
+          cloudSynced:Boolean(cloudSync.configured&&cloudSync.status==='synced'),
+        };
+      }
+    }catch(error){
+      serverSyncAvailable=false;
+      serverSyncPending=true;
+      serverSyncError=error;
+      console.warn('Server save failed; offline fallback enabled.',error);
+      if(!silent)toast(error.status===401?'Saved locally — sign in again to sync with the server':'Saved locally; server sync is unavailable');
+      clearTimeout(serverRetryTimer);
+      serverRetryTimer=setTimeout(initializeServerSync,Math.min(30000,2000*2**serverRetryAttempt));
+      return false;
+    }finally{
+      serverSyncInFlight=false;
+      if(serverSyncPending&&serverSyncAvailable&&!serverConflict){
+        clearTimeout(serverSyncTimer);
+        serverSyncTimer=setTimeout(syncServerState,0);
+      }
     }
-  }catch(error){
-    serverSyncAvailable=false;
-    serverSyncError=error;
-    console.warn('Server save failed; offline fallback enabled.',error);
-    if(!silent)toast(error.status===401?'Saved locally — sign in again to sync with the server':'Saved locally; server sync is unavailable');
-    clearTimeout(serverRetryTimer);
-    serverRetryTimer=setTimeout(initializeServerSync,Math.min(30000,2000*2**serverRetryAttempt));
-    return false;
-  }finally{serverSyncInFlight=false;}
+  })();
+  serverSyncPromise=syncPromise;
+  try{return await syncPromise;}
+  finally{
+    if(serverSyncPromise===syncPromise)serverSyncPromise=null;
+  }
 }
 function resolveStateConflict(choice){
   if(!serverConflict)return;
@@ -1084,6 +1111,44 @@ function mergeBundledFnbState(db){
   normalizeFnbAllocations(db);
   return db;
 }
+function mergeScannedDocumentState(previousDocuments,bundledDocuments){
+  const previous=Array.isArray(previousDocuments)?previousDocuments:[];
+  const bundled=Array.isArray(bundledDocuments)?bundledDocuments:[];
+  const identity=document=>{
+    const hash=String(document?.hash||document?.contentHash||'').trim().toLowerCase();
+    if(hash)return `hash:${hash}`;
+    const id=String(document?.id||'').trim().toLowerCase();
+    if(id)return `id:${id}`;
+    return `file:${String(document?.name||'').trim().toLowerCase()}|${Number(document?.size)||0}`;
+  };
+  const previousByIdentity=new Map(previous.map(document=>[identity(document),document]));
+  const bundledIdentities=new Set(bundled.map(identity));
+  const refreshedBundled=bundled.map(document=>{
+    const old=previousByIdentity.get(identity(document))||{};
+    const aiReviewed=Boolean(old.aiReview?.successful||old.reviewStatus==='AI reviewed');
+    const reviewed=aiReviewed||Boolean(old.fnbReview);
+    return {
+      ...document,
+      reviewStatus:old.reviewStatus||document.reviewStatus,
+      includedInTotals:old.includedInTotals??document.includedInTotals??false,
+      reviewedAt:old.reviewedAt||document.reviewedAt||'',
+      aiReview:old.aiReview||document.aiReview,
+      fnbReview:old.fnbReview||document.fnbReview,
+      ...(reviewed?{
+        scanDate:old.scanDate??document.scanDate,
+        category:old.category??document.category,
+        merchant:old.merchant??document.merchant,
+        vendor:old.vendor??document.vendor,
+        amount:old.amount??document.amount,
+        currency:old.currency??document.currency,
+        documentType:old.documentType??document.documentType,
+        notes:old.notes??document.notes
+      }: {})
+    };
+  });
+  const locallyAdded=previous.filter(document=>!bundledIdentities.has(identity(document)));
+  return [...refreshedBundled,...locallyAdded];
+}
 function load(){
   const imported=window.UW_IMPORTED||{};
   const operations=window.UW_OPERATIONS||{};
@@ -1130,27 +1195,7 @@ function load(){
         localStorage.setItem(DB_KEY,JSON.stringify(merged));
       }
       if(merged.meta.scannedVersion!==(scanned.version||'')||(merged.scannedDocuments||[]).length<(scanned.documents||[]).length){
-        const previous=new Map((merged.scannedDocuments||[]).map(x=>[x.hash,x]));
-        merged.scannedDocuments=(scanned.documents||[]).map(x=>{
-          const old=previous.get(x.hash)||{};
-          const reviewed=old.aiReview?.successful||old.reviewStatus==='AI reviewed';
-          return {...x,
-            reviewStatus:old.reviewStatus||x.reviewStatus,
-            includedInTotals:old.includedInTotals||false,
-            reviewedAt:old.reviewedAt||'',
-            aiReview:old.aiReview||x.aiReview,
-            ...(reviewed?{
-              scanDate:old.scanDate||x.scanDate,
-              category:old.category||x.category,
-              merchant:old.merchant||x.merchant,
-              vendor:old.vendor||x.vendor,
-              amount:old.amount??x.amount,
-              currency:old.currency||x.currency,
-              documentType:old.documentType||x.documentType,
-              notes:old.notes||x.notes
-            }: {})
-          };
-        });
+        merged.scannedDocuments=mergeScannedDocumentState(merged.scannedDocuments,scanned.documents);
         merged.meta.scannedVersion=scanned.version||'';
         localStorage.setItem(DB_KEY,JSON.stringify(merged));
       }
@@ -2350,34 +2395,66 @@ async function fileContentHash(file){
 }
 function scannedDate(d){const m=String(d.name||'').match(/(20\\d{2})(\\d{2})(\\d{2})/);return m?`${m[1]}-${m[2]}-${m[3]}`:''}
 function scannedCategory(d){const n=String(d.name||'').toLowerCase();return n.includes('invoice')?'Invoice scan':n.includes('receipt')||n.includes('proof')?'Receipt scan':'Unclassified scan'}
-function fnbReviewCandidate(d){const date=d.scanDate||scannedDate(d);if(!date)return null;return (DB.fnbStatements||[]).find(s=>String(s.statementDate||'')>=date)||null}
+function fnbReviewCandidate(d){const date=extractedDocumentDate(d);if(!date)return null;return (DB.fnbStatements||[]).find(s=>String(s.statementDate||'')>=date)||null}
 function fnbDateValue(value){const parsed=Date.parse(String(value||''));return Number.isFinite(parsed)?parsed:null}
 function fnbTransactionDate(transaction){return transaction.date||transaction.transactionDate||transaction.postedDate||transaction.valueDate||''}
 function fnbTransactionMerchant(transaction){return transaction.merchant||transaction.description||transaction.payee||transaction.name||''}
-function crossReferenceFnbPurchase(document){
-  const date=fnbDateValue(document.scanDate||scannedDate(document)),amount=Number(document.amount),merchant=String(document.merchant||document.vendor||'').trim().toLowerCase();
-  const type=String(document.documentType||'').toLowerCase();
+function fnbMerchantTokens(value){
+  return String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+    .replace(/\b(?:pty|limited|ltd|cc|inc|purchase|receipt|invoice|pos)\b/g,' ')
+    .replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(token=>token.length>2);
+}
+function crossReferenceFnbPurchase(document,transactionOverride){
+  const review=document.aiReview||document.extraction||{};
+  const date=fnbDateValue(extractedDocumentDate(document)),amount=extractedDocumentAmount(document);
+  const merchant=review.merchant||review.store||review.vendor||document.merchant||document.store||document.business||document.vendor||'';
+  const merchantTokens=fnbMerchantTokens(merchant),type=String(review.documentType||document.documentType||'').toLowerCase();
   const statements=(DB.fnbStatements||[]).slice().sort((a,b)=>String(a.statementDate||'').localeCompare(String(b.statementDate||'')));
   const statement=statements.find(item=>date&&date<=fnbDateValue(item.statementDate))||null;
-  const transactions=statements.flatMap(item=>(Array.isArray(item.transactions)?item.transactions:[]).map(transaction=>({...transaction,statementId:item.id,statementName:item.name})));
-  const matches=transactions.filter(transaction=>{
-    const transactionDate=fnbDateValue(fnbTransactionDate(transaction));
-    const rawAmount=Number(transaction.amount??transaction.debit??transaction.value);
-    const transactionAmount=Math.abs(rawAmount);
-    const transactionMerchant=fnbTransactionMerchant(transaction).toLowerCase();
-    const debit=Number(transaction.debit)>0||rawAmount<0;
-    const dateMatch=!date||!transactionDate||Math.abs(date-transactionDate)<=3*86400000;
-    const amountMatch=Number.isFinite(amount)&&amount>0&&Number.isFinite(transactionAmount)&&Math.abs(amount-transactionAmount)<=0.02;
-    const merchantWords=merchant.split(/\s+/).filter(word=>word.length>3);
-    const merchantMatch=!merchant||!transactionMerchant||merchantWords.some(word=>transactionMerchant.includes(word));
-    return debit&&dateMatch&&amountMatch&&merchantMatch;
-  });
-  if(matches.length){
-    matches.sort((a,b)=>Math.abs(fnbDateValue(fnbTransactionDate(a))-(date||0))-Math.abs(fnbDateValue(fnbTransactionDate(b))-(date||0)));
-    return {status:'matched',accountConfirmed:true,statementId:matches[0].statementId,statementName:matches[0].statementName,transaction:matches[0],matchedAt:new Date().toISOString(),evidence:'Matched FNB debit by receipt amount/date/merchant',documentType:type||'receipt'};
+  const transactions=Array.isArray(transactionOverride)?transactionOverride:statements.flatMap(item=>(Array.isArray(item.transactions)?item.transactions:[]).map(transaction=>({...transaction,statementId:item.id,statementName:item.name})));
+  const baseResult={statementId:statement?.id||'',statementName:statement?.name||'',documentType:type||'receipt'};
+  if(!(amount>0)||!Number.isFinite(date)){
+    return {...baseResult,status:'insufficient-receipt-data',accountConfirmed:null,matchedAt:new Date().toISOString(),evidence:'A reviewed receipt amount and document date are required for an FNB match'};
   }
-  if(!transactions.length)return {status:statement?'statement-period-only':'no-statement-detail',accountConfirmed:null,statementId:statement?.id||'',statementName:statement?.name||'',matchedAt:new Date().toISOString()};
-  return {status:'not-matched',accountConfirmed:false,statementId:statement?.id||'',statementName:statement?.name||'',matchedAt:new Date().toISOString(),evidence:'No FNB debit matched the receipt amount/date/merchant',documentType:type||'receipt'};
+  const previouslyMatched=new Set((DB.scannedDocuments||[])
+    .filter(item=>item!==document&&(document.id?String(item.id||'')!==String(document.id):String(item.path||'')!==String(document.path||''))&&item.fnbReview?.accountConfirmed===true)
+    .map(item=>String(item.fnbReview?.transaction?.id||'')));
+  const candidates=transactions.filter(transaction=>{
+    const transactionDate=fnbDateValue(fnbTransactionDate(transaction));
+    const transactionAmount=Math.abs(fnbTransactionAmount(transaction));
+    const transactionTokens=fnbMerchantTokens(fnbTransactionMerchant(transaction));
+    const merchantOverlap=merchantTokens.filter(token=>transactionTokens.some(candidate=>candidate===token||(token.length>=6&&candidate.includes(token))||(candidate.length>=6&&token.includes(candidate)))).length;
+    return fnbTransactionAmount(transaction)<0
+      &&Number.isFinite(transactionDate)
+      &&Math.abs(date-transactionDate)<=3*86400000
+      &&Number.isFinite(transactionAmount)
+      &&Math.abs(amount-transactionAmount)<=0.02
+      &&(!merchantTokens.length||merchantOverlap>0);
+  });
+  const available=candidates.filter(transaction=>!previouslyMatched.has(String(transaction.id)));
+  if(candidates.length&&!available.length){
+    const matched=candidates[0];
+    return {status:'already-matched',accountConfirmed:false,statementId:matched.statementId,statementName:matched.statementName,transaction:matched,matchedAt:new Date().toISOString(),evidence:'This FNB debit is already linked to another reviewed scan',documentType:type||'receipt'};
+  }
+  available.sort((a,b)=>{
+    const dateDeltaA=Math.abs(fnbDateValue(fnbTransactionDate(a))-date),dateDeltaB=Math.abs(fnbDateValue(fnbTransactionDate(b))-date);
+    const amountDeltaA=Math.abs(Math.abs(fnbTransactionAmount(a))-amount),amountDeltaB=Math.abs(Math.abs(fnbTransactionAmount(b))-amount);
+    return dateDeltaA-dateDeltaB||amountDeltaA-amountDeltaB;
+  });
+  if(available.length>1){
+    const first=available[0],second=available[1];
+    const sameDateDelta=Math.abs(fnbDateValue(fnbTransactionDate(first))-date)===Math.abs(fnbDateValue(fnbTransactionDate(second))-date);
+    const sameAmountDelta=Math.abs(Math.abs(fnbTransactionAmount(first))-amount)===Math.abs(Math.abs(fnbTransactionAmount(second))-amount);
+    if(sameDateDelta&&sameAmountDelta){
+      return {...baseResult,status:'ambiguous',accountConfirmed:null,matchedAt:new Date().toISOString(),evidence:`${available.length} FNB debits match the receipt amount and date; select the correct transaction manually`};
+    }
+  }
+  if(available.length){
+    const match=available[0];
+    return {status:'matched',accountConfirmed:true,statementId:match.statementId,statementName:match.statementName,transaction:match,matchedAt:new Date().toISOString(),evidence:`Matched FNB debit by receipt amount/date${merchantTokens.length?' and merchant':''}`,documentType:type||'receipt'};
+  }
+  if(!transactions.length)return {...baseResult,status:statement?'statement-period-only':'no-statement-detail',accountConfirmed:null,matchedAt:new Date().toISOString()};
+  return {...baseResult,status:'not-matched',accountConfirmed:false,matchedAt:new Date().toISOString(),evidence:'No FNB debit matched the receipt amount/date/merchant'};
 }
 function reviewAgainstFnb(path){
   const found=(DB.scannedDocuments||[]).find(x=>x.path===path);
@@ -2387,9 +2464,9 @@ function reviewAgainstFnb(path){
   if(!geminiReviewComplete(found))found.reviewStatus='FNB reviewed';
   found.includedInTotals=false;
   save();render();
-  toast(result.accountConfirmed===true?'FNB transaction matched — eligible for confirmation':result.accountConfirmed===false?'No matching FNB transaction found — kept out of totals':'FNB statement period found, but transaction detail is unavailable');
+  toast(result.accountConfirmed===true?'FNB transaction matched — verify the statement row before approving':result.status==='insufficient-receipt-data'?'FNB review needs a receipt date and amount; run AI review or enter them first':result.status==='ambiguous'?'More than one FNB debit matches; review the statement rows manually':result.status==='already-matched'?'That FNB debit is already linked to another scanned receipt':'No matching FNB transaction found — kept out of totals');
 }
-function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
+function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}if(found.fnbReview.accountConfirmed!==true){toast('This receipt has no confirmed FNB transaction match; review it in the Document Register if it was paid another way');return}found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
 async function aiReviewDocument(doc){
   if(geminiReviewComplete(doc)){toast(`${doc.name} has already been reviewed by Gemini`);return;}
   const resultHost=`ai-review-${String(doc.id||Date.now()).replace(/[^a-z0-9]/gi,'')}`;
@@ -2428,6 +2505,7 @@ function applyAiReview(id,result,options={}){
   else if(result.documentType==='receipt')found.category='Receipt scan';
   found.reviewStatus='AI reviewed';
   save();
+  void syncServerState();
   if(!options.silent){
     closeModal();
     render();
@@ -2616,22 +2694,22 @@ function vScanned(c){
   const body=rows.map(d=>{
     const duplicate=scanDuplicateGroups().some(group=>group.some(item=>String(item.id)===String(d.id)));
     const approved=d.reviewStatus==='Approved',reviewed=d.reviewStatus==='FNB reviewed',candidate=fnbReviewCandidate(d),payload=JSON.stringify(d).replace(/'/g,'&#39;'),path=JSON.stringify(d.path).replace(/'/g,'&#39;');
-    const action=approved?'':d.fnbReview?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Approve after FNB</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>Review FNB</button>`;
-    const fnbStatus=d.fnbReview?.accountConfirmed===true?'FNB matched':d.fnbReview?.accountConfirmed===false?'FNB not matched':d.fnbReview?.status==='statement-period-only'?'FNB period only':'';
+    const action=approved?'':d.fnbReview?.accountConfirmed===true?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Confirm match & approve</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>${d.fnbReview?'Review FNB again':'Review FNB'}</button>`;
+    const fnbStatus=d.fnbReview?.accountConfirmed===true?'FNB matched':d.fnbReview?.status==='ambiguous'?'FNB match needs review':d.fnbReview?.status==='already-matched'?'FNB debit already linked':d.fnbReview?.status==='insufficient-receipt-data'?'FNB needs receipt date + amount':d.fnbReview?.accountConfirmed===false?'FNB not matched':d.fnbReview?.status==='statement-period-only'?'FNB period only':'';
     const aiAction=geminiReviewComplete(d)
       ? '<span class="tag paid">Gemini reviewed</span>'
       : ` <button class="btn sm gold" onclick='aiReviewDocument(${payload})'>AI review</button>`;
     const categoryOptions=['Receipt scan','Invoice scan','Unclassified scan','Other'];
     const categoryId=String(d.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const categorySelect=`<select class="search" aria-label="Category for ${escapeHtml(d.name)}" onchange="setScannedCategory('${categoryId}',this.value)">${categoryOptions.map(category=>`<option ${d.category===category?'selected':''}>${category}</option>`).join('')}</select>`;
-    const merchant=d.merchant||d.store||d.business||d.vendor||'—',amount=d.amount===undefined||d.amount===null?'—':R(d.amount);
-    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}${duplicate?'<small style="display:block;color:var(--amber)">Duplicate candidate · Gemini can still review</small>':''}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${d.scanDate||'—'}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}${fnbStatus?`<small style="display:block;color:${d.fnbReview.accountConfirmed===true?'var(--green)':d.fnbReview.accountConfirmed===false?'var(--amber)':'var(--muted)'}">${fnbStatus}</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.transaction?`${d.fnbReview.transaction.description||d.fnbReview.transaction.merchant||''} · ${d.fnbReview.statementName}`:d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
+    const merchant=d.merchant||d.store||d.business||d.vendor||d.aiReview?.merchant||d.extraction?.merchant||'—',amount=extractedDocumentAmount(d)>0?R(extractedDocumentAmount(d)):'—',date=extractedDocumentDate(d)||'—';
+    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}${duplicate?'<small style="display:block;color:var(--amber)">Duplicate candidate · Gemini can still review</small>':''}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${date}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}${fnbStatus?`<small style="display:block;color:${d.fnbReview.accountConfirmed===true?'var(--green)':d.fnbReview.accountConfirmed===false?'var(--amber)':'var(--muted)'}">${fnbStatus}</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.transaction?`${d.fnbReview.transaction.description||d.fnbReview.transaction.merchant||''} · ${d.fnbReview.statementName}`:d.fnbReview?.evidence||d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
   }).join('');
   const batchRunning=Boolean(scannedReviewBatch?.running);
   const batchButton=batchRunning
     ? `<button class="btn gold" type="button" onclick="cancelScannedReviewBatch()">Stop after current</button><span id="scanned-review-progress" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></span>`
     : '<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">Review FNB matches</button><button class="btn" type="button" onclick="deleteDuplicateScans()">Delete duplicates</button>';
-  c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><label class="btn" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload folder<input type="file" webkitdirectory directory multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="scan-dropzone" ondragover="allowScannedDrop(event)" ondragleave="leaveScannedDrop(event)" ondrop="handleScannedDrop(event)"><strong>Drop receipt or invoice files/folders here</strong><span>JPG, PNG, WEBP, GIF, and PDF · folders are scanned recursively</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">Gemini extraction and FNB reconciliation are separate reviews. Uploads are stored in managed storage and can be reviewed independently.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
+  c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><label class="btn" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload folder<input type="file" webkitdirectory directory multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="scan-dropzone" ondragover="allowScannedDrop(event)" ondragleave="leaveScannedDrop(event)" ondrop="handleScannedDrop(event)"><strong>Drop receipt or invoice files/folders here</strong><span>JPG, PNG, WEBP, GIF, and PDF · folders are scanned recursively</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">FNB review compares each receipt's date and amount against debits in the imported statement rows. Run Gemini first when the date or amount is missing; ambiguous and already-linked transactions are flagged instead of auto-confirmed.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
   if(batchRunning)updateScannedReviewProgress();
 }
 function setScannedCategory(id,category){

@@ -97,7 +97,7 @@ if (-not (Test-Path $backupScript)) {
   throw "The local backup script was not installed at $backupScript."
 }
 $backupAction = New-ScheduledTaskAction -Execute $powershellPath -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$backupScript`""
-$backupTrigger = New-ScheduledTaskTrigger -Daily -At "2:00AM"
+$backupTrigger = New-ScheduledTaskTrigger -Daily -At "1:00PM"
 $backupSettings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
   -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
