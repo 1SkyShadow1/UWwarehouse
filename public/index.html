@@ -2456,13 +2456,18 @@ function crossReferenceFnbPurchase(document,transactionOverride){
   if(!transactions.length)return {...baseResult,status:statement?'statement-period-only':'no-statement-detail',accountConfirmed:null,matchedAt:new Date().toISOString()};
   return {...baseResult,status:'not-matched',accountConfirmed:false,matchedAt:new Date().toISOString(),evidence:'No FNB debit matched the receipt amount/date/merchant'};
 }
+function saveFnbReview(document,{manual=false}={}){
+  if(!document)return null;
+  const result=crossReferenceFnbPurchase(document);
+  document.fnbReview={...result,reviewedAt:new Date().toISOString(),manual,automatic:!manual};
+  if(manual&&!geminiReviewComplete(document))document.reviewStatus='FNB reviewed';
+  if(result.accountConfirmed!==true)document.includedInTotals=false;
+  return result;
+}
 function reviewAgainstFnb(path){
   const found=(DB.scannedDocuments||[]).find(x=>x.path===path);
   if(!found)return;
-  const result=crossReferenceFnbPurchase(found);
-  found.fnbReview={...result,reviewedAt:new Date().toISOString(),manual:true};
-  if(!geminiReviewComplete(found))found.reviewStatus='FNB reviewed';
-  found.includedInTotals=false;
+  const result=saveFnbReview(found,{manual:true});
   save();render();
   toast(result.accountConfirmed===true?'FNB transaction matched — verify the statement row before approving':result.status==='insufficient-receipt-data'?'FNB review needs a receipt date and amount; run AI review or enter them first':result.status==='ambiguous'?'More than one FNB debit matches; review the statement rows manually':result.status==='already-matched'?'That FNB debit is already linked to another scanned receipt':'No matching FNB transaction found — kept out of totals');
 }
@@ -2504,6 +2509,7 @@ function applyAiReview(id,result,options={}){
   if(result.documentType==='invoice')found.category='Invoice scan';
   else if(result.documentType==='receipt')found.category='Receipt scan';
   found.reviewStatus='AI reviewed';
+  saveFnbReview(found);
   save();
   void syncServerState();
   if(!options.silent){
@@ -2594,18 +2600,16 @@ async function reviewAllScannedDocuments(){
   toast(`${result.running===false?'Gemini review stopped':'Gemini review complete'}: ${result.completed} completed${result.failed?`, ${result.failed} failed`:''}.`);
 }
 async function reviewAllFnbDocuments(){
-  const docs=(DB.scannedDocuments||[]).filter(doc=>!isLegacyBulkScan(doc)&&doc.canonical&&!doc.existingMatch&&!doc.fnbReview);
-  if(!docs.length){toast('All scanned documents already have FNB review results');return;}
-  toast(`Reviewing ${docs.length} scanned document${docs.length===1?'':'s'} against FNB…`);
+  const docs=(DB.scannedDocuments||[]).filter(doc=>!isLegacyBulkScan(doc)&&doc.canonical&&!doc.existingMatch);
+  if(!docs.length){toast('No eligible scanned documents are available for FNB review');return;}
+  toast(`Rechecking ${docs.length} scanned document${docs.length===1?'':'s'} against FNB…`);
   for(const doc of docs){
-    const result=crossReferenceFnbPurchase(doc);
-    doc.fnbReview={...result,reviewedAt:new Date().toISOString(),manual:true};
-    if(!geminiReviewComplete(doc))doc.reviewStatus='FNB reviewed';
-    doc.includedInTotals=false;
-    save();
+    saveFnbReview(doc,{manual:true});
   }
+  DB.meta={...(DB.meta||{}),fnbReviewBatchCompletedAt:new Date().toISOString(),fnbReviewBatchRunCount:(Number(DB.meta?.fnbReviewBatchRunCount)||0)+1};
+  save();
   render();
-  toast(`FNB review complete: ${docs.length} document${docs.length===1?'':'s'} checked`);
+  toast(`FNB review complete: ${docs.length} document${docs.length===1?'':'s'} checked. New scans will be checked automatically.`);
 }
 function cancelScannedReviewBatch(){
   if(!scannedReviewBatch?.running)return;
@@ -2630,12 +2634,12 @@ async function storeUploadedScan(file){
     managed=await uploadManagedDocument(file);
   }catch(error){
     const r=new FileReader();
-    r.onload=async()=>{const doc={id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};DB.scannedDocuments.push(doc);save();render();toast(error.message+' Using offline storage; Gemini requires managed server storage.');};
+    r.onload=async()=>{const doc={id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};DB.scannedDocuments.push(doc);saveFnbReview(doc);save();render();toast(error.message+' Using offline storage; Gemini requires managed server storage.');};
     r.readAsDataURL(file);
     return;
   }
   const doc={id:managed.id,name:managed.name,path:managed.url,data:null,url:managed.url,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};
-  DB.scannedDocuments.push(doc);save();render();
+  DB.scannedDocuments.push(doc);saveFnbReview(doc);save();render();
   try{
     await confirmManagedDocumentReadable(managed);
     await autoReviewScannedDocument(doc);
@@ -2708,7 +2712,7 @@ function vScanned(c){
   const batchRunning=Boolean(scannedReviewBatch?.running);
   const batchButton=batchRunning
     ? `<button class="btn gold" type="button" onclick="cancelScannedReviewBatch()">Stop after current</button><span id="scanned-review-progress" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></span>`
-    : '<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">Review FNB matches</button><button class="btn" type="button" onclick="deleteDuplicateScans()">Delete duplicates</button>';
+    : `<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">${DB.meta?.fnbReviewBatchCompletedAt?'Review FNB matches again':'Review FNB matches'}</button><button class="btn" type="button" onclick="deleteDuplicateScans()">Delete duplicates</button>`;
   c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><label class="btn" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload folder<input type="file" webkitdirectory directory multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="scan-dropzone" ondragover="allowScannedDrop(event)" ondragleave="leaveScannedDrop(event)" ondrop="handleScannedDrop(event)"><strong>Drop receipt or invoice files/folders here</strong><span>JPG, PNG, WEBP, GIF, and PDF · folders are scanned recursively</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">FNB review compares each receipt's date and amount against debits in the imported statement rows. Run Gemini first when the date or amount is missing; ambiguous and already-linked transactions are flagged instead of auto-confirmed.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
   if(batchRunning)updateScannedReviewProgress();
 }

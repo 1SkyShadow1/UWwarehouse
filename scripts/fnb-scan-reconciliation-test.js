@@ -9,10 +9,18 @@ const amountStart = indexHtml.indexOf('function extractedDocumentAmount(');
 const amountEnd = indexHtml.indexOf('function crossReferenceSummary(', amountStart);
 const reviewStart = indexHtml.indexOf('function fnbReviewCandidate(');
 const reviewEnd = indexHtml.indexOf('async function aiReviewDocument(doc){', reviewStart);
+const batchStart = indexHtml.indexOf('async function reviewAllFnbDocuments(){');
+const batchEnd = indexHtml.indexOf('function cancelScannedReviewBatch(){', batchStart);
+const aiApplyStart = indexHtml.indexOf('function applyAiReview(id,result,options={}){');
+const aiApplyEnd = indexHtml.indexOf('async function requestGeminiReview(doc){', aiApplyStart);
 assert.notEqual(amountStart, -1, 'Receipt extraction helpers were not found.');
 assert.notEqual(amountEnd, -1, 'Receipt extraction helpers end was not found.');
 assert.notEqual(reviewStart, -1, 'FNB reconciliation helper was not found.');
 assert.notEqual(reviewEnd, -1, 'FNB reconciliation helper end was not found.');
+assert.notEqual(batchStart, -1, 'FNB batch review action was not found.');
+assert.notEqual(batchEnd, -1, 'FNB batch review action end was not found.');
+assert.notEqual(aiApplyStart, -1, 'Gemini review save action was not found.');
+assert.notEqual(aiApplyEnd, -1, 'Gemini review save action end was not found.');
 
 const context = {
   DB: { fnbStatements: [], scannedDocuments: [] },
@@ -32,6 +40,9 @@ const context = {
   render: () => {},
   messages: [],
   saveCount: 0,
+  isLegacyBulkScan: () => false,
+  syncServerState: () => Promise.resolve(),
+  closeModal: () => {},
   fnbTransactionAmount: transaction => {
     const amount = Number(transaction?.amount);
     if (Number.isFinite(amount) && amount !== 0) return amount;
@@ -41,7 +52,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(
-  `${indexHtml.slice(amountStart, amountEnd)}${indexHtml.slice(reviewStart, reviewEnd)};globalThis.compare=crossReferenceFnbPurchase;globalThis.review=reviewAgainstFnb;globalThis.approve=approveFnbReviewed;`,
+  `${indexHtml.slice(amountStart, amountEnd)}${indexHtml.slice(reviewStart, reviewEnd)}${indexHtml.slice(batchStart, batchEnd)}${indexHtml.slice(aiApplyStart, aiApplyEnd)};globalThis.compare=crossReferenceFnbPurchase;globalThis.review=reviewAgainstFnb;globalThis.approve=approveFnbReviewed;globalThis.batch=reviewAllFnbDocuments;globalThis.applyReview=applyAiReview;`,
   context,
   { timeout: 1000 },
 );
@@ -56,7 +67,7 @@ const statements = {
   ],
 };
 
-const run = () => {
+const run = async () => {
   context.DB.fnbStatements = [statements];
   const aiOnlyReceipt = {
     id: 'scan-1',
@@ -76,6 +87,49 @@ const run = () => {
   context.approve(savedReceipt.path);
   assert.equal(savedReceipt.reviewStatus, 'Approved', 'A confirmed statement match may be approved.');
   assert.equal(savedReceipt.includedInTotals, true);
+
+  const newScan = {
+    id: 'new-scan',
+    path: '/new-receipt.png',
+    scanDate: '2026-09-25',
+    amount: 123.45,
+    merchant: 'Acme Stationery',
+    canonical: true,
+    existingMatch: false,
+    reviewStatus: 'Needs review',
+  };
+  context.DB.scannedDocuments = [newScan];
+  context.applyReview('new-scan', {
+    provider: 'gemini',
+    model: 'test-model',
+    documentDate: '2026-09-25',
+    merchant: 'Acme Stationery',
+    amountPaid: 123.45,
+    documentType: 'receipt',
+    confidence: 0.99,
+  });
+  assert.equal(newScan.fnbReview.accountConfirmed, true, 'A new Gemini-reviewed scan must automatically refresh its FNB comparison.');
+
+  context.DB.scannedDocuments = [savedReceipt, newScan];
+  await context.batch();
+  assert.ok(context.DB.meta.fnbReviewBatchCompletedAt, 'Batch review must persist completion state for the repeat action label.');
+  assert.equal(context.DB.meta.fnbReviewBatchRunCount, 1);
+  assert.match(indexHtml, /DB\.meta\?\.fnbReviewBatchCompletedAt\?'Review FNB matches again':'Review FNB matches'/, 'The batch action should change to a repeat-review label after it runs.');
+  const anotherNewScan = {
+    id: 'another-new-scan',
+    path: '/another-receipt.png',
+    scanDate: '2026-09-25',
+    amount: 123.45,
+    merchant: 'Acme Stationery',
+    canonical: true,
+    existingMatch: false,
+  };
+  context.DB.scannedDocuments.push(anotherNewScan);
+  context.saveCount = 0;
+  await context.batch();
+  assert.equal(context.DB.meta.fnbReviewBatchRunCount, 2, 'The FNB review action must rerun on existing and newly added scans.');
+  assert.ok(anotherNewScan.fnbReview, 'A scan added after the first batch must be included in the repeat review.');
+  assert.equal(context.saveCount, 1, 'A batch pass should persist its review results.');
 
   const duplicateReceipt = {
     id: 'scan-2',
@@ -150,12 +204,10 @@ const run = () => {
   assert.equal(importedMatch.transaction.id, uniqueDebit.id);
   assert.equal(importedMatch.statementId, uniqueDebit.statementId);
 
-  console.log('FNB receipt review compares extracted receipt data with statement debits and flags missing, duplicate, or ambiguous matches.');
+  console.log('FNB receipt review compares statement debits, auto-refreshes after Gemini, reruns on new scans, and flags unsafe matches.');
 };
 
-try {
-  run();
-} catch (error) {
+run().catch(error => {
   console.error(error);
   process.exitCode = 1;
-}
+});
