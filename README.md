@@ -36,6 +36,44 @@ Optional AI assistance is backend-only and uses **Gemini exclusively**. Set `GEM
 
 Do not open `index.html` directly with `file://` when you need installability or cloud sync. Browsers require a local HTTP server for service workers and PWA features.
 
+### Keep the server running on this Windows PC
+
+To run the app in the background whenever you sign in to Windows, open PowerShell in the project folder and run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-local-autostart.ps1
+```
+
+This installs a separate copy under `%LOCALAPPDATA%\UWAccountingSystem`, preserves the current `data` folder, installs its Node dependencies, and registers and starts a per-user Task Scheduler task. The server binds only to `127.0.0.1:8080`, restarts after an unexpected exit, and writes rotating UTF-8 logs to `data\logs\server.log`. The task also starts automatically at future sign-ins.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\UWAccountingSystem\scripts\local-server-task.ps1" Start
+```
+
+Open `http://localhost:8080`. Use the same `local-server-task.ps1` with `Status` or `Stop`; `Uninstall` removes only the startup task and leaves application files/data in place. To update the installed app from a newer checkout, run `install-local-autostart.ps1 -Update`; it stops and restarts the task, replacing code and dependencies without replacing the installed `data` folder. The app is available only while this PC is on and awake; this setup does not alter power/sleep settings or expose the app to other devices.
+
+The **UW Accounting System** desktop shortcut starts the scheduled server if the local app is not responding, waits for it to become healthy, and opens it in your browser. Use it after closing the browser or if the server was stopped.
+
+The app stores its accounting state and managed documents under `%LOCALAPPDATA%\UWAccountingSystem\data`. The JSON state has a server-side `.bak`, but documents need their own backup. Periodically back up the complete `data` folder to a separate drive or trusted cloud storage. Keep the app open only on a trusted Windows user account; local mode does not require operator sign-in.
+
+#### Configure the existing local login, Supabase, and Google Drive
+
+The local install deliberately does not copy deployment secrets. To enable Brian and Evans' existing passphrases and the same cloud services, open PowerShell and run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\UWAccountingSystem\scripts\configure-local-integrations.ps1"
+```
+
+Enter each existing passphrase twice in the hidden prompts. Then provide the Supabase service-role key, Google OAuth client secret, and the existing `UW_TOKEN_ENCRYPTION_KEY` from the prior deployment settings. The Supabase project URL defaults to this system's configured project; the wizard checks the state, session, secret, and document tables plus the private storage bucket before it writes configuration. The local `.env` is ACL-restricted to this Windows user, SYSTEM, and Administrators; secrets are not printed or sent through chat. The wizard restarts the local service and tests both sign-ins, Supabase status, and the Google OAuth redirect. It preserves other local settings such as the Gemini key.
+
+Use the same Supabase workspace (`default` for the existing configuration) and especially the same encryption key to recover saved Google Drive credentials. If the previous key is unavailable, the wizard requires confirmation that Drive must be reauthorized. Run the existing SQL migrations if the table or bucket checks report they are missing. In Google Cloud Console, register `http://localhost:8080` as an authorized JavaScript origin and `http://localhost:8080/api/google-drive/callback` as an authorized redirect URI. After setup, choose **Sign in with Google Drive** in the app if no saved Drive authorization was restored. The local server restores an existing Supabase snapshot into a new empty local data folder before it can synchronize local state, preventing an empty first-run datastore from replacing the cloud backup.
+
+## Deploying on Vercel
+
+Vercel detects the Express app exported from `server.js`; browser assets live in `public/` so Vercel can serve them from its CDN. The Vercel runtime uses `/tmp` for temporary files and does not start a persistent HTTP listener. Vercel storage is ephemeral, so configure Supabase before using production data: set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_WORKSPACE`, `SUPABASE_STATE_TABLE`, and `SUPABASE_DOCUMENT_BUCKET`, and run all listed Supabase migrations. Also configure `UW_API_KEY`, `UW_AUTH_USERS_JSON`, `UW_TOKEN_ENCRYPTION_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` for production authentication and OAuth. `/api/ready` reports not-ready until required production settings are present.
+
+Set the Google OAuth redirect URI to `https://<your-vercel-domain>/api/google-drive/callback` and add that URL and the Vercel origin to the Google OAuth client. Vercel serverless instances do not share in-memory session state or local files; durable application state, user sessions, and uploaded documents must use the configured Supabase services. Use the Render instructions below if a persistent-disk deployment is preferred.
+
 ## Production deployment checklist
 
 - Run `npm test` before every deployment. This starts a disposable server and verifies health, security headers, readiness reporting, AI validation, and Drive status responses.

@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 const { google } = require('googleapis');
 const multer = require('multer');
@@ -11,7 +12,9 @@ const { PDFDocument: PDFLibDocument } = require('pdf-lib');
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
+const isVercel = process.env.VERCEL === '1';
 const rootDir = __dirname;
+const publicDir = path.join(rootDir, 'public');
 const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
 const adjacentSourceRoot = path.resolve(rootDir, '..', '..', '..', 'UWwarehouse');
 const sourceRoots = [...new Set([
@@ -24,7 +27,7 @@ const sourceRoots = [...new Set([
   path.join(rootDir, 'documents'),
   path.join(rootDir, 'newstatements'),
 ])];
-const defaultDataRoot = path.join(rootDir, 'data');
+const defaultDataRoot = isVercel ? path.join(os.tmpdir(), 'uw-accounting') : path.join(rootDir, 'data');
 const configuredDataRoot = process.env.UW_DATA_DIR || defaultDataRoot;
 const canUseDirectory = candidate => {
   try {
@@ -365,6 +368,19 @@ const restoreSnapshotFromSupabase = async () => {
     return;
   }
   const local = ensureStorage();
+  const localIsPristine = local.revision === 0 && Object.keys(local.data).length === 0;
+  const remoteHasData = Number(remote.revision) > 0 || Object.keys(remote.data).length > 0;
+  if (localIsPristine && remoteHasData) {
+    stateSnapshot = {
+      version: stateVersion,
+      revision: Number(remote.revision) || 0,
+      updatedAt: remote.updated_at || new Date().toISOString(),
+      data: remote.data,
+    };
+    atomicWrite(stateSnapshot);
+    console.log('Supabase data restored into a new local installation.');
+    return;
+  }
   const remoteUpdated = Date.parse(remote.updated_at || '');
   const localUpdated = Date.parse(local.updatedAt || '');
   if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && Number(remote.revision) > local.revision)) {
@@ -614,7 +630,7 @@ const createDocumentPdf = ({ kind, record, meta = {} }) => new Promise((resolve,
   const text = value => pdfText(value) || '';
   const items = Array.isArray(record.items) ? record.items : [];
   const total = items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0), 0);
-  const logo = path.join(rootDir, 'uw-official-logo.png');
+  const logo = path.join(publicDir, 'uw-official-logo.png');
   if (fs.existsSync(logo)) pdf.image(logo, left, 40, { fit: [kind === 'quote' ? 320 : 250, kind === 'quote' ? 82 : 72], align: 'left', valign: 'center' });
   let y = kind === 'quote' ? 132 : 120;
   if (kind === 'quote') {
@@ -1541,7 +1557,7 @@ app.get('/api/ready', (req, res) => {
     serverAuth: Boolean(process.env.UW_API_KEY),
     durableStore: Boolean(stateSnapshot && fs.existsSync(stateFile)),
     documentStorage: fs.existsSync(documentsRoot),
-    persistentStorage: !isProduction || (!dataRootFallback && !documentsRootFallback),
+    persistentStorage: !isProduction || (isVercel ? supabaseConfigured() : (!dataRootFallback && !documentsRootFallback)),
     bootstrap: bootstrapComplete,
     apiAuth: !isProduction || Boolean(process.env.UW_API_KEY),
     operatorAuth: !isProduction || authConfigured(),
@@ -1866,10 +1882,11 @@ app.use('/api', (req, res) => {
   });
 });
 
-app.use(express.static(rootDir, { index: 'index.html' }));
+app.get('/favicon.ico', (_, res) => res.sendFile(path.join(publicDir, 'uw-round-logo.png')));
+app.use(express.static(publicDir, { index: 'index.html' }));
 
 app.get('*', (_, res) => {
-  res.sendFile(path.join(rootDir, 'index.html'));
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 app.use((error, req, res, next) => {
@@ -1885,21 +1902,21 @@ app.use((error, req, res, next) => {
   return res.status(status).send('The server could not complete that request.');
 });
 
-const server = app.listen(PORT, HOST, () => {
+if (supabaseConfigured()) {
+  bootstrapComplete = false;
+  bootstrapReady = Promise.all([restoreSnapshotFromSupabase(), restoreDriveTokens()]).then(() => {
+    bootstrapComplete = true;
+    console.log('Supabase state sync: configured');
+  }).catch(error => {
+    bootstrapComplete = true;
+    console.error('Supabase state bootstrap failed:', error.message);
+  });
+}
+
+const server = isVercel ? null : app.listen(PORT, HOST, () => {
   console.log(`UW Accounting app and API running at http://${HOST}:${PORT}`);
   console.log('Google OAuth backend status:', getGoogleConfig().clientId && getGoogleConfig().clientSecret ? 'configured' : 'missing env vars');
-  if (supabaseConfigured()) {
-    bootstrapComplete = false;
-    bootstrapReady = Promise.all([restoreSnapshotFromSupabase(), restoreDriveTokens()]).then(() => {
-      bootstrapComplete = true;
-      console.log('Supabase state sync: configured');
-    }).catch(error => {
-      bootstrapComplete = true;
-      console.error('Supabase state bootstrap failed:', error.message);
-    });
-  } else {
-    console.log('Supabase state sync: not configured');
-  }
+  console.log(`Supabase state sync: ${supabaseConfigured() ? 'configured' : 'not configured'}`);
 });
 
 const shutdown = (signal) => {
@@ -1909,4 +1926,4 @@ const shutdown = (signal) => {
 process.once('SIGTERM', () => shutdown('SIGTERM'));
 process.once('SIGINT', () => shutdown('SIGINT'));
 
-module.exports = { app, server, ensureStorage, stateFile, documentsRoot };
+module.exports = Object.assign(app, { app, server, ensureStorage, stateFile, documentsRoot });
