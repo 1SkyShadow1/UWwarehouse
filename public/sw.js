@@ -1,6 +1,6 @@
-const CACHE_NAME = 'uw-accounting-v40';
+const CACHE_NAME = 'uw-accounting-v41';
 const DOCUMENT_CACHE = 'uw-accounting-documents-v2';
-const APP_SHELL = ['./', './index.html', './css/pricing.css?v=40', './js/pricing-core.js?v=40', './js/fabrics.js?v=40', './js/fabric-picker.js?v=40', './js/pricing.js?v=40', './js/quote-history.js?v=40', './js/document-editor.js?v=40', './js/document-views.js?v=40', './js/quotes.js?v=40', './js/dashboard.js?v=40', './js/suppliers.js?v=40', './js/app-version.js?v=40', './imported-data.js?v=40', './income-2026.js?v=40', './operations-data.js?v=40', './scanned-data.js?v=40', './bank-statements.js?v=40', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
+const APP_SHELL = ['./', './index.html', './css/pricing.css?v=41', './js/pricing-core.js?v=41', './js/fabrics.js?v=41', './js/fabric-picker.js?v=41', './js/pricing.js?v=41', './js/quote-history.js?v=41', './js/document-editor.js?v=41', './js/document-views.js?v=41', './js/quotes.js?v=41', './js/dashboard.js?v=41', './js/suppliers.js?v=41', './js/app-version.js?v=41', './js/shared-sync.js?v=41', './imported-data.js?v=41', './income-2026.js?v=41', './operations-data.js?v=41', './scanned-data.js?v=41', './bank-statements.js?v=41', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));

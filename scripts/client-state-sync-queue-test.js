@@ -24,6 +24,9 @@ const context = {
   serverRevision: 0,
   serverRetryTimer: null,
   serverRetryAttempt: 0,
+  sharedSyncBase: null,
+  sharedSyncStatus: () => {},
+  writeLocalSnapshot: () => ({ok:true}),
   fetch: async (_, options) => {
     requestCount += 1;
     requestBodies.push(JSON.parse(options.body).data);

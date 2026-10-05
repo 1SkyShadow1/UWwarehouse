@@ -10,6 +10,8 @@ Quotes and invoices now distinguish internal cost, markup, selling price and est
 
 Git pushes update the repository; the separately installed local app needs `npm run update:local` from this checkout. This code-only updater verifies and replaces application assets, preserves existing data, documents, secrets and dependencies, restarts the existing local service, and opens `http://127.0.0.1:8080/`. The footer shows the installed commit. Desktop/service startup and `npm start` also open the app automatically. Suppliers & Stock shows supplier catalog coverage separately from actual stock quantities.
 
+Brian and Evans share the same workspace. Sign-in loads the latest server data; open screens refresh every five seconds and on returning to the app. Saved independent edits merge automatically. Overlapping edits to the same field remain available for review in Settings rather than silently overwriting either version. Open forms remain intact until closed; offline changes sync when the server is reachable. The footer reports shared sync status. Accounts, access controls and the existing datastore are unchanged.
+
 Payroll is populated from the supplied `WAGES.xlsx` sheet. The app preserves the sheet's staff names and daily rates and displays weekly, monthly, and annual wage figures. Use the sun/moon button in the top bar or **Settings → Appearance** to switch between light and dark mode; the choice is saved locally.
 
 Invoice and quotation previews use the supplied `Invoice Template.docx` and `Quote Template.xlsx` branding, field structure, terms, banking details, signature areas, and exact UW logo artwork. The original templates and extracted logo assets are bundled in the package for reference.

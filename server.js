@@ -292,6 +292,20 @@ const queueStateWrite = (next) => {
   stateWrite = write.catch(() => {});
   return write;
 };
+const queueSharedStateUpdate = (expectedRevision, data) => {
+  const write = stateWrite.then(() => {
+    const current = ensureStorage();
+    if (!Number.isInteger(expectedRevision) || expectedRevision !== current.revision) {
+      return { conflict: current };
+    }
+    const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data };
+    atomicWrite(next);
+    stateSnapshot = next;
+    return { current, next };
+  });
+  stateWrite = write.catch(() => {});
+  return write;
+};
 const supabaseConfigured = () => Boolean(supabaseUrl && supabaseServiceKey);
 const supabaseHeaders = () => ({
   apikey: supabaseServiceKey,
@@ -1065,7 +1079,9 @@ app.post('/api/auth/logout', async (req, res) => {
 
 app.get('/api/state', requireApiKey, async (req, res) => {
   await bootstrapReady;
+  await stateWrite;
   const snapshot = ensureStorage();
+  if (req.query.revision !== undefined && Number(req.query.revision) === snapshot.revision) return res.status(204).end();
   res.json(snapshot);
 });
 
@@ -1080,10 +1096,11 @@ app.put('/api/state', requireApiKey, async (req, res) => {
   const validationError = validateStateData(data);
   if (validationError) return res.status(400).json({ error: validationError });
   try {
-    const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data };
-    await queueStateWrite(next);
+    const result = await queueSharedStateUpdate(expectedRevision, data);
+    if (result.conflict) return res.status(409).json({ error: 'State revision conflict.', snapshot: result.conflict });
+    const { next } = result;
     enqueueSupabaseSnapshot(next);
-    const documentExports = await persistInvoiceQuoteDocuments(current.data, next.data);
+    const documentExports = await persistInvoiceQuoteDocuments(result.current.data, next.data);
     if (documentExports.errors.length) {
       console.warn('Some invoice/quote PDFs could not be saved:', documentExports.errors.join('; '));
     }

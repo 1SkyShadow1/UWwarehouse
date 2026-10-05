@@ -1,5 +1,5 @@
 // Code version only; no accounting state or credentials are read here.
-const UW_RELEASE='2026-10-05-pricing-v40';
+const UW_RELEASE='2026-10-05-pricing-v41';
 window.addEventListener('DOMContentLoaded',async()=>{
   const label=document.getElementById('app-build-label');if(!label)return;
   label.textContent='Pricing update · '+UW_RELEASE;

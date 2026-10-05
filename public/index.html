@@ -11,7 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=40">
+<link rel="stylesheet" href="css/pricing.css?v=41">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -19,18 +19,6 @@
   --text:#f5f5f0; --muted:#9a9a92; --line:#2e2e2e;
   --green:#4CAF7D; --red:#D9534F; --amber:#E0A800;
   --radius:12px;
-}
-async function removeLegacyBulkScans(){
-  const before=DB.scannedDocuments||[];
-  const filtered=before.filter(document=>!isLegacyBulkScan(document));
-  if(filtered.length!==before.length){
-    DB.scannedDocuments=filtered;
-    localStorage.setItem(DB_KEY,JSON.stringify(DB));
-  }
-  try{
-    const response=await fetch('/api/documents/remove-bulk-scans',{method:'POST',headers:{Accept:'application/json'}});
-    if(response.ok){serverRevision=Number((await response.json()).revision||serverRevision);queueServerStateSave();}
-  }catch(error){console.warn('Legacy bulk scan cleanup unavailable; local cleanup retained.',error);}
 }
 body.light{
   --bg:#f4f1e8; --bg2:#fffdf7; --bg3:#ebe6d8; --card:#fffefa;
@@ -344,27 +332,28 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <button class="tb-btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
   </div>
   <div id="content"></div>
-  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span><span id="app-build-label"></span> · Data stored locally on this device · FNB Gold Business 63173509557 · Branch 250655</span></div>
+  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span><span id="workspace-sync-label"></span> · <span id="app-build-label"></span> · Data stored locally on this device · FNB Gold Business 63173509557 · Branch 250655</span></div>
 </div>
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=40"></script>
-<script src="income-2026.js?v=40"></script>
-<script src="operations-data.js?v=40"></script>
-<script src="scanned-data.js?v=40"></script>
-<script src="bank-statements.js?v=40"></script>
-<script src="js/pricing-core.js?v=40"></script>
-<script src="js/fabrics.js?v=40"></script>
-<script src="js/fabric-picker.js?v=40"></script>
-<script src="js/pricing.js?v=40"></script>
-<script src="js/quote-history.js?v=40"></script>
-<script src="js/document-editor.js?v=40"></script>
-<script src="js/document-views.js?v=40"></script>
-<script src="js/quotes.js?v=40"></script>
-<script src="js/dashboard.js?v=40"></script>
-<script src="js/suppliers.js?v=40"></script>
-<script src="js/app-version.js?v=40"></script>
+<script src="imported-data.js?v=41"></script>
+<script src="income-2026.js?v=41"></script>
+<script src="operations-data.js?v=41"></script>
+<script src="scanned-data.js?v=41"></script>
+<script src="bank-statements.js?v=41"></script>
+<script src="js/pricing-core.js?v=41"></script>
+<script src="js/fabrics.js?v=41"></script>
+<script src="js/fabric-picker.js?v=41"></script>
+<script src="js/pricing.js?v=41"></script>
+<script src="js/quote-history.js?v=41"></script>
+<script src="js/document-editor.js?v=41"></script>
+<script src="js/document-views.js?v=41"></script>
+<script src="js/quotes.js?v=41"></script>
+<script src="js/dashboard.js?v=41"></script>
+<script src="js/suppliers.js?v=41"></script>
+<script src="js/app-version.js?v=41"></script>
+<script src="js/shared-sync.js?v=41"></script>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
@@ -799,32 +788,38 @@ async function initializeServerSync(){
     }
     if(!response.ok) throw await stateRequestError(response,'Server state unavailable');
     const snapshot=await response.json();
+    if(sharedSyncBase&&!DB.meta?.syncPending&&document.querySelector('#modal-root input,#modal-root textarea,#modal-root select')&&Number(snapshot.revision)!==serverRevision){
+      serverSyncAvailable=true;return true;
+    }
     serverRevision=Number(snapshot.revision||0);
     serverSyncAvailable=true;
     serverSyncError=null;
     serverRetryAttempt=0;
     clearTimeout(serverRetryTimer);
-    const localSavedAt=Date.parse(DB.meta?.localSavedAt||'');
-    const remoteUpdatedAt=Date.parse(snapshot.updatedAt||'');
-    if(snapshot.data&&Object.keys(snapshot.data).length&&(!Number.isFinite(localSavedAt)||!Number.isFinite(remoteUpdatedAt)||remoteUpdatedAt>=localSavedAt)){
-      DB={...DB,...snapshot.data,meta:{...DB.meta,...(snapshot.data.meta||{})}};
-      mergeBundledFnbState(DB);
-      normalizeWageLedger(DB);
-      deduplicateExpenseLedger(DB);
-      normalizePayables(DB);
-      persistLocalSnapshot();
-      render();
-    }else if(Number.isFinite(localSavedAt)&&(!Number.isFinite(remoteUpdatedAt)||localSavedAt>remoteUpdatedAt)){
-      queueServerStateSave();
+    if(serverConflict){sharedSyncStatus('Shared edit conflict · review Settings');return false;}
+    if(!hasSharedAccounting(snapshot.data)){
+      // A documents-only initial server snapshot must not erase the imported ledger.
+      DB={...DB,...snapshot.data,meta:{...DB.meta,...snapshot.data?.meta}};
+      sharedSyncBase=JSON.parse(JSON.stringify(DB));queueServerStateSave();
+    }else if(DB.meta?.syncPending){
+      if(sharedSyncBase){
+        const merged=mergeSharedState(sharedSyncBase,DB,snapshot.data);
+        if(merged.conflicts.length){preserveSharedConflict(snapshot,merged.conflicts);return false;}
+        DB={...merged.data,meta:{...merged.data.meta,localSavedAt:DB.meta.localSavedAt,syncPending:true}};
+        sharedSyncBase=JSON.parse(JSON.stringify(snapshot.data));queueServerStateSave();
+      }else if(Number(DB.meta.syncRevision)===serverRevision){
+        sharedSyncBase=JSON.parse(JSON.stringify(snapshot.data));queueServerStateSave();
+      }else{preserveSharedConflict(snapshot,['Offline changes require review']);return false;}
     }else{
-      queueServerStateSave();
+      const before=JSON.stringify(syncComparable(snapshot.data));applySharedSnapshot(snapshot);
+      if(JSON.stringify(syncComparable(DB))!==before)queueServerStateSave();
     }
     await synchronizeRemoteDocuments();
-    await removeLegacyBulkScans();
-    setTimeout(()=>queueServerStateSave(),0);
+    return true;
   }catch(error){
     serverSyncAvailable=false;
     serverSyncError=error;
+    sharedSyncStatus('Offline · changes pending sync');
     console.warn('Server persistence unavailable; continuing offline.',error);
     clearTimeout(serverRetryTimer);
     const delay=Math.min(30000,2000*2**serverRetryAttempt);
@@ -832,6 +827,7 @@ async function initializeServerSync(){
     serverRetryTimer=setTimeout(initializeServerSync,delay);
   }finally{
     serverSyncInFlight=false;
+    if(serverSyncPending&&serverSyncAvailable&&!serverConflict)queueServerStateSave();
   }
 }
 async function synchronizeRemoteDocuments(){
@@ -857,11 +853,13 @@ async function synchronizeRemoteDocuments(){
 }
 function queueServerStateSave(){
   serverSyncPending=true;
+  DB.meta=DB.meta||{};DB.meta.syncPending=true;writeLocalSnapshot(JSON.stringify(DB));sharedSyncStatus('Saving shared workspace…');
   if(!serverSyncAvailable||serverSyncInFlight)return;
   clearTimeout(serverSyncTimer);
   serverSyncTimer=setTimeout(syncServerState,900);
 }
 async function syncServerState(force=false,silent=false){
+  if(serverConflict)return false;
   if(serverSyncPromise){
     serverSyncPending=true;
     if(!force)return false;
@@ -877,22 +875,29 @@ async function syncServerState(force=false,silent=false){
   serverSyncPending=false;
   const syncPromise=(async()=>{
     try{
-      let response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
+      const submitted=JSON.parse(JSON.stringify(DB));
+      let response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:submitted})});
       if([401,403].includes(response.status)&&await refreshAuthSession()){
-        response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:DB})});
+        response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({revision:serverRevision,data:submitted})});
       }
       const payload=await response.json().catch(()=>({}));
       if(response.status===409&&payload.snapshot){
-        serverRevision=payload.snapshot.revision;
-        serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:payload.snapshot.data||{},revision:payload.snapshot.revision};
-        localStorage.setItem('UW_STATE_CONFLICT',JSON.stringify(serverConflict));
-        serverSyncAvailable=false;
-        serverSyncPending=false;
-        if(!silent)toast('A newer server copy exists. Your local changes were preserved; review the conflict in Settings.');
+        const merged=sharedSyncBase?mergeSharedState(sharedSyncBase,DB,payload.snapshot.data||{}):{conflicts:['No acknowledged baseline']};
+        if(!merged.conflicts.length){
+          DB={...merged.data,meta:{...merged.data.meta,localSavedAt:DB.meta?.localSavedAt,syncPending:true}};
+          sharedSyncBase=JSON.parse(JSON.stringify(payload.snapshot.data));serverRevision=payload.snapshot.revision;
+          serverSyncPending=true;writeLocalSnapshot(JSON.stringify(DB));
+          sharedSyncStatus('Combining shared changes…');
+        }else{
+          preserveSharedConflict(payload.snapshot,merged.conflicts);
+          if(!silent)toast('Both profiles changed the same record. Both versions are preserved; review Settings.');
+        }
         return false;
       }else if(!response.ok) throw await stateRequestError(response,'Server save failed');
       else {
         serverRevision=payload.revision;
+        sharedSyncBase=submitted;DB.meta=DB.meta||{};DB.meta.syncRevision=serverRevision;DB.meta.syncPending=serverSyncPending;
+        writeLocalSnapshot(JSON.stringify(DB));sharedSyncStatus(serverSyncPending?'Saving shared workspace…':'Shared workspace up to date');
         serverSyncAvailable=true;
         serverSyncError=null;
         const exportErrors=payload.documentExports?.errors;
@@ -935,13 +940,16 @@ function resolveStateConflict(choice){
   if(choice==='server'){
     DB={...DB,...serverConflict.remote,meta:{...DB.meta,...(serverConflict.remote.meta||{})}};
     serverRevision=serverConflict.revision;
+    sharedSyncBase=JSON.parse(JSON.stringify(serverConflict.remote));
     serverSyncAvailable=true;
-    localStorage.setItem(DB_KEY,JSON.stringify(DB));
+    DB.meta.syncPending=false;DB.meta.syncRevision=serverRevision;
+    localStorage.setItem(DB_KEY,JSON.stringify(DB));sharedSyncStatus('Shared workspace up to date');
   }else if(choice==='local'){
     DB=serverConflict.local;
     serverRevision=serverConflict.revision;
+    sharedSyncBase=JSON.parse(JSON.stringify(serverConflict.remote));
     serverSyncAvailable=true;
-    localStorage.removeItem('UW_STATE_CONFLICT');
+    serverConflict=null;localStorage.removeItem('UW_STATE_CONFLICT');
     queueServerStateSave();
     toast('Local copy queued for overwrite');
     return;
@@ -982,7 +990,8 @@ async function confirmManagedDocumentReadable(document){
 }
 window.addEventListener('online',()=>initializeServerSync());
 window.addEventListener('pagehide',()=>persistLocalSnapshot());
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!serverSyncAvailable)initializeServerSync();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&document.body.classList.contains('app-ready'))refreshSharedWorkspace();});
+window.addEventListener('focus',()=>{if(document.body.classList.contains('app-ready'))refreshSharedWorkspace();});
 function normalizeQuoteFields(db){
   (db.quotes||[]).forEach(q=>{
     if(q.projectReference===undefined) q.projectReference='';
@@ -1272,6 +1281,7 @@ async function globalSave(){
       else if(synced?.serverSaved&&synced.supabaseConfigured)toast('Saved locally and on this computer — database sync is queued and will retry');
       else if(synced?.serverSaved)toast('Saved locally and on this computer — Supabase is not configured');
       else if(serverConflict)toast('Saved locally — a database conflict needs review in Settings');
+      else if(serverSyncPending&&serverSyncAvailable)toast('Saved locally — combining shared changes; sync will retry automatically');
       else if(serverSyncError?.status===401)toast('Saved locally — sign in again to sync with the server');
       else toast('Saved locally — server sync is unavailable and will retry');
     }else{
@@ -1287,15 +1297,17 @@ async function globalSave(){
 }
 function persistLocalSnapshot(){
   const result=writeLocalSnapshot(JSON.stringify(DB));
-  if(result.ok)queueServerStateSave();
+  if(result.ok&&DB.meta?.syncPending)queueServerStateSave();
   else console.error('Periodic local save failed:',result.error);
 }
 function startPeriodicSync(){
   clearInterval(periodicSyncTimer);
   periodicSyncTimer=setInterval(()=>{
-    persistLocalSnapshot();
-    if(serverSyncAvailable&&!serverSyncInFlight) syncServerState();
-  },30000);
+    if(serverSyncPending||DB.meta?.syncPending){
+      if(!serverSyncInFlight&&!serverConflict){if(serverSyncAvailable)syncServerState();else initializeServerSync();}
+    }
+    else refreshSharedWorkspace();
+  },5000);
 }
 function cloudConfig(){return DB.meta.cloud||{};}
 async function cloudSync(direction){
@@ -2788,7 +2800,7 @@ function initializeAccessFlow(){
       sessionStorage.setItem('UW_CSRF_TOKEN',result.csrfToken||'');
       localStorage.setItem('UW_ACCESS_USER', result.user?.email||userValue);
       loginScreen.classList.add('hidden');
-      startApplication(result.user);
+      await startApplication(result.user);
     }catch(error){
       showLoginError(error.name==='TimeoutError'?'The sign-in request timed out. Check the connection and try again.':error.message||'Unable to sign in. Try again.');
       passField.value='';
@@ -2799,8 +2811,9 @@ function initializeAccessFlow(){
   });
 }
 
-function startApplication(user){
-  initializeServerSync();
+async function startApplication(user){
+  sharedSyncStatus('Loading shared workspace…');
+  await initializeServerSync();
   startPeriodicSync();
   renderNav();
   render();
