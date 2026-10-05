@@ -1,0 +1,30 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const os=require('node:os');
+const path=require('node:path');
+const {spawnSync}=require('node:child_process');
+const test=require('node:test');
+const repo=path.resolve(__dirname,'..');
+test('local updater installs all modules while preserving data, secrets and dependencies',{skip:process.platform!=='win32'},()=>{
+  const fixture=fs.mkdtempSync(path.join(os.tmpdir(),'uw-code-update-test-')),installed=path.join(fixture,'installed');
+  fs.mkdirSync(path.join(installed,'data'),{recursive:true});fs.mkdirSync(path.join(installed,'node_modules'),{recursive:true});fs.mkdirSync(path.join(installed,'public'),{recursive:true});
+  fs.writeFileSync(path.join(installed,'server.js'),'// previous code');
+  fs.copyFileSync(path.join(repo,'package-lock.json'),path.join(installed,'package-lock.json'));
+  fs.writeFileSync(path.join(installed,'.env'),'fixture credentials stay intact');
+  fs.writeFileSync(path.join(installed,'data','uw-state.json'),'fixture accounting state');
+  fs.writeFileSync(path.join(installed,'node_modules','sentinel.txt'),'installed dependencies');
+  const result=spawnSync('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(repo,'scripts','update-local-app.ps1'),'-InstallRoot',installed,'-SkipRestart','-NoBrowser'],{encoding:'utf8',timeout:60000,windowsHide:true});
+  assert.equal(result.status,0,result.stdout+'\n'+result.stderr);
+  assert.equal(fs.readFileSync(path.join(installed,'.env'),'utf8'),'fixture credentials stay intact');
+  assert.equal(fs.readFileSync(path.join(installed,'data','uw-state.json'),'utf8'),'fixture accounting state');
+  assert.equal(fs.readFileSync(path.join(installed,'node_modules','sentinel.txt'),'utf8'),'installed dependencies');
+  assert(!fs.existsSync(path.join(installed,'tmp'))&&!fs.existsSync(path.join(installed,'UW')));
+  const build=JSON.parse(fs.readFileSync(path.join(installed,'public','build-info.json'),'utf8'));
+  assert(build.files['public/js/pricing-core.js']);assert(build.files['public/js/suppliers.js']);
+  assert.equal(fs.readFileSync(path.join(installed,'public','sw.js'),'utf8'),fs.readFileSync(path.join(repo,'public','sw.js'),'utf8'));
+});
+test('updated service worker precaches every local module and stylesheet',()=>{
+  const html=fs.readFileSync(path.join(repo,'public','index.html'),'utf8'),sw=fs.readFileSync(path.join(repo,'public','sw.js'),'utf8');
+  for(const match of html.matchAll(/(?:src|href)="((?:js|css)\/[^"?]+)"/g))assert(sw.includes("'./"+match[1]+"'"),match[1]+' is missing from the offline shell');
+  assert(sw.includes("'uw-accounting-v38'"));assert(sw.includes("'uw-accounting-documents-v2'"));
+});

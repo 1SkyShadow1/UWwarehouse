@@ -19,7 +19,7 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
     res.writeHead(404); return res.end();
   }
-  const type = { '.html': 'text/html', '.js': 'application/javascript', '.png': 'image/png', '.svg': 'image/svg+xml' }[path.extname(file)] || 'application/octet-stream';
+  const type = { '.html': 'text/html', '.js': 'application/javascript', '.css':'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' }[path.extname(file)] || 'application/octet-stream';
   res.writeHead(200, { 'Content-Type': type });
   fs.createReadStream(file).pipe(res);
 });
@@ -44,6 +44,12 @@ async function run() {
     await page.addStyleTag({content:'#boot-screen,#login-screen{display:none!important}'});
     const catalog = await page.evaluate(() => window.UW_FABRIC_CATALOG);
     assert.equal(catalog.fabrics.length, 1421);
+    await page.evaluate(()=>go('suppliers'));
+    assert((await page.locator('#content').innerText()).includes('1421 selectable source entries'));
+    assert.equal(await page.getByRole('button',{name:'Browse fabrics',exact:true}).count(),6);
+    await page.getByRole('button',{name:'Browse fabrics',exact:true}).first().click();
+    assert.equal(await page.locator('#content table tr').count(),15);
+    assert((await page.locator('#content').innerText()).includes('African Gameskin'));
     await page.evaluate(() => newInvoice());
     const representatives = Object.keys(catalog.sources).map(key => catalog.fabrics.find(f => f.sourceId === key && !f.needsPriceConfirmation));
     for (let index = 0; index < representatives.length; index++) {
@@ -134,11 +140,12 @@ async function run() {
     assert.equal(await page.locator('.i-price').inputValue(), '');
     assert.equal(await page.evaluate(() => collectDocumentItems('f-items', 'i')), null);
     await page.locator('.i-price').fill('123.45');
+    await page.locator('.line-cost').fill('100');
     assert.equal((await page.evaluate(() => collectDocumentItems('f-items', 'i')))[0].price, 123.45);
     await page.evaluate(() => closeModal());
 
     // Catalog is read from its bundle even after a restored DB has no fabrics.
-    await page.evaluate(() => { window.savedTestFabrics = DB.fabrics; DB.fabrics = []; go('fabrics'); });
+    await page.evaluate(() => { window.savedTestFabrics = DB.fabrics; DB.fabrics = []; delete state.docFilters.fabrics; go('fabrics'); });
     assert.equal(await page.locator('#content table tr').count(), 1422);
     await page.evaluate(() => { setDocFilter('fabrics', 'q', 'Gazelle'); applyDocFilter('fabrics'); });
     assert.equal(await page.locator('#content table tr').count(), 3);
@@ -154,8 +161,10 @@ async function run() {
     await page.evaluate(() => { calcPrice(); quoteFromCalc(); });
     const calcQuote = await page.evaluate(() => DB.quotes[0]);
     assert.equal(calcQuote.items[0].qty, 7.5);
-    assert.equal(calcQuote.items[0].price, 102);
-    assert(Math.abs(calcQuote.items.reduce((s, i) => s + i.qty * i.price, 0) - calcQuote.calculator.total) < 0.000001);
+    assert.equal(calcQuote.items[0].unitCost,102);
+    assert.equal(calcQuote.items[0].price,122.4);
+    assert.equal(Math.round(calcQuote.items.reduce((s, i) => s + i.qty * i.price, 0)*100)/100,calcQuote.calculator.total);
+    assert(!calcQuote.items.some(item=>/pricing margin/i.test(item.desc)));
 
     await page.evaluate(() => { go('pricing'); const before = document.getElementById('pc-fab').value; document.getElementById('pc-item').value = '1'; loadPricePreset(); window.presetChanged = before !== document.getElementById('pc-fab').value || Number(document.getElementById('pc-mtr').value) === Number(DB.priceBook[1].mtr); });
     assert.equal(await page.evaluate(() => window.presetChanged), true);
@@ -191,6 +200,94 @@ async function run() {
     await page.locator('.line-fabric').dispatchEvent('change');
     assert.equal((await page.evaluate(()=>collectDocumentItems('f-items','i')))[0].unit,'panel');
     assert.equal(Number(await page.locator('.i-price').inputValue()),750);
+    // Visible picker selection, independent cost/selling prices, and accepted revisions.
+    await page.evaluate(()=>{closeModal();newQuote();});
+    await page.locator('#modal-root .fabric-supplier').selectOption('Helm');
+    await page.locator('.line-fabric').fill(helm.desc);
+    const searchResult=page.locator(`.fabric-result[data-fabric-id="${helm.id}"]`);
+    assert((await searchResult.innerText()).includes('excl VAT'));
+    await page.locator(`#modal-root .fabric-favorite[data-fabric-id="${helm.id}"]`).click();
+    await page.locator('#modal-root .fabric-scope').selectOption('favorites');
+    assert.equal(await page.locator('#modal-root .fabric-result').count(),1);
+    await searchResult.click();
+    assert.equal(await page.evaluate(id=>DB.meta.fabricPicker.recentIds[0]===id,helm.id),true);
+    assert.equal(Number(await page.locator('.line-cost').inputValue()),102);
+    await page.locator('.line-markup').fill('25');
+    assert.equal(Number(await page.locator('.i-price').inputValue()),127.5);
+    await page.locator('.i-qty').fill('2.5');
+    assert((await page.locator('.line-profit').innerText()).includes('20.0%'));
+    assert((await page.locator('#f-items-profit').innerText()).includes(await page.evaluate(()=>R(318.75))));
+    await page.locator('.line-fabric-vat').selectOption('incl');
+    assert.equal(Number(await page.locator('.line-cost').inputValue()),117.3);
+    assert.equal(Number(await page.locator('.i-price').inputValue()),146.63);
+    await page.locator('.line-fabric-vat').selectOption('listed');
+    await page.locator('#f-cust').fill('Revision client');
+    assert.equal(await page.locator('#f-expiry').inputValue(),await page.evaluate(()=>dateAfterDays(today())));
+    await page.evaluate(()=>saveInvoice());
+    const revisionQuote=await page.evaluate(()=>DB.quotes[0]);
+    assert.equal(revisionQuote.revision,1);
+    assert.equal(revisionQuote.items[0].unitCost,102);
+    await page.evaluate(id=>{acceptQuote(id);viewQuote(id);},revisionQuote.id);
+    const customerPreview=await page.locator('#quote-preview').innerText();
+    assert(customerPreview.includes('Revision 1'));
+    assert(customerPreview.includes('valid until '+revisionQuote.expiry));
+    assert(!customerPreview.includes('Markup')&&!customerPreview.includes('Cost / unit'));
+    await page.evaluate(id=>{closeModal();convertQuote(id);},revisionQuote.id);
+    const acceptedInvoice=await page.evaluate(()=>DB.invoices[0]);
+    assert.equal(acceptedInvoice.quoteRevision,1);
+    await page.evaluate(id=>editQuote(id),revisionQuote.id);
+    await page.locator('.eq-price').fill('150');
+    await page.evaluate(id=>saveEditedQuote(id),revisionQuote.id);
+    const revised=await page.evaluate(()=>DB.quotes.find(q=>q.customer==='Revision client'));
+    assert.equal(revised.revision,2);assert.equal(revised.status,'Draft');
+    assert.equal(revised.acceptedVersion.snapshot.items[0].price,127.5);
+    assert.equal(await page.evaluate(id=>DB.invoices.find(i=>i.id===id).items[0].price,acceptedInvoice.id),127.5);
+    await page.evaluate(id=>viewQuoteHistory(id),revisionQuote.id);
+    assert((await page.locator('#modal-root').innerText()).includes('selling / unit: 127.5 → 150'));
+    await page.evaluate(id=>viewQuoteRevision(id,1),revisionQuote.id);
+    assert((await page.locator('#quote-preview').innerText()).includes('Revision 1'));
+    await page.evaluate(id=>viewAcceptedQuote(id),revisionQuote.id);
+    assert((await page.locator('#quote-preview').innerText()).includes('Revision 1'));
+    await page.evaluate(()=>closeModal());
+    await page.evaluate(id=>editQuote(id),revisionQuote.id);
+    const revisionBefore=await page.evaluate(id=>DB.quotes.find(q=>q.id===id).revision,revisionQuote.id);
+    await page.evaluate(id=>saveEditedQuote(id),revisionQuote.id);
+    assert.equal(await page.evaluate(id=>DB.quotes.find(q=>q.id===id).revision,revisionQuote.id),revisionBefore);
+    await page.evaluate(()=>newQuote());
+    await page.locator('#f-cust').fill('Expired client');
+    await page.locator('#f-date').fill('2026-01-01');
+    await page.locator('#f-expiry').fill('2026-01-31');
+    await page.locator('.i-desc').fill('Expired work');
+    await page.locator('.i-price').fill('50');
+    await page.evaluate(()=>saveInvoice());
+    const expiredQuote=await page.evaluate(()=>DB.quotes[0]);
+    const invoiceCount=await page.evaluate(()=>DB.invoices.length);
+    await page.evaluate(id=>convertQuote(id),expiredQuote.id);
+    assert.equal(await page.evaluate(()=>DB.invoices.length),invoiceCount);
+    assert.equal(await page.evaluate(id=>DB.quotes.find(q=>q.id===id).status,expiredQuote.id),'Draft');
+    // Daily actions open the precise record and remain independent of month filters.
+    await page.evaluate(({invoiceId,quoteId})=>{
+      DB.invoices.find(i=>i.id===invoiceId).dueDate=dateAfterDays(today(),-1);
+      DB.quotes.find(q=>q.id===quoteId).expiry=dateAfterDays(today(),3);
+      DB.jobs=[{id:'daily-job',stage:'Deposit received',customer:'Daily client'}];
+      DB.stock=[{sku:'daily-stock',name:'Daily fabric',quantity:1,reorderLevel:2,unit:'m'}];
+      DB.fnbStatements=[{id:'daily-statement',transactions:[{id:'daily-bank',date:today(),description:'Daily purchase',debit:100,allocationNeedsReview:true}]}];
+      state.mfilter='2020-01';go('dashboard');
+    },{invoiceId:acceptedInvoice.id,quoteId:revisionQuote.id});
+    assert((await page.locator('#content').innerText()).includes('Overdue invoice'));
+    assert((await page.locator('#content').innerText()).includes('Job awaiting materials'));
+    const dailyInvoiceRow=page.locator('#content tr').filter({hasText:acceptedInvoice.id}).first();
+    await dailyInvoiceRow.getByRole('button',{name:'Open',exact:true}).click();
+    assert((await page.locator('#invoice-preview').innerText()).includes(acceptedInvoice.id));
+    await page.evaluate(()=>{closeModal();go('dashboard');});
+    await page.getByLabel('Daily action category').selectOption('quote');
+    assert(!(await page.locator('#content .panel').first().innerText()).includes('Low stock'));
+    await page.evaluate(()=>openDailyAction('bank','daily-bank'));
+    assert((await page.locator('#modal-root').innerText()).includes('Daily purchase'));
+    await page.getByLabel('Bank action category').selectOption('Other');
+    assert.equal(await page.evaluate(()=>DB.fnbStatements[0].transactions[0].allocationNeedsReview),false);
+    await page.evaluate(()=>go('dashboard'));
+    assert(!(await page.evaluate(()=>dailyActions(DB).map(a=>a.id))).includes('daily-bank'));
     assert.deepEqual(errors, []);
     if (process.env.UW_TEST_SCREENSHOT){
       await page.evaluate(()=>{closeModal();newQuote();});
@@ -203,7 +300,7 @@ async function run() {
       await page.evaluate(()=>{closeModal();go('fabrics');setDocFilter('fabrics','q','');setDocFilter('fabrics','category','The Mill');applyDocFilter('fabrics');});
       await page.screenshot({path:process.env.UW_TEST_SCREENSHOT.replace(/\.png$/,'.catalog.png'),fullPage:true});
     }
-    console.log('PASS: six suppliers, autofill, fractional quantities, invoice/quote edits, overrides, VAT, confirmed supplier units, hide units, duplicate designs, quote conversion, linked record renaming, duplicate document IDs, missing prices, unknown selections, bulk eligibility, catalog search/restore, calculator reconciliation and preset refresh; no browser exceptions.');
+    console.log('PASS: supplier pricing, searchable picker, markup/margin, manual overrides, accepted revisions, expiry enforcement, daily actions, catalog restore and calculator reconciliation; no browser exceptions.');
   } finally {
     await browser.close();
   }

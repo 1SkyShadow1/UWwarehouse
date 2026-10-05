@@ -1,0 +1,14 @@
+.fabric-search input,.fabric-search select,.line-cost,.line-markup,.line-pricing-mode{
+  background:var(--input,#121212);color:var(--text);border:1px solid var(--line);
+  border-radius:6px;padding:7px;font:inherit;max-width:100%;
+}
+.fabric-search input{margin-top:5px}
+.fabric-search select{width:100%}
+.fabric-results{margin-top:5px;background:var(--card)}
+.fabric-results .fabric-result{line-height:1.5;padding:8px;font-size:12px}
+.fabric-result:focus{outline:2px solid var(--gold)}
+.line-cost,.line-markup{display:block;width:115px}
+.line-pricing-mode{display:block;width:190px}
+.line-profit{margin-top:7px;line-height:1.5;color:var(--gold2)}
+#f-items-profit,#ef-items-profit,#eq-items-profit{padding:12px 0;line-height:1.5}
+@media(max-width:850px){.modal{overflow-x:auto}.fabric-search{min-width:240px!important}}

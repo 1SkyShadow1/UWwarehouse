@@ -11,6 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
+<link rel="stylesheet" href="css/pricing.css">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -343,7 +344,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <button class="tb-btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
   </div>
   <div id="content"></div>
-  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span>Data stored locally on this device · FNB Gold Business 63173509557 · Branch 250655</span></div>
+  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span><span id="app-build-label"></span> · Data stored locally on this device · FNB Gold Business 63173509557 · Branch 250655</span></div>
 </div>
 
 <div id="modal-root"></div>
@@ -353,6 +354,18 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="operations-data.js"></script>
 <script src="scanned-data.js"></script>
 <script src="bank-statements.js"></script>
+<script src="js/pricing-core.js"></script>
+<script src="js/fabrics.js"></script>
+<script src="js/fabric-picker.js"></script>
+<script src="js/pricing.js"></script>
+<script src="js/quote-history.js"></script>
+<script src="js/document-editor.js"></script>
+<script src="js/document-views.js"></script>
+<script src="js/quotes.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/suppliers.js"></script>
+<script src="js/app-version.js"></script>
+
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 /* ============================================================
@@ -1633,69 +1646,6 @@ function render(){
 }
 
 /* ---------- DASHBOARD ---------- */
-function vDashboard(c){
-  state.mfilter=getMF()||state.mfilter;
-  const mf=state.mfilter;
-  const inv=uniqueInvoices().filter(i=>!mf||monthOf(i.date)===mf);
-  const exp=uniqueExpenses(mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses);
-  const fnbSummary=fnbReconciliationSummary(mf);
-  const crossRef=crossReferenceSummary(mf);
-  const fnbCats=fnbAllocatedCategoryTotals(mf);
-  const fnbAllocatedTotal=fnbSummary.unposted;
-  const fnbExpenseOverlaps=crossRef.fnbExpenseMatchCount;
-  const fnbExpenseOverlapTotal=crossRef.fnbExpenseMatchAmount;
-  const inc=inv.reduce((s,i)=>s+invoiceCollectedAmount(i),0);
-  const wageT=mf?0:employeeWagesTotal();
-  const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
-  const out=inv.filter(i=>invBalance(i)>0.005);
-  const outT=out.reduce((s,i)=>s+invBalance(i),0);
-  const qPend=uniqueQuotes().filter(q=>q.status!=='Accepted').length;
-  const cats={};exp.forEach(e=>{const category=canonicalExpenseCategory(e.category);cats[category]=(cats[category]||0)+Number(e.amount||0);});
-  if(wageT)cats['Employee wages / Salary']=(cats['Employee wages / Salary']||0)+wageT;
-  const maxC=Math.max(1,...Object.values(cats));
-  c.innerHTML=`
-  <div class="toolbar">${monthFilterHtml('mf')}</div>
-  <div class="cards">
-    <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} unique invoice(s)${mf?' · '+mf:''} · paid + deposits</div></div>
-    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + employee wages':''}</div></div>
-    <div class="card"><div class="lbl">FNB reconciled spend</div><div class="val amber">${R(fnbSummary.total)}</div><div class="sub">${R(fnbSummary.posted)} posted once · ${R(fnbAllocatedTotal)} still unposted</div></div>
-    <div class="card"><div class="lbl">Receipt/card cross-reference</div><div class="val">${crossRef.matchedScanCount}</div><div class="sub">${R(crossRef.matchedScanAmount)} receipt evidence matched · ${crossRef.reviewedScanCount} reviewed</div></div>
-    <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
-    <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
-    <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${uniqueQuotes().length} unique total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
-    <div class="card"><div class="lbl">Scanned documents awaiting Gemini</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length}</div><div class="sub">Failed and pending scans can be retried</div></div>
-  </div>
-  <div class="grid2">
-    <div class="panel"><h3>Recorded expense ledger · categories ${mf?'· '+mf:''}</h3>
-      ${Object.keys(cats).length?Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
-        <div class="bar-row"><span style="width:110px;color:var(--muted)">${k}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxC*100).toFixed(1)}%"></div></div>
-        <b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No expenses this period</div>'}
-    </div>
-    <div class="panel"><h3>Recent Invoices</h3>
-      <table><tr><th>No</th><th>Customer</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th></tr>
-      ${uniqueInvoices().slice(0,6).map(i=>`<tr><td>${i.id}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R(invBalance(i))}</td><td>${statusBadge(i.status)}</td></tr>`).join('')}
-      </table>
-    </div>
-  </div>
-  <div class="panel"><h3>FNB source register · unposted bank debits ${mf?'· '+mf:''}</h3>
-    <p style="font-size:11px;color:var(--muted)">This is a bank-source reconciliation view, not a second expense ledger. FNB spend is shown once in the reconciled total; posted rows are already represented in Total Expenses and only unposted rows remain in the category breakdown below.</p>
-    ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:190px;color:var(--muted)">FNB · ${k} <small>(unposted)</small></span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No unposted FNB debits for this period</div>'}
-  </div>
-  <div class="panel"><h3>Financial data controls</h3>
-    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB reconciled total contains eligible bank debits exactly once: ${R(fnbSummary.posted)} are posted into the ledger and ${R(fnbSummary.unposted)} remain unposted source evidence. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s), totaling ${R(fnbExpenseOverlapTotal)}, match recorded expenses by amount and date; they are not added again.`:'No FNB debit currently matches a recorded expense by amount and date.'} Receipt cross-reference: ${crossRef.matchedScanCount} reviewed receipt(s) match card debits for ${R(crossRef.matchedScanAmount)}; ${crossRef.reviewedScanCount-crossRef.matchedScanCount} reviewed receipt(s) remain unmatched for review. Unreviewed scans never affect totals. Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
-  </div>
-  <div class="panel"><h3>Quick Actions</h3>
-    <div class="toolbar">
-      <button class="btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
-      <button class="btn gold" onclick="go('quotes');setTimeout(newQuote,100)">+ New Quote</button>
-      <button class="btn" onclick="go('receipts');setTimeout(newReceipt,100)">+ Log Receipt</button>
-      <button class="btn" onclick="go('expenses');setTimeout(newExpense,100)">+ Add Expense</button>
-      <button class="btn" onclick="go('pricing')">Open Pricing Calculator</button>
-    </div>
-  </div>`;
-}
-
 /* ---------- INVOICES ---------- */
  const whatsappIcon='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M20.52 3.48A11.84 11.84 0 0 0 12.08 0C5.53 0 .2 5.33.2 11.88c0 2.1.55 4.15 1.6 5.96L.1 24l6.3-1.65a11.9 11.9 0 0 0 5.68 1.44h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.18-1.23-6.17-3.45-8.43Zm-8.44 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.22-3.74.98 1-3.65-.24-.37a9.85 9.85 0 1 1 8.38 4.64Zm5.4-7.4c-.3-.15-1.78-.88-2.05-.98-.27-.1-.47-.15-.67.15-.2.3-.77.98-.95 1.18-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.09 4.49.71.31 1.27.5 1.7.64.72.23 1.38.2 1.9.12.58-.09 1.78-.73 2.03-1.43.25-.7.25-1.3.17-1.43-.07-.12-.27-.2-.57-.35Z"/></svg>';
  async function shareDocumentWhatsApp(kind,id){
@@ -1789,112 +1739,6 @@ function setFnbTransactionCategory(statementId,rowId,category){
   transaction.allocationNeedsReview=!category;
   save();render();
 }
-function newInvoice(mode='invoice'){
-  window.invoiceFormMode=mode;
-  const initialDate=today(), initialPrefix='BB';
-  const prefixField=mode==='quote'?'':'<div class="fld"><label>Invoice initials</label><select id="f-prefix" onchange="document.getElementById(\'f-no\').value=nextInvoiceNo(document.getElementById(\'f-date\').value,this.value)"><option value="BB">BB</option><option value="EE">EE</option></select></div>';
-  const dateHandler=mode==='quote'?'document.getElementById(\'f-no\').value=nextQuoteNo(this.value)':'document.getElementById(\'f-no\').value=nextInvoiceNo(this.value,document.getElementById(\'f-prefix\').value)';
-  modal(`<h3>New Invoice</h3>
-  <div class="frm">
-    <div class="fld"><label>${mode==='quote'?'Quote No':'Invoice No'}</label><input id="f-no" value="${mode==='quote'?nextQuoteNo(initialDate):nextInvoiceNo(initialDate,initialPrefix)}" ${mode==='quote'?'readonly':''}></div>
-    ${prefixField}
-    <div class="fld"><label>Date</label><input id="f-date" type="date" value="${initialDate}" onchange="${dateHandler}"></div>
-    <div class="fld"><label>Customer</label><input id="f-cust"></div>
-    <div class="fld"><label>Contact / Phone</label><input id="f-contact"></div>
-    <div class="fld"><label>Email</label><input id="f-email"></div>
-    <div class="fld"><label>${mode==='quote'?'Project Reference':'Project'}</label><input id="f-project" value="${mode==='quote'?'':'Re-Upholstery'}"></div>
-    ${mode==='quote'?`<div class="fld"><label>Quote item preset</label><select id="f-preset" onchange="applyQuotePreset(this.value, this)"><option value="">Choose size/type/material preset…</option>${(Array.isArray(DB.priceBook)?DB.priceBook:[]).map((p,i)=>`<option value="${i}">${p.code||'Preset '+(i+1)} — ${p.desc||'Priced item'}</option>`).join('')}</select></div>
-    <div class="fld"><label>Number of items</label><input id="f-qty" type="number" min="1" step="1" value="1" onchange="refreshQuotePreset()"></div>
-    <div class="fld"><label>Work type</label><select id="f-work-type" onchange="refreshQuotePreset()"><option>Manufacturing</option><option>Repair</option><option>Reupholster</option></select></div>
-    <div class="fld"><label>Material length</label><select id="f-length" onchange="refreshQuotePreset()"><option value="">Use preset length</option>${[1,2,3,4,5,6,7,8,9,10,11,12,14,16,18,20,22,24,26,30].map(length=>`<option value="${length}">${length}m</option>`).join('')}</select></div>
-    <div class="fld"><label>Colour</label><select id="f-colour" onchange="refreshQuotePreset()"><option value="">Choose colour…</option>${['Sterling','Dessert','Stone','Charcoal','Navy','Black','Grey','Beige','Brown','Cream','Custom'].map(color=>`<option>${color}</option>`).join('')}</select></div>`:''}
-  </div>
-  ${mode==='quote'?'<div class="fld" style="margin-bottom:8px"><label>Introduction, notes and specifications</label><textarea id="f-introduction" rows="3"></textarea></div>':''}
-  <div class="fld" style="margin-bottom:8px"><label>Line Items</label></div>
-  <table id="f-items"><tr><th>Code</th><th>Description</th><th>Supplier fabric / price basis</th>${mode==='quote'?'<th>Item</th>':''}<th>Qty</th><th class="num">Unit Price</th><th></th></tr></table>
-  <button class="btn sm" onclick="addItemRow()">+ Add line</button>
-  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
-    <button class="btn" onclick="closeModal()">Cancel</button>
-    <button class="btn gold" onclick="saveInvoice()">Save ${mode==='quote'?'Quote':'Invoice'}</button>
-  </div>`);
-  addItemRow();
-}
-function refreshQuotePreset(){
-  const preset=document.getElementById('f-preset')?.value;
-  if(preset!=='')applyQuotePreset(preset);
-}
-function applyQuotePreset(index,select){
-  const presets=Array.isArray(DB.priceBook)?DB.priceBook:[];
-  const presetIndex=Number.parseInt(index,10);
-  if(!Number.isInteger(presetIndex)||presetIndex<0||presetIndex>=presets.length)return;
-  const preset=presets[presetIndex];
-  const quantity=Math.max(1,Number(document.getElementById('f-qty')?.value)||1);
-  const workType=document.getElementById('f-work-type')?.value||'Reupholster';
-  const selectedLength=Number(document.getElementById('f-length')?.value)||Number(preset.mtr)||1;
-  const colour=document.getElementById('f-colour')?.value.trim()||'the selected colour';
-  const introduction=document.getElementById('f-introduction');
-  if(introduction) introduction.value=`${quantity} x ${preset.desc||'Item'} to be ${workType.toLowerCase()} in ${selectedLength}m ${colour} fabric.\n* New foam, decron, arm repair and consumables included.`;
-  const table=document.getElementById('f-items');
-  if(table){
-    const selectedFabric=[...table.querySelectorAll('tr')].find(row=>row._lineItem?.fabricId);
-    const savedFabric=selectedFabric?{...selectedFabric._lineItem,code:selectedFabric.querySelector('.i-code')?.value||'',desc:selectedFabric.querySelector('.i-desc').value,price:selectedFabric.querySelector('.i-price').value===''?'':Number(selectedFabric.querySelector('.i-price').value)}:null;
-    table.querySelectorAll('tr:not(:first-child)').forEach(row=>row.remove());
-    quotePresetLines(preset,quantity,selectedLength,colour).forEach(line=>addItemRow(line.item==='Fabric'&&savedFabric?{...line,...savedFabric,qty:line.qty}:{...line,code:String(preset.code||'')}));
-  }
-  if(select)select.blur();
-}
-function quotePresetLines(preset,quantity=1,lengthOverride=null,colour=''){
-  const name=String(preset?.desc||'Item');
-  const count=Math.max(1,Number(quantity)||1);
-  const length=Number(lengthOverride)||Number(preset?.mtr)||1;
-  const colourLabel=colour?` (${length}m ${colour})`:` (${length}m)`;
-  return [
-    {item:'Fabric',desc:`${name} - Fabric${colourLabel}`,qty:length*count,price:Number(preset?.fabCost)||0},
-    {item:'Foam',desc:`${name} - Foam / Decron / Comfortel`,qty:count,price:Number(preset?.matCost)||0},
-    {item:'Labour',desc:`${name} - Labour`,qty:count,price:(Number(preset?.labHr)||0)*400},
-    {item:'Consumables',desc:`${name} - Consumables`,qty:count,price:20},
-  ];
-}
-function addItemRow(item={}){appendDocumentItem('f-items','i',item,window.invoiceFormMode==='quote');}
-function saveInvoice(){
-  const items=collectDocumentItems('f-items','i');if(!items)return;
-  const common={id:document.getElementById('f-no').value,date:document.getElementById('f-date').value,customer:document.getElementById('f-cust').value,contact:document.getElementById('f-contact').value,email:document.getElementById('f-email').value,items};
-  if(!common.id||!common.date||!common.customer||!items.length){toast('Enter invoice number, date, customer and at least one line item');return;}
-  const collection=window.invoiceFormMode==='quote'?DB.quotes:DB.invoices;
-  if(collection.some(doc=>doc.id===common.id)){toast('This document number already exists');return;}
-  if(window.invoiceFormMode==='quote'){
-    DB.quotes.unshift({...common,expiry:'',projectReference:document.getElementById('f-project').value,workType:document.getElementById('f-work-type')?.value||'Reupholster',colour:document.getElementById('f-colour')?.value||'',introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false});
-    save();closeModal();toast('Quote '+common.id+' created');go('quotes');
-  }else{
-    if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
-    const inv={...common,project:document.getElementById('f-project').value,deposit:0,paid:0,status:'Pending',fy:DB.meta.fy};
-    DB.invoices.unshift(inv);save();closeModal();toast('Invoice '+inv.id+' created');render();
-  }
-}
-function editInvoice(id){
-    const i=DB.invoices.find(x=>x.id===id); if(!i)return;
-    modal(`<h3>Edit Invoice ${i.id}</h3><div class="frm">
-      <div class="fld"><label>Invoice No</label><input id="ef-no" value="${i.id}"></div><div class="fld"><label>Date</label><input id="ef-date" type="date" value="${i.date}"></div>
-      <div class="fld"><label>Customer</label><input id="ef-cust" value="${i.customer||''}"></div><div class="fld"><label>Contact / Phone</label><input id="ef-contact" value="${i.contact||''}"></div>
-      <div class="fld"><label>Email</label><input id="ef-email" value="${i.email||''}"></div><div class="fld"><label>Project</label><input id="ef-project" value="${i.project||''}"></div>
-    </div><div class="fld"><label>Line Items</label></div><table id="ef-items"><tr><th>Code</th><th>Description</th><th>Supplier fabric / price basis</th><th>Qty</th><th>Unit Price</th><th></th></tr></table>
-    <button class="btn sm" onclick="addEditItemRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedInvoice('${id}')">Save Changes</button></div>`);
-    (i.items||[]).forEach(addEditItemRow); if(!(i.items||[]).length)addEditItemRow();
-  }
-function addEditItemRow(item={}){appendDocumentItem('ef-items','ei',item,false);}
-function saveEditedInvoice(id){
-  const invoice=DB.invoices.find(x=>x.id===id);if(!invoice)return;
-  const items=collectDocumentItems('ef-items','ei');if(!items)return;
-  const nextId=fa('ef-no').trim();
-  if(!nextId||!fa('ef-date')||!fa('ef-cust')||!items.length){toast('Complete invoice number, date, customer and line items');return;}
-  if(!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
-  if(DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
-  Object.assign(invoice,{id:nextId,date:fa('ef-date'),customer:fa('ef-cust'),contact:fa('ef-contact'),email:fa('ef-email'),project:fa('ef-project'),items});
-  if(nextId!==id){
-    for(const row of [...(DB.receipts||[]),...(DB.jobs||[]),...(DB.quotes||[])])if(row.invoiceId===id)row.invoiceId=nextId;
-  }
-  save();closeModal();toast('Invoice updated');render();
-}
 function recordPayment(id){
   const inv=DB.invoices.find(i=>i.id===id);const bal=invBalance(inv);
   modal(`<h3>Record Payment — ${id}</h3>
@@ -1942,124 +1786,6 @@ function viewInvoiceLegacy(id){
   </div>`,'');
 }
 function del(coll,id){if(!confirm('Delete this record?'))return;DB[coll]=DB[coll].filter(x=>x.id!==id);save();render();toast('Deleted');}
-
-/* ---------- QUOTES ---------- */
-function quoteItemOptions(selected=''){
-  const groups={Materials:[],Labour:[],Consumables:[]};
-  const add=(group,value,label)=>{if(value&&!groups[group].some(x=>x.value===value))groups[group].push({value,label});};
-  const categories=[
-    ['Fabric','Fabric'],
-    ['Foam','Foam'],
-    ['Labour','Labour'],
-    ['Consumables','Consumables'],
-    ['Delivery','Delivery'],
-    ['Other','Other'],
-  ];
-  (DB.stock||[]).forEach(s=>{
-    const name=String(s.name||'').trim();if(name)add('Materials',s.sku||name,`${name}${s.supplier?' — '+s.supplier:''}`);
-  });
-  (DB.priceBook||[]).forEach(p=>add('Materials',p.code||p.desc,p.desc||p.code));
-  (DB.payables||[]).filter(p=>/material|fabric|foam|consum/i.test(`${p.category||''} ${p.description||''} ${p.vendor||''}`))
-    .forEach(p=>add(/consum/i.test(p.category||'')?'Consumables':'Materials',p.description||p.vendor,`${p.description||p.vendor}${p.vendor?' — '+p.vendor:''}`));
-  ['Upholstery labour','Removal and preparation labour','Cutting and sewing labour','Installation labour'].forEach(x=>add('Labour',x,x));
-  ['Foam','High-density foam','Webbing','Springs','Batting / Dacron','Staples','Adhesive / glue','Thread','Zips','Calico / lining','Dust cover fabric','Screws and fasteners','Packaging and delivery consumables'].forEach(x=>add('Consumables',x,x));
-  if(selected&&!categories.some(([value])=>value===selected)&&!Object.values(groups).some(items=>items.some(x=>x.value===selected)))add('Materials',selected,quoteItemLabel(selected));
-  return `<optgroup label="Cost category">${categories.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===selected?'selected':''}>${escapeHtml(label)}</option>`).join('')}</optgroup>${Object.entries(groups).map(([group,items])=>`<optgroup label="${group}">${items.map(x=>`<option value="${escapeHtml(x.value)}" ${x.value===selected?'selected':''}>${escapeHtml(x.label)}</option>`).join('')}</optgroup>`).join('')}`;
-}
-function quoteItemLabel(value){
-  if(!value)return '—';
-  const all=[...(DB.fabrics||[]).map(x=>({value:x.code,label:x.desc})),...(DB.stock||[]).map(x=>({value:x.sku||x.name,label:x.name})),...(DB.priceBook||[]).map(x=>({value:x.code,label:x.desc}))];
-  return all.find(x=>x.value===value)?.label||value;
-}
-function vQuotes(c){
-  const rows=sortDocumentsByDate(DB.quotes.filter(q=>docMatches(q,'quotes','Quotation',q.status)),'quotes');
-  c.innerHTML=`<div class="toolbar">${docFilterHtml('quotes',['Quotation'],['Draft','Accepted'])}<button class="btn gold" onclick="newQuote()">+ New Quote</button></div>
-  <div class="panel"><p style="font-size:11px;color:var(--muted);margin-bottom:10px">${rows.length} quote document(s) match the current filters.</p>
-  <table><tr><th>Quote No</th><th>Date</th><th>Customer</th><th>Work type</th><th>Colour</th><th class="num">Total</th><th>Status</th><th></th></tr>
-  ${rows.map(q=>`<tr><td style="color:var(--gold2)">${q.id}</td><td>${q.date}</td><td>${q.customer}</td><td>${q.workType||'Reupholster'}</td><td>${q.colour||'—'}</td>
-    <td class="num">${R(q.items.reduce((s,i)=>s+i.qty*i.price,0))}</td><td>${q.status==='Accepted'?'<span class="tag paid">Accepted</span>':'<span class="tag quote">'+q.status+'</span>'}</td>
-    <td style="white-space:nowrap"><button class="btn sm" onclick="viewQuote('${q.id}')">View</button>
-    <button class="btn sm" onclick="editQuote('${q.id}')">Edit</button>
-    <button class="btn sm" onclick="convertQuote('${q.id}')">→ Invoice</button><button class="btn sm whatsapp-btn" title="Share on WhatsApp" aria-label="Share quote on WhatsApp" onclick="shareDocumentWhatsApp('quote','${q.id}')">${whatsappIcon}</button>
-    <button class="btn sm danger" onclick="del('quotes','${q.id}')">✕</button></td></tr>`).join('')}
-  </table></div>`;
-}
-function newQuote(){newInvoice('quote');document.querySelector('#modal-root h3').textContent='New Quote';}
-function editQuote(id){
-  const q=DB.quotes.find(x=>x.id===id);if(!q)return;
-  modal(`<h3>Edit Quote ${q.id}</h3><div class="frm"><div class="fld"><label>Quote No</label><input id="eq-no" value="${q.id}"></div><div class="fld"><label>Date</label><input id="eq-date" type="date" value="${q.date}"></div><div class="fld"><label>Customer</label><input id="eq-cust" value="${q.customer||''}"></div><div class="fld"><label>Contact</label><input id="eq-contact" value="${q.contact||''}"></div><div class="fld"><label>Expiry</label><input id="eq-expiry" type="date" value="${q.expiry||''}"></div><div class="fld"><label>Project Reference</label><input id="eq-project" value="${q.projectReference||''}"></div><div class="fld"><label>Work type</label><select id="eq-work-type">${['Manufacturing','Repair','Reupholster'].map(x=>`<option ${q.workType===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="fld"><label>Colour</label><input id="eq-colour" value="${q.colour||''}" placeholder="e.g. Stone, Charcoal, Navy"></div><div class="fld"><label>Introduction, notes and specifications</label><textarea id="eq-introduction" rows="3">${q.introduction||q.notes||''}</textarea></div></div><div class="fld"><label>Line Items</label></div><table id="eq-items"><tr><th>Description</th><th>Supplier fabric / price basis</th><th>Item</th><th>Qty</th><th>Unit Price</th><th></th></tr></table><button class="btn sm" onclick="addEditQuoteRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedQuote('${id}')">Save Changes</button></div>`);
-  (q.items||[]).forEach(addEditQuoteRow);if(!(q.items||[]).length)addEditQuoteRow();
-}
-function addEditQuoteRow(item={}){appendDocumentItem('eq-items','eq',item,true,false);}
-function saveEditedQuote(id){
-  const quote=DB.quotes.find(x=>x.id===id);if(!quote)return;
-  const items=collectDocumentItems('eq-items','eq');if(!items)return;
-  const nextId=fa('eq-no').trim();
-  if(!nextId||!fa('eq-date')||!fa('eq-cust')||!items.length){toast('Complete quote number, date, customer and line items');return;}
-  if(DB.quotes.some(other=>other!==quote&&other.id===nextId)){toast('This quote number already exists');return;}
-  Object.assign(quote,{id:nextId,date:fa('eq-date'),customer:fa('eq-cust'),contact:fa('eq-contact'),expiry:fa('eq-expiry'),projectReference:fa('eq-project'),workType:fa('eq-work-type'),colour:fa('eq-colour'),introduction:fa('eq-introduction'),notes:fa('eq-introduction'),items});
-  if(nextId!==id)for(const invoice of DB.invoices||[])if(invoice.generatedFromQuote===id)invoice.generatedFromQuote=nextId;
-  save();closeModal();toast('Quote updated');render();
-}
-function viewQuoteLegacy(id){
-  const q=DB.quotes.find(x=>x.id===id);const m=DB.meta;const t=q.items.reduce((s,i)=>s+i.qty*i.price,0);
-  modal(`<h3>Quotation ${q.id}</h3><div class="doc-preview" id="print-area">
-    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px">
-      <div><b style="font-size:16px;letter-spacing:2px">UPHOLSTERY WAREHOUSE</b><br><i>ALL THINGS UPHOLSTERY...</i><br>${m.address} · ${m.phone}</div>
-      <div style="text-align:right"><b>QUOTATION</b><br>${q.id}<br>${q.date} ${q.expiry?'· Exp: '+q.expiry:''}</div></div>
-    <p style="margin:10px 0"><b>Client:</b> ${q.customer} ${q.contact?'· '+q.contact:''}</p>
-    ${q.notes?'<p><b>Notes:</b> '+q.notes+'</p>':''}
-    <table style="color:#111;font-size:12px;margin-top:8px">
-      <tr style="background:#eee"><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Total</th></tr>
-      ${q.items.map(x=>`<tr><td>${x.desc}</td><td class="num">${x.qty}</td><td class="num">${R(x.price)}</td><td class="num">${R(x.qty*x.price)}</td></tr>`).join('')}
-      <tr><td colspan="3" style="text-align:right;font-weight:bold">TOTAL</td><td class="num"><b>${R(t)}</b></td></tr></table>
-    <p style="font-size:10px;margin-top:10px">Quote includes collection & delivery within 10km. 80% deposit due on collection, 20% balance prior to delivery. No works commence until deposit paid. Kindly use Quote Number as payment reference. ${m.bank}, Acc ${m.account}, BC ${m.branch}.</p>
-  </div>
-  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button>
-  <button class="btn gold" onclick="window.print()">🖨 Print / PDF</button></div>`);
-}
-function money(n){return Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}
-function viewInvoice(id){
-  const i=DB.invoices.find(x=>x.id===id),m=DB.meta,t=invTotal(i);
-  modal(`<h3>Invoice ${i.id} <span style="float:right">${statusBadge(i.status)}</span></h3>${viewerControls('invoice-preview')}<div class="doc-viewer"><div class="template-doc" id="invoice-preview" data-scale="1">
-    <img class="template-logo" src="uw-official-logo.png" alt="Upholstery Warehouse">
-    <div class="doc-heading"><h1>INVOICE</h1><div class="doc-number"><b>INVOICE NO:</b> ${i.id}<br><b>DATE:</b> ${i.date}</div></div>
-    <div class="company-details"><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address||'4, 5th Avenue, Edenvale, JHB, 1609.'}<br>${m.phone||'077 412 8367'} / ${m.email||'info@upholsterywarehouse.co.za'}</div>
-    <div class="field-grid"><div class="field"><b>INVOICE TO:</b> ${i.customer||''}</div><div class="field"><b>Client Contact:</b> ${i.contact||''}</div><div class="field"><b>Contact:</b> ${i.phone||''}</div><div class="field"><b>Order NO:</b> ${i.orderNo||''}</div><div class="field"><b>VAT NO:</b> ${i.vatNo||''}</div><div class="field"><b>Project:</b> ${i.project||'Re-Upholstery'}</div></div>
-    <div class="template-section">ITEM CODE <span style="margin-left:18%">DESCRIPTION</span><span style="float:right">AMOUNT</span></div>
-    <table><tbody>${i.items.map(x=>`<tr><td style="width:20%">${x.code||''}</td><td>${x.desc||''}${x.qty>1?` <small>(${x.qty} × ${R(x.price)})</small>`:''}</td><td class="right" style="width:20%">R ${money(x.qty*x.price)}</td></tr>`).join('')}</tbody><tfoot><tr class="grand-total"><td colspan="2" class="right">*Grand Total:</td><td class="right">R ${money(t)}</td></tr></tfoot></table>
-    <div class="terms">${m.vatNote||'*Quoted prices above exclude VAT.'}<br>Full Terms and Conditions can be provided.<br>All goods received/collected in terms of this order remain the property of Upholstery Warehouse Pty Ltd until account is settled in full.<br><br><b>Banking Details:</b><br>Account Name: Upholstery Warehouse (Pty) Ltd<br>Bank Name: ${m.bank||'First National Bank'}<br>Account type: Current<br>Account Number: ${m.account||'63173509557'}<br>Branch Code: ${m.branch||'250655'}<br><br>*Kindly use ${i.id} as reference when making payment.</div>
-    <div class="signature-grid"><div>Received By: ...........................................................</div><div>Signature: ...............................................................</div><div>Date: ..................................................</div><div style="text-align:right;border-top:0">E&OE.<br>Produced by UW</div></div></div></div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn whatsapp-btn" onclick="shareDocumentWhatsApp('invoice','${i.id}')">${whatsappIcon} Share on WhatsApp</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
-}
-function viewQuote(id){
-  const q=DB.quotes.find(x=>x.id===id),m=DB.meta,t=q.items.reduce((s,i)=>s+i.qty*i.price,0);
-  modal(`<h3>Quotation ${q.id}</h3>${viewerControls('quote-preview')}<div class="doc-viewer"><div class="template-doc" id="quote-preview" data-scale="1">
-    <div class="quote-top-header"><img class="template-logo" src="uw-official-logo.png" alt="Upholstery Warehouse"><div class="company-details"><b>Upholstery Warehouse (Pty) Ltd</b><br>077 412 8367<br>4, 5th Avenue, Edenvale,<br>Johannesburg.<br>info@upholsterywarehouse.co.za</div></div>
-    <div class="quote-doc-heading"><h1>QUOTATION</h1><div class="doc-number"><span><b>Quote number:</b> ${q.id}</span><span class="quote-dates"><b>Date generated:</b> ${q.date} &nbsp; <b>Expiry date:</b> ${q.expiry||''}</span></div></div>
-    <div class="field-grid"><div class="field"><b>Client account name:</b> ${q.customer||''}</div><div class="field"><b>Prepared by:</b> ${q.preparedBy||'Brian Raymond'}</div><div class="field"><b>Client contact name:</b> ${q.contact||''}</div><div class="field"><b>Contact mobile:</b> ${q.phone||''}</div><div class="field"><b>Client telephone:</b> ${q.phone||''}</div><div class="field"><b>Contact email:</b> ${q.email||'info@upholsterywarehouse.co.za'}</div><div class="field"><b>Client email:</b> ${q.email||''}</div></div>
-    <div class="quote-reference"><b>Project Reference</b><span>${q.projectReference||''}</span><b>Work type</b><span>${q.workType||'Reupholster'}</span><b>Colour</b><span>${q.colour||'—'}</span></div>
-    <div class="template-section">Introduction, notes and specifications</div><div class="quote-introduction">${q.introduction||q.notes||''}</div><div class="template-section">Quote line items</div>
-    <table><thead><tr><th>Description</th><th>Item</th><th class="right">Qty</th><th class="right">Unit Price</th><th class="right">Total Price</th></tr></thead><tbody>${q.items.map(x=>`<tr><td>${x.desc||''}</td><td>${quoteItemLabel(x.item)}</td><td class="right">${x.qty}</td><td class="right">R ${money(x.price)}</td><td class="right">R ${money(x.qty*x.price)}</td></tr>`).join('')}</tbody><tfoot><tr class="grand-total"><td colspan="4" class="right">*TOTAL</td><td class="right">R ${money(t)}</td></tr></tfoot></table>
-    <div class="template-section">Payment Details: COD or EFT</div><div class="terms">• Upholstery Warehouse (PTY) LTD, First National Bank, Account Number: 63173509557 - Branch Code: 250655<br><b><i>Kindly use Quote Number as reference when making payment. *Quoted prices above exclude VAT. To be Invoiced.</i></b><br><br>By my signature I hereby declare that I have read, understood, and accept the above quotation and below terms.<br>• 80% Deposit due on collection, 20% balance due prior to delivery.<br>• No works will commence until deposit payment is made in full.<br>• Unpaid balances will result in interest being charged as well as storage costs.<br>• Quote includes FREE collection and delivery within a 5km radius of our workshop.<br>• Quote is valid for 30 days from date generated.</div><div class="signature-grid"><div>Client signature: ...........................................................</div><div>Date: ...............................................................</div></div></div></div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn whatsapp-btn" onclick="shareDocumentWhatsApp('quote','${q.id}')">${whatsappIcon} Share on WhatsApp</button><button class="btn gold" onclick="window.print()">Print / PDF</button></div>`);
-}
-function convertQuote(id){
-  const q=DB.quotes.find(x=>x.id===id);
-  if(!q)return;
-  if(DB.invoices.some(i=>i.generatedFromQuote===id||i.id===id)){toast('This quote already has an invoice; use Undo invoice first');return;}
-  const invoiceId=nextInvoiceNo(today(),'BB');
-  DB.invoices.unshift({id:invoiceId,date:today(),customer:q.customer,contact:q.contact||'',email:'',project:q.projectReference||'Re-Upholstery',introduction:q.introduction||q.notes||'',items:q.items.map(i=>({code:'',...i})),deposit:0,paid:0,status:'Pending',fy:DB.meta.fy,reviewStatus:'Approved',includedInTotals:true,generatedFromQuote:id});
-  q.status='Accepted';q.invoicedAt=new Date().toISOString();q.invoiceId=invoiceId;save();toast('Quote '+id+' converted to invoice '+invoiceId);go('invoices');
-}
-function undoQuoteInvoice(invoiceId){
-  const invoice=DB.invoices.find(i=>i.id===invoiceId),quote=invoice&&DB.quotes.find(q=>q.id===invoice.generatedFromQuote);
-  if(!invoice||!quote)return;
-  const paid=(invoice.paid||0)+(invoice.deposit||0),receipts=(DB.receipts||[]).filter(r=>r.invoiceId===invoiceId);
-  if(paid>0||receipts.length){toast('Cannot undo an invoice with payments or receipts recorded');return;}
-  if(!confirm('Undo this invoice and return the quote to Draft?'))return;
-  DB.invoices=DB.invoices.filter(i=>i!==invoice);quote.status='Draft';delete quote.invoiceId;delete quote.invoicedAt;save();toast('Invoice undone; quote returned to Draft');go('quotes');
-}
 
 /* ---------- RECEIPTS ---------- */
 function vReceipts(c){
@@ -2191,301 +1917,6 @@ function newLoanPay(){
   <button class="btn gold" onclick="DB.loans[+document.getElementById('l-loan').value].payments.push({date:document.getElementById('l-date').value,amount:+document.getElementById('l-amt').value||0,note:document.getElementById('l-note').value});save();closeModal();toast('Payment logged');render()">Save</button></div>`);
 }
 
-/* ---------- PRICING CALCULATOR ---------- */
-function vPricing(c){
-  c.innerHTML=`
-  <div class="grid2">
-  <div class="panel"><h3>Job Builder</h3>
-    <div class="frm">
-      <div class="fld"><label>Item (from price book)</label><select id="pc-item" onchange="loadPricePreset()">${DB.priceBook.map((p,i)=>`<option value="${i}">${p.code} — ${p.desc}</option>`).join('')}</select></div>
-      <div class="fld"><label>Supplier fabric</label><input id="pc-fabric" list="pc-fabric-options" placeholder="Search supplier, design or colour…" onchange="selectCalculatorFabric()"><datalist id="pc-fabric-options">${fabricCatalog().map(f=>`<option value="${escapeHtml(fabricLookupLabel(f))}"></option>`).join('')}</datalist></div>
-      <div class="fld"><label>Fabric price basis</label><select id="pc-fabric-price" onchange="priceCalculatorFabric()"><option value="">Choose fabric first…</option></select></div>
-      <div class="fld"><label>Supplier VAT basis</label><select id="pc-fabric-vat" onchange="priceCalculatorFabric()"><option value="listed">As listed</option><option value="incl">Incl supplier VAT (15%)</option><option value="excl">Excl supplier VAT (15%)</option></select></div>
-      <div class="fld"><label>Fabric quantity (items)</label><input id="pc-fqty" type="number" value="1" min="0" step="1" oninput="calcPrice()"></div>
-      <div class="fld"><label id="pc-fabric-rate-label">Fabric (R/m)</label><input id="pc-fab" type="number" min="0" step="0.01" oninput="calcPrice()"></div>
-      <div class="fld"><label id="pc-fabric-measure-label">Fabric metres / item</label><input id="pc-mtr" type="number" min="0" step="0.01" oninput="calcPrice()"></div>
-      <div class="fld"><label>Consumables quantity (items)</label><input id="pc-mqty" type="number" value="1" min="0" step="1" oninput="calcPrice()"></div>
-      <div class="fld"><label>Consumables / item (R)</label><input id="pc-mat" type="number" oninput="calcPrice()"></div>
-      <div class="fld"><label>Labor rate (R/hr)</label><input id="pc-lrate" type="number" value="400" oninput="calcPrice()"></div>
-      <div class="fld"><label>Labor quantity (items)</label><input id="pc-lqty" type="number" value="1" min="0" step="1" oninput="calcPrice()"></div>
-      <div class="fld"><label>Labor hrs / item</label><input id="pc-lhrs" type="number" oninput="calcPrice()"></div>
-      <div class="fld"><label>Markup % (on cost)</label><input id="pc-mu" type="number" value="20" oninput="calcPrice()"></div>
-      <div class="fld"><label>Transport / extras (R)</label><input id="pc-extra" type="number" value="0" oninput="calcPrice()"></div>
-    </div>
-    <div id="pc-out"></div>
-    <div class="toolbar" style="margin-top:12px"><button class="btn gold" onclick="quoteFromCalc()">→ Create Quote from this</button></div>
-  </div>
-  <div class="panel"><h3>Price Book (NEW PRICING formulas)</h3><div style="max-height:480px;overflow-y:auto"><table>
-    <tr><th>Code</th><th>Description</th><th class="num">Fab m</th><th class="num">Fab R/m</th><th class="num">Sundries</th><th class="num">Lab hrs</th><th class="num">Est. price</th></tr>
-    ${DB.priceBook.map((p,i)=>`<tr style="cursor:pointer" onclick="document.getElementById('pc-item').value=${i};loadPricePreset()"><td style="color:var(--gold2)">${p.code}</td><td>${p.desc}</td><td class="num">${p.mtr}</td><td class="num">${p.fabCost}</td><td class="num">${p.matCost}</td><td class="num">${p.labHr}</td><td class="num" id="pb-${i}"></td></tr>`).join('')}
-  </table></div></div>
-  </div>`;
-  calcPrice();
-}
-function priceCalc(p,fqty,fab,mtr,mqty,mat,lqty,lrate,lhrs,mu,extra){
-  const fabricQuantity=Math.max(0,Number(fqty)||0), consumableQuantity=Math.max(0,Number(mqty)||0), laborQuantity=Math.max(0,Number(lqty)||0);
-  const fabT=fab*mtr*fabricQuantity, matT=mat*consumableQuantity, labT=lrate*lhrs*laborQuantity;
-  const cost=fabT+matT+labT+ +extra;
-  const sell=cost*(1+mu/100);
-  const units=Math.max(fabricQuantity,laborQuantity,consumableQuantity,1);
-  return {fabT,matT,labT,cost,sell,each:sell/units,fabricQuantity,consumableQuantity,laborQuantity};
-}
-function loadPricePreset(){delete document.getElementById('pc-fab').dataset.t;calcPrice();}
-function selectCalculatorFabric(){
-  const input=document.getElementById('pc-fabric'),value=input.value.trim();
-  const priorId=input.dataset.fabricId,priorInvalid=input.dataset.invalidFabric;
-  delete input.dataset.fabricId;delete input.dataset.invalidFabric;
-  if(!value){document.getElementById('pc-fabric-price').innerHTML='<option value="">Choose fabric first…</option>';document.getElementById('pc-fabric-rate-label').textContent='Fabric (R/m)';document.getElementById('pc-fabric-measure-label').textContent='Fabric metres / item';loadPricePreset();return;}
-  const f=fabricCatalog().find(f=>fabricLookupLabel(f)===value);
-  if(!f){input.dataset.invalidFabric='true';toast('Choose a fabric from the supplier search suggestions');return;}
-  input.dataset.fabricId=f.id;
-  if(priorId===f.id&&!priorInvalid)return;
-  const select=document.getElementById('pc-fabric-price');
-  select.innerHTML=f.prices.map(p=>`<option value="${escapeHtml(p.key)}" ${p.amount==null?'disabled':''}>${escapeHtml(fabricPriceText(p))}</option>`).join('');select.value=fabricDefaultPrice(f)?.key||'';
-  document.getElementById('pc-fabric-vat').value='listed';
-  document.getElementById('pc-fabric-vat').disabled=f.prices.every(p=>p.vat==='unspecified');
-  priceCalculatorFabric();
-}
-function calculatorFabricSnapshot(){
-  const f=findFabric(document.getElementById('pc-fabric')?.dataset.fabricId);if(!f)return {};
-  const p=f.prices.find(p=>p.key===document.getElementById('pc-fabric-price').value),vat=document.getElementById('pc-fabric-vat').value,source=fabricSource(f);
-  return {fabricId:f.id,fabricPriceKey:p?.key,fabricVatBasis:vat,code:f.code,unit:p?.unit,
-    fabricSource:{supplier:f.supplier,name:source.name,date:source.date,page:f.page,listedAmount:p?.amount,listedVat:p?.vat,unit:p?.unit,rate:fabricRate(p,vat)}};
-}
-function priceCalculatorFabric(){
-  const snapshot=calculatorFabricSnapshot();if(!snapshot.fabricId)return;
-  const f=findFabric(snapshot.fabricId),unit=snapshot.unit||'unit',input=document.getElementById('pc-fab');
-  input.value=f.needsPriceConfirmation?'':snapshot.fabricSource.rate??'';input.dataset.t='1';
-  document.getElementById('pc-fabric-rate-label').textContent=`Fabric (R/${unit})`;
-  document.getElementById('pc-fabric-measure-label').textContent=`Fabric ${unit} / item${f.unitUnspecified?' (confirm supplier unit)':''}`;
-  calcPrice();
-}
-function calcPrice(){
-  const p=DB.priceBook[+document.getElementById('pc-item').value]||DB.priceBook[0];
-  const g=id=>+document.getElementById(id).value||0;
-  // prefill from price book when unchanged from defaults
-  if(!document.getElementById('pc-fab').dataset.t){if(!document.getElementById('pc-fabric')?.dataset.fabricId)document.getElementById('pc-fab').value=p?.fabCost??0;document.getElementById('pc-mtr').value=p?.mtr??0;document.getElementById('pc-mat').value=p?.matCost??0;document.getElementById('pc-lhrs').value=p?.labHr??0;}
-  document.getElementById('pc-fab').dataset.t=1;
-  const r=priceCalc(p,g('pc-fqty'),g('pc-fab'),g('pc-mtr'),g('pc-mqty'),g('pc-mat'),g('pc-lqty'),g('pc-lrate'),g('pc-lhrs'),g('pc-mu'),g('pc-extra'));
-  document.getElementById('pc-out').innerHTML=`
-    <div class="kv"><span>Fabric total (${g('pc-mtr')}${escapeHtml(calculatorFabricSnapshot().unit||'m')} × ${R(g('pc-fab'))} per unit × ${r.fabricQuantity} fabric items)</span><b>${R(r.fabT)}</b></div>
-    <div class="kv"><span>Consumables (${r.consumableQuantity} items × ${R(g('pc-mat'))})</span><b>${R(r.matT)}</b></div>
-    <div class="kv"><span>Labor (${g('pc-lhrs')}h × ${R(g('pc-lrate'))}/h × ${r.laborQuantity} labor items)</span><b>${R(r.labT)}</b></div>
-    <div class="kv"><span>Extras</span><b>${R(g('pc-extra'))}</b></div>
-    <div class="kv"><span>Total cost</span><b>${R(r.cost)}</b></div>
-    <div class="kv" style="font-size:15px"><span>CLIENT PRICE (+${g('pc-mu')}% markup)</span><b style="font-size:19px;color:var(--gold)">${R(r.sell)}</b></div>
-    <div class="kv"><span>Each</span><b>${R(r.each)}</b></div>`;
-  DB.priceBook.forEach((pb,i)=>{const rr=priceCalc(pb,1,pb.fabCost,pb.mtr,1,pb.matCost,1,400,pb.labHr,20,0);const el=document.getElementById('pb-'+i);if(el)el.textContent=R(rr.sell);});
-}
-function quoteFromCalc(){
-  if(document.getElementById('pc-fabric')?.dataset.invalidFabric){toast('Choose a valid supplier fabric');return;}
-  const numericFields=['pc-fqty','pc-fab','pc-mtr','pc-mqty','pc-mat','pc-lqty','pc-lrate','pc-lhrs','pc-mu','pc-extra'];
-  if(numericFields.some(id=>{const value=document.getElementById(id).value;return value===''||!Number.isFinite(Number(value))||Number(value)<0;})){toast('Complete all calculator fields with non-negative numbers and a confirmed fabric price');return;}
-  const g=id=>+document.getElementById(id).value||0;
-  const p=DB.priceBook[+document.getElementById('pc-item').value];
-  if(!p){toast('Choose an item from the price book');return;}
-  const snapshot=calculatorFabricSnapshot(),f=findFabric(snapshot.fabricId),basis=f?.prices.find(p=>p.key===snapshot.fabricPriceKey);
-  if(basis?.minimumExclusive!=null&&g('pc-mtr')*g('pc-fqty')<=basis.minimumExclusive){toast(`Bulk price requires over ${basis.minimumExclusive}${basis.unit} per colour`);return;}
-  if(basis?.minimum!=null&&g('pc-mtr')*g('pc-fqty')<basis.minimum){toast(`Supplier minimum is ${basis.minimum}${basis.unit}`);return;}
-  const r=priceCalc(p,g('pc-fqty'),g('pc-fab'),g('pc-mtr'),g('pc-mqty'),g('pc-mat'),g('pc-lqty'),g('pc-lrate'),g('pc-lhrs'),g('pc-mu'),g('pc-extra'));
-  const qid=nextQuoteNo(today());
-  const items=[
-    {...snapshot,item:'Fabric',desc:f?`${f.supplier} — ${f.desc} (${snapshot.unit}; ${basis.label}${basis.approximate?'; approximate':''})`:`${p.desc} - Fabric (m)`,qty:r.fabricQuantity*g('pc-mtr'),price:g('pc-fab'),priceOverridden:snapshot.fabricSource?g('pc-fab')!==snapshot.fabricSource.rate:false},
-    {item:'Consumables',desc:`${p.desc} - Consumables`,qty:r.consumableQuantity,price:g('pc-mat')},
-    {item:'Labour',desc:`${p.desc} - Labour`,qty:r.laborQuantity,price:g('pc-lrate')*g('pc-lhrs')},
-    ...(g('pc-extra')>0?[{item:'Other',desc:`${p.desc} - Transport / extras`,qty:1,price:g('pc-extra')}]:[]),
-  ];
-  const detailTotal=items.reduce((sum,item)=>sum+item.qty*item.price,0);
-  if(r.sell-detailTotal>0.005)items.push({item:'Other',desc:`${p.desc} - Pricing margin (${g('pc-mu')}%)`,qty:1,price:r.sell-detailTotal});
-  DB.quotes.unshift({id:qid,date:today(),customer:'',contact:'',email:'',expiry:'',projectReference:'',workType:'Reupholster',colour:'',introduction:`${p.desc} pricing calculation. ${r.fabricQuantity} fabric item(s), ${r.laborQuantity} labour item(s), ${r.consumableQuantity} consumables item(s).`,notes:'',items,status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false,calculator:{markup:Number(document.getElementById('pc-mu').value)||0,total:r.sell}});
-  save();toast('Quote '+qid+' created from calculation');go('quotes');
-}
-
-/* ---------- FABRICS ---------- */
-// The supplier catalog stays in the existing static bundle. Only document price
-// snapshots and user-added fabrics use the application's existing database.
-function fabricCatalog(){
-  const bundled=window.UW_FABRIC_CATALOG?.fabrics||[];
-  const historical=[...(window.UW_IMPORTED?.fabrics||[]),...(seed.fabrics||[])];
-  const same=(a,b)=>['supplier','code','desc','cost','markup','sell'].every(k=>a[k]===b[k]);
-  const local=(DB.fabrics||[]).map((f,index)=>({...f,id:f.id||`local-fabric-${index}`,localIndex:index,
-    prices:[{key:'cost',label:'Entered cost',amount:f.cost,vat:'unspecified',unit:f.unit||'m'},
-            {key:'sell',label:'Entered selling price',amount:f.sell,vat:'unspecified',unit:f.unit||'m'}]}))
-    .filter(f=>!bundled.length||!historical.some(old=>same(f,old)));
-  return [...bundled,...local];
-}
-function findFabric(id){return fabricCatalog().find(f=>f.id===id);}
-function fabricSource(f){return window.UW_FABRIC_CATALOG?.sources?.[f?.sourceId]||{};}
-function fabricLookupLabel(f){
-  const variant=f.colours||f.fields?.['RANGE / ALTERNATIVE NAME']||f.fields?.RANGE||f.fields?.Collection||'';
-  const width=f.fields?.WIDTH||f.fields?.['WIDTH CM']||f.fields?.['Width (cm)']||f.fields?.['USEABLE WIDTH']||'';
-  const source=fabricSource(f),location=source.date?`${source.date} ${f.sheet?'row':'p'}${f.page}`:`local entry ${(f.localIndex??0)+1}`;
-  return `${f.supplier} — ${f.desc}${variant?' — '+variant:''}${width?' — '+width:''}${f.code&&f.code!==f.desc?' — '+f.code:''} — ${location}`;
-}
-function fabricDefaultPrice(f){
-  return ['cut','cash','retail','area','cost','roll'].map(key=>(f.prices||[]).find(p=>p.key===key&&Number.isFinite(p.amount)))
-    .find(Boolean)||(f.prices||[]).find(p=>Number.isFinite(p.amount));
-}
-function fabricRate(price,vatBasis='listed'){
-  if(!price||!Number.isFinite(price.amount)||price.amount<0)return null;
-  let amount=price.amount;
-  if(vatBasis==='incl'&&price.vat==='excl')amount=Number.isFinite(price.amountIncl)?price.amountIncl:amount*1.15;
-  if(vatBasis==='excl'&&price.vat==='incl')amount=amount/1.15;
-  return Math.round((amount+Number.EPSILON)*100)/100;
-}
-function fabricPriceText(p){return `${p.label}: ${p.amount==null?'Unavailable':R(p.amount)} /${p.unit} (${p.vat==='excl'?'excl VAT':p.vat==='incl'?'incl VAT':'VAT unspecified'})`;}
-function ensureFabricDatalist(){
-  const host=document.getElementById('modal-root');if(!host||host.querySelector('#fabric-options'))return;
-  const list=document.createElement('datalist');list.id='fabric-options';
-  list.innerHTML=fabricCatalog().map(f=>`<option value="${escapeHtml(fabricLookupLabel(f))}"></option>`).join('');host.appendChild(list);
-}
-function fabricPickerHtml(item={}){
-  const f=findFabric(item.fabricId);
-  return `<input class="line-fabric" list="fabric-options" aria-label="Search supplier fabric" placeholder="Search supplier, design or colour…" style="width:100%;min-width:220px" value="${escapeHtml(f?fabricLookupLabel(f):'')}" onchange="selectLineFabric(this)">
-    <div style="display:flex;gap:4px;margin-top:4px"><select class="line-fabric-price" aria-label="Fabric price basis" style="max-width:170px" onchange="repriceFabricRow(this.closest('tr'))"><option value="">Price basis…</option></select>
-    <select class="line-fabric-vat" aria-label="Supplier VAT basis" style="width:170px;max-width:170px" onchange="repriceFabricRow(this.closest('tr'))"><option value="listed">As listed</option><option value="incl">Incl supplier VAT (15%)</option><option value="excl">Excl supplier VAT (15%)</option></select></div>
-    <select class="line-fabric-unit" aria-label="Confirmed supplier unit" hidden onchange="repriceFabricRow(this.closest('tr'))"><option value="unit">Confirm unit…</option><option value="m">m</option><option value="m²">m²</option><option value="side/hide">side/hide</option></select>
-    <small class="line-fabric-info" style="display:block;max-width:340px;white-space:normal"></small>`;
-}
-function appendDocumentItem(tableId,prefix,item={},category=false,code=true){
-  const table=document.getElementById(tableId);if(!table)return;
-  const tr=document.createElement('tr');tr._lineItem={...item};tr.dataset.prefix=prefix;
-  tr.innerHTML=`${code?`<td><input style="width:85px" class="${prefix}-code" value="${escapeHtml(item.code||'')}"></td>`:''}
-    <td><input style="width:100%;min-width:150px" class="${prefix}-desc" value="${escapeHtml(item.desc||'')}"></td>
-    <td>${fabricPickerHtml(item)}</td>
-    ${category?`<td><select class="${prefix}-item" style="width:130px;max-width:130px"><option value="">Select category…</option>${quoteItemOptions(item.item||'')}</select></td>`:''}
-    <td><input style="width:75px" class="${prefix}-qty" aria-label="Quantity" type="number" min="0" step="0.01" value="${escapeHtml(item.qty??1)}" oninput="updateFabricLineInfo(this.closest('tr'))"></td>
-    <td><input style="width:100px" class="${prefix}-price" aria-label="Unit price" type="number" min="0" step="0.01" value="${escapeHtml(item.price??0)}" oninput="updateFabricLineInfo(this.closest('tr'))"></td>
-    <td><button class="btn sm danger" onclick="this.closest('tr').remove()">✕</button></td>`;
-  table.appendChild(tr);ensureFabricDatalist();
-  if(item.fabricId)configureFabricRow(tr,item.fabricPriceKey,item.fabricVatBasis);
-}
-function configureFabricRow(tr,key,vat='listed'){
-  const f=findFabric(tr._lineItem.fabricId);if(!f)return;
-  const select=tr.querySelector('.line-fabric-price');
-  select.innerHTML=(f.prices||[]).map(p=>`<option value="${escapeHtml(p.key)}" ${p.amount==null?'disabled':''}>${escapeHtml(fabricPriceText(p))}</option>`).join('');
-  select.value=key||fabricDefaultPrice(f)?.key||'';
-  tr.querySelector('.line-fabric-vat').value=vat||'listed';
-  tr.querySelector('.line-fabric-unit').hidden=!f.unitUnspecified;
-  tr.querySelector('.line-fabric-unit').value=f.unitUnspecified?(tr._lineItem.unit||'unit'):'unit';
-  // Unspecified supplier VAT cannot be inferred from a manual record.
-  tr.querySelector('.line-fabric-vat').disabled=(f.prices||[]).every(p=>p.vat==='unspecified');
-  updateFabricLineInfo(tr);
-}
-function selectLineFabric(input){
-  const tr=input.closest('tr'),value=input.value.trim();
-  if(!value){
-    delete tr._lineItem.fabricId;delete tr._lineItem.fabricSource;delete tr._lineItem.fabricPriceKey;delete tr._lineItem.fabricVatBasis;
-    delete tr.dataset.invalidFabric;tr.querySelector('.line-fabric-price').innerHTML='<option value="">Price basis…</option>';
-    tr.querySelector('.line-fabric-info').textContent='';return;
-  }
-  const matches=fabricCatalog().filter(f=>fabricLookupLabel(f)===value||f.id===value);
-  if(matches.length!==1){tr.dataset.invalidFabric='true';toast('Choose a fabric from the supplier search suggestions');return;}
-  if(matches[0].id===tr._lineItem.fabricId&&!tr.dataset.invalidFabric){input.value=fabricLookupLabel(matches[0]);return;}
-  delete tr.dataset.invalidFabric;
-  const f=matches[0];tr._lineItem.fabricId=f.id;tr._lineItem.unit=fabricDefaultPrice(f)?.unit||'unit';input.value=fabricLookupLabel(f);
-  configureFabricRow(tr);repriceFabricRow(tr);
-}
-function repriceFabricRow(tr){
-  const f=findFabric(tr._lineItem.fabricId);if(!f)return;
-  const key=tr.querySelector('.line-fabric-price').value,vat=tr.querySelector('.line-fabric-vat').value;
-  const p=f.prices.find(p=>p.key===key),rate=fabricRate(p,vat),prefix=tr.dataset.prefix;
-  const unit=f.unitUnspecified?tr.querySelector('.line-fabric-unit').value:p?.unit;
-  const source=fabricSource(f);
-  tr._lineItem={...tr._lineItem,fabricPriceKey:key,fabricVatBasis:vat,unit:unit||'',
-    fabricSource:{supplier:f.supplier,name:source.name||'User-entered fabric',date:source.date||'',page:f.page||'',
-      listedAmount:p?.amount,listedVat:p?.vat,listedUnit:p?.unit,unit,rate}};
-  const code=tr.querySelector(`.${prefix}-code`);if(code)code.value=f.code;
-  tr.querySelector(`.${prefix}-desc`).value=`${f.supplier} — ${f.desc}${f.colours?' — '+f.colours:''} (${unit||'unit'}; ${p?.label||'price unavailable'}${p?.approximate?'; approximate':''})`;
-  const category=tr.querySelector(`.${prefix}-item`);if(category)category.value='Fabric';
-  tr.querySelector(`.${prefix}-price`).value=rate==null||f.needsPriceConfirmation?'':rate;
-  updateFabricLineInfo(tr);
-}
-function updateFabricLineInfo(tr){
-  const info=tr.querySelector('.line-fabric-info');if(!info)return;
-  const f=findFabric(tr._lineItem.fabricId);if(!f){
-    if(tr._lineItem.fabricSource)info.textContent=`Saved supplier rate: ${R(tr._lineItem.price)} /${tr._lineItem.unit||'unit'}`;
-    return;
-  }
-  const p=f.prices.find(p=>p.key===tr.querySelector('.line-fabric-price').value),prefix=tr.dataset.prefix;
-  const qty=Number(tr.querySelector(`.${prefix}-qty`).value),priceInput=tr.querySelector(`.${prefix}-price`),rate=Number(priceInput.value);
-  const source=fabricSource(f),warnings=[];
-  if(f.unitUnspecified&&tr._lineItem.unit==='unit')warnings.push('Supplier unit unspecified — confirm unit');
-  if(f.needsPriceConfirmation)warnings.push('Zero price in source — enter confirmed supplier price');
-  if(p?.approximate)warnings.push('Approximate hide price — confirm actual hide size/amount');
-  if(p?.minimumExclusive!=null&&qty<=p.minimumExclusive)warnings.push(`Requires over ${p.minimumExclusive}${p.unit} per colour, COD`);
-  if(f.needsStockConfirmation||/discontinued|check stock/i.test(JSON.stringify(f.fields)))warnings.push('Check supplier stock');
-  if(/full hides only/i.test(JSON.stringify(f.fields)))warnings.push('Full hides only — confirm actual hide area');
-  if(p?.minimum!=null&&qty<p.minimum)warnings.push(`Minimum ${p.minimum}${p.unit}`);
-  const vatChoice=tr.querySelector('.line-fabric-vat').value,effectiveVat=vatChoice==='listed'?p?.vat:vatChoice;
-  const vatLabel=effectiveVat==='incl'?'incl supplier VAT':effectiveVat==='excl'?'excl supplier VAT':'VAT unspecified';
-  info.textContent=`Qty in ${tr._lineItem.unit||p?.unit||'units'} · ${vatLabel} · ${priceInput.value!==''&&Number.isFinite(qty)&&Number.isFinite(rate)?'Line total '+R(qty*rate):'Enter confirmed price'} · ${tr._lineItem.fabricSource?.date||source.date||'User-entered'}${warnings.length?' · '+warnings.join(' · '):''}`;
-}
-function collectDocumentItems(tableId,prefix){
-  const items=[];
-  for(const tr of [...document.querySelectorAll(`#${tableId} tr`)].slice(1)){
-    const desc=tr.querySelector(`.${prefix}-desc`).value.trim();
-    if(!desc&&!tr._lineItem?.fabricId)continue;
-    const qtyInput=tr.querySelector(`.${prefix}-qty`),priceInput=tr.querySelector(`.${prefix}-price`);
-    const qty=Number(qtyInput.value),price=Number(priceInput.value);
-    if(tr.dataset.invalidFabric||!desc||qtyInput.value===''||priceInput.value===''||!Number.isFinite(qty)||!Number.isFinite(price)||qty<0||price<0){toast('Complete each line with a valid fabric selection, description, non-negative quantity and confirmed unit price');return null;}
-    const f=findFabric(tr._lineItem?.fabricId),p=f?.prices.find(p=>p.key===tr.querySelector('.line-fabric-price').value);
-    if(p?.minimumExclusive!=null&&qty<=p.minimumExclusive){toast(`Bulk price requires over ${p.minimumExclusive}${p.unit} per colour`);return null;}
-    if(p?.minimum!=null&&qty<p.minimum){toast(`Supplier minimum is ${p.minimum}${p.unit}`);return null;}
-    const item={...tr._lineItem,code:tr.querySelector(`.${prefix}-code`)?.value??tr._lineItem?.code??'',desc,
-      item:tr.querySelector(`.${prefix}-item`)?.value||tr._lineItem?.item||'',qty,price};
-    if(item.fabricSource)item.priceOverridden=price!==item.fabricSource.rate;
-    items.push(item);
-  }
-  return items;
-}
-function vFabrics(c){
-  const all=fabricCatalog();
-  const rows=all.filter(f=>docMatches({...f,description:JSON.stringify(f.fields||{})},'fabrics',f.supplier));
-  const suppliers=[...new Set(all.map(f=>f.supplier))].sort();
-  c.innerHTML=`<div class="toolbar">
-    ${docFilterHtml('fabrics',suppliers,[],false)}
-    <button class="btn gold" onclick="newFabric()">+ Add Fabric</button></div>
-  <p style="color:var(--muted)">${rows.length} of ${all.length} supplier fabrics and materials. Prices reflect the supplied dated lists. Select a fabric on any quote or invoice line to fill its rate; choose roll/cut/area/hide and VAT basis explicitly. No automatic markup is added.</p>
-  <div class="panel" style="overflow:auto"><table><tr><th>Supplier / list date</th><th>Fabric Code / Design</th><th>Range / colours</th><th>Source prices & units</th><th>Specifications</th><th></th></tr>
-  ${rows.map(f=>`<tr><td>${escapeHtml(f.supplier)}<small style="display:block">${escapeHtml(fabricSource(f).date||'User-entered')}</small></td>
-    <td>${escapeHtml(f.code)}<small style="display:block">${escapeHtml(f.desc)}</small></td>
-    <td style="max-width:250px;white-space:normal">${escapeHtml(f.colours||f.fields?.RANGE||f.fields?.Collection||f.fields?.['RANGE / ALTERNATIVE NAME']||'—')}</td>
-    <td style="white-space:normal">${(f.prices||[]).map(p=>`<div>${escapeHtml(fabricPriceText(p))}${p.approximate?' · approximate':''}</div>`).join('')}${f.needsPriceConfirmation?'<b>Price requires confirmation</b>':''}${f.unitUnspecified?'<div>Confirm supplier unit</div>':''}</td>
-    <td><button class="btn sm" onclick="viewFabricDetails('${f.id}')">All fields / source</button></td>
-    <td>${f.localIndex!=null?`<button class="btn sm danger" onclick="deleteLocalFabric('${f.id}')">✕</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6">No fabrics match these filters.</td></tr>'}
-  </table></div>`;
-}
-function viewFabricDetails(id){
-  const f=findFabric(id);if(!f)return;const source=fabricSource(f);
-  modal(`<h3>${escapeHtml(f.supplier+' — '+f.desc)}</h3><p>${escapeHtml(source.name||'User-entered fabric')} · ${escapeHtml(source.date||'')}${f.sheet?' · '+escapeHtml(f.sheet)+' row '+f.page:' · PDF page '+(f.page||'—')}</p>
-    <div class="panel" style="max-height:55vh;overflow:auto"><table>${Object.entries(f.fields||{Supplier:f.supplier,Code:f.code,Description:f.desc,Cost:f.cost,Markup:f.markup,Selling:f.sell,Unit:f.unit||'m'}).map(([k,v])=>`<tr><th>${escapeHtml(k)}</th><td style="white-space:normal">${escapeHtml(v==null||v===''?'Not provided':v)}</td></tr>`).join('')}</table>
-    <h4>List notes / care key / terms</h4><p style="white-space:pre-wrap">${escapeHtml(source.notes||'No additional notes supplied.')}</p></div>
-    <div class="toolbar"><button class="btn" onclick="closeModal()">Close</button>${source.path?`<button class="btn gold" onclick="openFabricSource('${f.id}')">View original document</button>`:''}</div>`);
-}
-function openFabricSource(id){const f=findFabric(id),s=fabricSource(f);if(s.path)viewDocument({name:s.name,path:s.path});}
-function deleteLocalFabric(id){const f=findFabric(id);if(f?.localIndex==null)return;if(!confirm('Delete this manually added fabric? Saved invoice and quote prices are retained.'))return;DB.fabrics.splice(f.localIndex,1);save();render();}
-function newFabric(){
-  modal(`<h3>Add Fabric Price</h3><div class="frm">
-    <div class="fld"><label>Supplier</label><input id="fa-sup"></div>
-    <div class="fld"><label>Code</label><input id="fa-code"></div>
-    <div class="fld"><label>Description</label><input id="fa-desc"></div>
-    <div class="fld"><label>Unit</label><select id="fa-unit"><option value="m">m</option><option value="m²">m²</option><option value="side/hide">side/hide</option><option value="unit">unit</option></select></div>
-    <div class="fld"><label>Cost per unit (R)</label><input id="fa-cost" type="number" min="0" step="0.01" oninput="document.getElementById('fa-sell').value=((+this.value)*(1+(+document.getElementById('fa-mu').value)/100)).toFixed(2)"></div>
-    <div class="fld"><label>Markup %</label><input id="fa-mu" type="number" value="100" oninput="document.getElementById('fa-sell').value=((+document.getElementById('fa-cost').value)*(1+(+this.value)/100)).toFixed(2)"></div>
-    <div class="fld"><label>Selling per unit (R)</label><input id="fa-sell" type="number" min="0" step="0.01"></div>
-  </div>
-  <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
-  <button class="btn gold" onclick="saveNewFabric()">Save</button></div>`);
-}
-function saveNewFabric(){
-  const supplier=fa('fa-sup').trim(),code=fa('fa-code').trim(),desc=fa('fa-desc').trim();
-  const cost=Number(fa('fa-cost')),markup=Number(fa('fa-mu')),sell=Number(fa('fa-sell'));
-  if(!supplier||!code||!desc||['fa-cost','fa-mu','fa-sell'].some(id=>fa(id)==='')||[cost,markup,sell].some(x=>!Number.isFinite(x)||x<0)){toast('Enter supplier, code, description and non-negative prices/markup');return;}
-  DB.fabrics=DB.fabrics||[];DB.fabrics.push({id:'local-fabric-'+crypto.randomUUID(),supplier,code,desc,cost,markup,sell,unit:fa('fa-unit')});save();closeModal();toast('Fabric added');render();
-}
-const fa=id=>document.getElementById(id).value;
-
 /* ---------- WAGES ---------- */
 function vWages(c){
   const sourceWages=DB.wages||[];
@@ -2545,9 +1976,6 @@ function linkJobInvoice(id,invoiceId){
 }
 function newJob(){modal(`<h3>New Job Card</h3><div class="frm"><div class="fld"><label>Job No</label><input id="j-id" value="JOB-${Date.now()}"></div><div class="fld"><label>Invoice</label><select id="j-invoice"><option value="">Not linked</option>${DB.invoices.map(i=>`<option value="${i.id}">${i.id} — ${i.customer}</option>`).join('')}</select></div><div class="fld"><label>Customer</label><input id="j-cust"></div><div class="fld"><label>Project</label><input id="j-project"></div><div class="fld"><label>Start date</label><input id="j-date" type="date" value="${today()}"></div><div class="fld"><label>Stage</label><select id="j-stage">${['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="fld"><label>Notes</label><input id="j-notes"></div></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="const inv=DB.invoices.find(i=>i.id===fa('j-invoice'));DB.jobs.push({id:fa('j-id'),invoiceId:fa('j-invoice'),customer:fa('j-cust')||(inv?.customer||''),project:fa('j-project')||(inv?.project||''),stage:fa('j-stage'),startDate:fa('j-date'),balance:inv?invBalance(inv):0,notes:fa('j-notes')});save();closeModal();render()">Save Job</button></div>`)}
 function viewJob(id){const j=DB.jobs.find(x=>x.id===id);modal(`<h3>Job ${j.id}</h3><div class="kv"><span>Customer</span><b>${j.customer}</b></div><div class="kv"><span>Project</span><b>${j.project||''}</b></div><div class="kv"><span>Stage</span><b>${j.stage}</b></div><div class="kv"><span>Notes</span><b>${j.notes||''}</b></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`)}
-function vSuppliers(c){
-  c.innerHTML=`<div class="cards"><div class="card"><div class="lbl">Suppliers</div><div class="val gold">${(DB.suppliers||[]).length}</div></div><div class="card"><div class="lbl">Catalogued stock sources</div><div class="val">${(DB.stock||[]).length}</div></div></div><div class="grid2"><div class="panel"><h3>Supplier Directory</h3><table><tr><th>Supplier</th><th>Category</th><th class="num">Source files</th><th>Status</th></tr>${(DB.suppliers||[]).map(s=>`<tr><td>${s.name}</td><td>${s.category}</td><td class="num">${s.items}</td><td>${statusBadge(s.status)}</td></tr>`).join('')}</table></div><div class="panel"><h3>Stock & Material Sources</h3><table><tr><th>Item</th><th>Supplier</th><th>Unit</th><th>Qty</th><th>Reorder</th></tr>${(DB.stock||[]).map((s,i)=>`<tr><td>${s.name}</td><td>${s.supplier}</td><td>${s.unit}</td><td><input style="width:65px" type="number" value="${s.quantity}" onchange="DB.stock[${i}].quantity=+this.value;save()"></td><td>${s.reorderLevel}</td></tr>`).join('')}</table></div></div>`;
-}
 function vPayables(c){
   normalizePayables(DB);
   const all=DB.payables||[],rows=sortDocumentsByDate(all.filter(p=>docMatches(p,'payables','Supplier payable',p.status)),'payables');

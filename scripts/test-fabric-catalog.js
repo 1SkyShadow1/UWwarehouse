@@ -11,8 +11,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 for (const script of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
   if (script[1].trim()) new vm.Script(script[1]);
 }
-vm.runInContext(html.slice(html.indexOf('/* ---------- FABRICS ---------- */'), html.indexOf('/* ---------- WAGES ---------- */')), context);
-vm.runInContext(html.slice(html.indexOf('function priceCalc('), html.indexOf('function loadPricePreset(')), context);
+for(const name of ['pricing-core','fabrics','pricing'])vm.runInContext(fs.readFileSync(path.join(root,'js',name+'.js'),'utf8'),context);
 const catalog = context.window.UW_FABRIC_CATALOG;
 
 test('catalog covers all supplied suppliers with unique selectable identities', () => {
@@ -107,5 +106,5 @@ test('calculator uses fractional material measurement and independent quantities
   assert.equal(r.fabT, 765);
   assert.equal(r.matT, 50);
   assert.equal(r.labT, 800);
-  assert(Math.abs(r.sell - 1952.808) < 0.000001);
+  assert.equal(r.sell,1952.81);
 });

@@ -1,6 +1,6 @@
-const CACHE_NAME = 'uw-accounting-v37';
+const CACHE_NAME = 'uw-accounting-v38';
 const DOCUMENT_CACHE = 'uw-accounting-documents-v2';
-const APP_SHELL = ['./', './index.html', './imported-data.js', './income-2026.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
+const APP_SHELL = ['./', './index.html', './css/pricing.css', './js/pricing-core.js', './js/fabrics.js', './js/fabric-picker.js', './js/pricing.js', './js/quote-history.js', './js/document-editor.js', './js/document-views.js', './js/quotes.js', './js/dashboard.js', './js/suppliers.js', './js/app-version.js', './imported-data.js', './income-2026.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
@@ -35,7 +35,7 @@ self.addEventListener('fetch', event => {
     }));
     return;
   }
-  if (requestUrl.pathname.startsWith('/api/')) {
+  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname === '/build-info.json') {
     event.respondWith(fetch(event.request, { cache: 'no-store' }));
     return;
   }

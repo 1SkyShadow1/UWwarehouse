@@ -1,4 +1,9 @@
+param([switch]$VerifyOnly)
 $ErrorActionPreference = "Stop"
+$launchMutex = New-Object Threading.Mutex($false, "Local\UWAccountingBrowserLaunch")
+$ownsLaunch = $launchMutex.WaitOne(0)
+if (-not $ownsLaunch) { $launchMutex.Dispose(); exit 0 }
+try {
 $taskName = "UW Accounting Local Server"
 $url = "http://127.0.0.1:8080/"
 $healthUrl = "http://127.0.0.1:8080/api/health"
@@ -33,4 +38,18 @@ try {
   }
 }
 
-Start-Process $url
+if (-not $VerifyOnly) {
+  $launchStamp = Join-Path ([IO.Path]::GetTempPath()) 'uw-accounting-browser-opened.txt'
+  $recentLaunch = (Test-Path -LiteralPath $launchStamp) -and ((Get-Date) - (Get-Item -LiteralPath $launchStamp).LastWriteTime).TotalSeconds -lt 15
+  if (-not $recentLaunch) {
+    $buildFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'public\build-info.json'
+    if (Test-Path -LiteralPath $buildFile) {
+      $build = Get-Content -LiteralPath $buildFile -Raw | ConvertFrom-Json
+      $url += '?build=' + [Uri]::EscapeDataString([string]$build.updatedAt)
+    }
+    Start-Process $url
+    [IO.File]::WriteAllText($launchStamp, [DateTime]::UtcNow.ToString('o'))
+  }
+} else { Write-Output "Verified local app: $url" }
+
+} finally { $launchMutex.ReleaseMutex(); $launchMutex.Dispose() }

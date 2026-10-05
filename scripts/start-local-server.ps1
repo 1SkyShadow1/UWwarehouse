@@ -19,6 +19,14 @@ $env:UW_INVOICES_DIR = "D:\UW FOREVER\Saved Invoices"
 $env:UW_QUOTES_DIR = "D:\UW FOREVER\Saved Quotes"
 Set-Location $root
 
+# Launch once per service start, after health succeeds. The helper and desktop
+# shortcut coordinate so restarting the server cannot create duplicate tabs.
+$appLauncher = Join-Path $PSScriptRoot 'launch-local-app.ps1'
+if (Test-Path -LiteralPath $appLauncher) {
+  $helperArgs = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $appLauncher
+  Start-Process -FilePath 'powershell.exe' -ArgumentList $helperArgs -WindowStyle Hidden
+}
+
 while ($true) {
   if ((Test-Path $logFile) -and (Get-Item $logFile).Length -ge $maxLogBytes) {
     Move-Item -Path $logFile -Destination "$logFile.1" -Force
