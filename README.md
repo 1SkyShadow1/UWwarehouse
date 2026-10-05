@@ -4,6 +4,8 @@ This is a locally runnable, installable Progressive Web App. It works offline an
 
 The imported operational modules include jobs and production stages, suppliers and stock-source catalogues, purchase/payable document review, a document register, and an AI business assistant. The assistant can provide local operational context, while the optional Gemini integration can review an individual receipt or invoice image/PDF and return structured fields for confirmation.
 
+**Fabric Price Lists** contains 1,421 source entries from the six supplied supplier lists, with source fields, dates, units and VAT bases. Use the supplier-fabric search on new or edited invoice/quote lines, or in the pricing calculator, to fill the material rate. Saved document prices are retained when reopened. See [the fabric pricing audit](docs/FABRIC_PRICING_AUDIT.md) for supplier coverage, exceptions, import instructions and regression-test commands.
+
 Payroll is populated from the supplied `WAGES.xlsx` sheet. The app preserves the sheet's staff names and daily rates and displays weekly, monthly, and annual wage figures. Use the sun/moon button in the top bar or **Settings → Appearance** to switch between light and dark mode; the choice is saved locally.
 
 Invoice and quotation previews use the supplied `Invoice Template.docx` and `Quote Template.xlsx` branding, field structure, terms, banking details, signature areas, and exact UW logo artwork. The original templates and extracted logo assets are bundled in the package for reference.
