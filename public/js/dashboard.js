@@ -16,7 +16,7 @@ function dailyActions(db,asOf=today()){
     if(['Delivered','Closed'].includes(job.stage))continue;
     add('job',job.id,'Job awaiting materials',`${job.customer||''} · ${job.project||''} · ${job.stage}`);
   }
-  for(const stock of db.stock||[])if(stock.quantity!==''&&stock.quantity!=null&&stock.reorderLevel!==''&&stock.reorderLevel!=null&&Number.isFinite(Number(stock.quantity))&&Number.isFinite(Number(stock.reorderLevel))&&Number(stock.quantity)<=Number(stock.reorderLevel))add('stock',stock.sku||stock.name,'Low stock',`${stock.name} · ${stock.quantity} ${stock.unit||'units'} available · Reorder at ${stock.reorderLevel}`);
+  for(const stock of db.stock||[])if(stockNeedsReorder(stock))add('stock',stock.sku||stock.name,'Low stock',`${stock.name} · ${stock.quantity} ${stock.unit||'units'} available · Reorder at ${stock.reorderLevel}`);
   for(const statement of db.fnbStatements||[])for(const [index,row] of (statement.transactions||[]).entries())if(!row.ledgerPosted&&(row.allocationNeedsReview||!row.category))add('bank',row.id||`${statement.id}-${index+1}`,'Bank allocation needs review',`${row.date||''} · ${row.description||''}`,2);
   for(const scan of db.scannedDocuments||[])if(scan.canonical&&!scan.existingMatch&&scan.reviewStatus!=='Approved'&&scan.fnbReview?.accountConfirmed===false)add('scan',scan.id,'Receipt bank match needs review',`${scan.name||''} · ${scan.fnbReview.status||'Unmatched'}`,2);
   const seen=new Set();return actions.filter(action=>{const key=action.kind+'|'+action.id;if(seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>a.priority-b.priority||a.id.localeCompare(b.id));

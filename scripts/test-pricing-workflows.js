@@ -6,7 +6,7 @@ const test=require('node:test');
 const root=path.join(__dirname,'..','public');
 let lastToast='';
 const context=vm.createContext({today:()=> '2026-10-05',R:value=>'R '+Number(value).toFixed(2),toast:value=>{lastToast=value;}});
-for(const name of ['pricing-core','quote-history','dashboard'])vm.runInContext(fs.readFileSync(path.join(root,'js',name+'.js'),'utf8'),context);
+for(const name of ['pricing-core','quote-history','suppliers','dashboard'])vm.runInContext(fs.readFileSync(path.join(root,'js',name+'.js'),'utf8'),context);
 const plain=value=>JSON.parse(JSON.stringify(value));
 
 test('markup and margin are distinct, rounded, and missing costs stay unknown',()=>{
@@ -64,7 +64,7 @@ test('daily queue distinguishes overdue from unknown due dates and excludes sett
     {id:'void',status:'Void',items:[{qty:1,price:100}]},
   ],quotes:[{id:'soon',expiry:'2026-10-12',status:'Sent'},{id:'expired',expiry:'2026-10-04',status:'Draft'},{id:'accepted',expiry:'2026-10-04',status:'Accepted'}],
   jobs:[{id:'waiting',stage:'Deposit received'},{id:'done',stage:'Closed',materialStatus:'waiting'}],
-  stock:[{name:'Fabric',quantity:2,reorderLevel:2},{name:'Unknown',quantity:null,reorderLevel:10}],
+  stock:[{name:'Fabric',quantity:2,reorderLevel:2},{name:'Unknown',quantity:null,reorderLevel:10},{name:'Catalog',unit:'price list',quantity:0,reorderLevel:0},{name:'Blank',quantity:'',reorderLevel:10}],
   fnbStatements:[{id:'s',transactions:[{id:'review',allocationNeedsReview:true},{id:'posted',ledgerPosted:true}]}]};
   const before=JSON.stringify(db),actions=plain(context.dailyActions(db));
   assert.equal(JSON.stringify(db),before);

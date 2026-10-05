@@ -1,4 +1,4 @@
-const CACHE_NAME = 'uw-accounting-v38';
+const CACHE_NAME = 'uw-accounting-v39';
 const DOCUMENT_CACHE = 'uw-accounting-documents-v2';
 const APP_SHELL = ['./', './index.html', './css/pricing.css', './js/pricing-core.js', './js/fabrics.js', './js/fabric-picker.js', './js/pricing.js', './js/quote-history.js', './js/document-editor.js', './js/document-views.js', './js/quotes.js', './js/dashboard.js', './js/suppliers.js', './js/app-version.js', './imported-data.js', './income-2026.js', './operations-data.js', './scanned-data.js', './bank-statements.js', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
