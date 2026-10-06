@@ -34,6 +34,18 @@ test('local mode stores shared state, conflict backups and encrypted persistent 
     const ledger={meta:{},invoices:[{id:'SHARED-LOCAL',items:[{desc:'Fabric',qty:144,price:351}]}],quotes:[],receipts:[],expenses:[]};
     const saved=await fetch(base+'/api/state',{method:'PUT',headers:brian,body:JSON.stringify({revision:initial.revision||0,data:ledger})});assert.equal(saved.status,200,await saved.text());
     const snapshot=await (await fetch(base+'/api/state',{headers:evans})).json();assert.equal(snapshot.data.invoices[0].id,'SHARED-LOCAL');
+    const form=new FormData();form.append('file',new Blob(['%PDF-1.4\nLocal upload fixture'],{type:'application/pdf'}),'local-scan.pdf');
+    const upload=await fetch(base+'/api/documents',{method:'POST',headers:{Cookie:brian.Cookie,'x-csrf-token':brian['x-csrf-token']},body:form});
+    assert.equal(upload.status,201);const document=await upload.json();
+    const afterUpload=await (await fetch(base+'/api/state',{headers:brian})).json();
+    // The client has not refreshed its document list after the upload.
+    const clientSave=await fetch(base+'/api/state',{method:'PUT',headers:brian,body:JSON.stringify({revision:afterUpload.revision,data:ledger})});assert.equal(clientSave.status,200);
+    assert.equal((await fetch(base+'/api/documents/'+document.id,{headers:evans})).status,200,'A subsequent workspace save must retain upload metadata');
+    const recoveredId=crypto.randomBytes(16).toString('hex');fs.writeFileSync(path.join(dataRoot,'documents',recoveredId+'.bin'),'%PDF-1.4\nRecovered old scan');
+    const oldScanState=await (await fetch(base+'/api/state',{headers:brian})).json();
+    oldScanState.data.scannedDocuments=[{id:recoveredId,name:'recovered.pdf',url:'/api/documents/'+recoveredId}];
+    assert.equal((await fetch(base+'/api/state',{method:'PUT',headers:brian,body:JSON.stringify({revision:oldScanState.revision,data:oldScanState.data})})).status,200);
+    assert.equal((await fetch(base+'/api/documents/'+recoveredId,{headers:evans})).status,200,'Older local scans can recover metadata from their scan record');
     const conflict={local:ledger,remote:{...ledger,invoices:[]},revision:snapshot.revision,paths:['invoices']};
     const backup=await fetch(base+'/api/state/conflicts',{method:'POST',headers:brian,body:JSON.stringify(conflict)});assert.equal(backup.status,201);const recovery=await backup.json();
     assert(fs.existsSync(path.join(dataRoot,'conflicts',recovery.id+'.json')));

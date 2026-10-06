@@ -311,7 +311,15 @@ const queueSharedStateUpdate = (expectedRevision, data) => {
     if (!Number.isInteger(expectedRevision) || expectedRevision !== current.revision) {
       return { conflict: current };
     }
-    const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data };
+    const incomingDocuments = Array.isArray(data.documents) ? [...data.documents] : [];
+    const incomingIds = new Set(incomingDocuments.map(document => document.id));
+    // Upload metadata belongs to the server. A client saving an older document
+    // list must not orphan an upload made immediately before that save.
+    for (const document of managedDocumentMetadata(current.data)) {
+      if (!incomingIds.has(document.id)) incomingDocuments.push(document);
+    }
+    const nextData = incomingDocuments.length ? {...data, documents:incomingDocuments} : data;
+    const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data:nextData };
     atomicWrite(next);
     stateSnapshot = next;
     return { current, next };
@@ -777,6 +785,18 @@ const createDocumentPdf = require('./lib/document-pdf').documentRenderer(PDFDocu
 
 const safeDocumentId = id => /^[a-f0-9]{32}$/.test(String(id || ''));
 const safeDocumentPath = id => path.join(documentsRoot, `${id}.bin`);
+const managedDocumentMetadata = data => {
+  const metadata = new Map((data.documents || []).filter(document => safeDocumentId(document.id)).map(document => [document.id, document]));
+  // Recover metadata for older scans whose workspace save omitted the upload
+  // entry. Only existing, authenticated managed-storage files qualify.
+  for (const record of [...(data.scannedDocuments || []), ...(data.gallery || [])]) {
+    const id = String(record.id || '');
+    if (!safeDocumentId(id) || metadata.has(id) || !fs.existsSync(safeDocumentPath(id))) continue;
+    const name = String(record.name || record.label || id);
+    metadata.set(id, {id, name, mimeType:mimeForFile(name), size:fs.statSync(safeDocumentPath(id)).size, url:`/api/documents/${id}`});
+  }
+  return [...metadata.values()];
+};
 const sourcePathWithin = candidate => {
   const resolved = path.resolve(candidate);
   const roots = sourceRoots.map(root => path.resolve(root));
@@ -1288,7 +1308,7 @@ app.get('/api/documents/:id', requireApiKey, async (req, res) => {
   await bootstrapReady;
   const id = String(req.params.id || '');
   if (!safeDocumentId(id)) return res.status(400).json({ error: 'Invalid document id.' });
-  const metadata = (ensureStorage().data.documents || []).find(doc => doc.id === id);
+  const metadata = managedDocumentMetadata(ensureStorage().data).find(doc => doc.id === id);
   const file = safeDocumentPath(id);
   if (!metadata) return res.status(404).json({ error: 'Document not found.' });
   res.type(metadata.mimeType || 'application/octet-stream');
