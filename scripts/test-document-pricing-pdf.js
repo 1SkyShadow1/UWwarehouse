@@ -44,7 +44,7 @@ test('material descriptions appear once and custom item references do not leak i
   const {documentLineDescription}=require('../public/js/document-format');
   assert.equal(documentLineDescription({item:'Fabric',desc:'Fabric - Fabric - Prasa'}),'Fabric - Prasa');
   assert.equal(documentLineDescription({item:'Foam',desc:'Foam - Foam - Yellow'}),'Foam - Yellow');
-  assert.equal(documentLineDescription({item:'Fabric',desc:'Lounge suite - Fabric Stone'}),'Lounge suite - Fabric Stone');
+  assert.equal(documentLineDescription({item:'Fabric',desc:'Lounge suite - Fabric Stone'}),'Fabric Stone');
   assert.equal(documentLineDescription({item:'STOCK-123',desc:'High density foam'}),'High density foam');
 });
 

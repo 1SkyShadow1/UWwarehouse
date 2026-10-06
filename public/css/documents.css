@@ -10,7 +10,10 @@
 .quote-template .quote-reference b{border-right:1px solid #111}
 .quote-template .quote-introduction{border:1px solid #111;min-height:58px;padding:6px;white-space:pre-line}
 .template-doc table th,.template-doc table td{color:#111;background:#fff;letter-spacing:normal;text-transform:none}
-.quote-template table th,.quote-template table td{border:1px solid #111;padding:4px 6px;font-size:12px}
+.quote-template table th,.quote-template table td{border:1px solid #111;padding:8px 9px;font-size:12px;line-height:1.5;vertical-align:top}
+.invoice-template table th,.invoice-template table td,.receipt-template table th,.receipt-template table td{padding:9px 10px;line-height:1.5;vertical-align:top}
+.template-doc .template-section{margin-top:18px;margin-bottom:8px;break-after:avoid}
+.quote-template .quote-introduction{padding:10px;line-height:1.6}
 .quote-template table th:first-child{width:45%}.quote-template table th:nth-child(2){width:8%}
 .quote-template table th:nth-child(3){width:18%}.quote-template table th:nth-child(4){width:29%}
 .quote-template .terms{margin-top:6px;line-height:1.5}

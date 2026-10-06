@@ -28,8 +28,10 @@ function updateLinePricing(tr,reason='display'){
   if(['cost','markup','mode','supplier'].includes(reason)&&mode.value==='markup'){
     price.value=cost.value!==''&&markup.value!==''&&Number.isFinite(Number(cost.value))&&Number.isFinite(Number(markup.value))?sellingFromCost(cost.value,markup.value):'';
   }
+  if(tr._lineItem&&(reason==='selling'||reason==='supplier'||(mode.value==='markup'&&['cost','markup','mode'].includes(reason))))tr._lineItem.historicalPricing=false;
   const p=lineProfit({qty:tr.querySelector(`.${prefix}-qty`).value,price:price.value,unitCost:cost.value});
   tr.querySelector('.line-profit').textContent=price.value===''?'Enter selling price':p.cost===null?'Cost not recorded; margin unavailable':`Cost ${R(p.cost)} · Sell ${R(p.sell)} · Profit ${R(p.profit)}${p.margin===null?'':` · Margin ${p.margin.toFixed(1)}%`}${p.profit<=0?' · At or below cost':''}`;
+  if(tr._lineItem?.historicalPricing)tr.querySelector('.line-profit').textContent+=' · Historical source rate; check current pricing';
   updateDocumentProfit(tr.closest('table'));
 }
 function updateDocumentProfit(table){

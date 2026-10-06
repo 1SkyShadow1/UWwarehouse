@@ -2,8 +2,8 @@
 function fabricSearchHtml(value='',calculator=false){
   const suppliers=[...new Set(fabricCatalog().map(f=>f.supplier))].sort();
   return `<div class="fabric-search" style="min-width:260px;max-width:420px;white-space:normal">
-    <select class="fabric-supplier" aria-label="Filter fabric supplier" onchange="renderFabricResults(this.parentElement,true)"><option value="">All suppliers</option>${suppliers.map(s=>`<option>${escapeHtml(s)}</option>`).join('')}</select>
-    <select class="fabric-scope" aria-label="Fabric shortcuts" onchange="renderFabricResults(this.parentElement,true)"><option value="">All fabrics</option><option value="favorites">Favourites</option><option value="recent">Recently used</option></select>
+    <small>Supplier</small><select class="fabric-supplier" aria-label="Filter fabric supplier" onchange="renderFabricResults(this.parentElement,true)"><option value="">All suppliers</option>${suppliers.map(s=>`<option>${escapeHtml(s)}</option>`).join('')}</select>
+    <small>Browse</small><select class="fabric-scope" aria-label="Fabric shortcuts" onchange="renderFabricResults(this.parentElement,true)"><option value="">All fabrics</option><option value="favorites">Favourites</option><option value="recent">Recently used</option></select>
     <input ${calculator?'id="pc-fabric"':''} class="fabric-query ${calculator?'':'line-fabric'}" aria-label="Search supplier fabric" autocomplete="off" placeholder="Search design, code or colour…" style="width:100%" value="${escapeHtml(value)}" oninput="renderFabricResults(this.parentElement)" onfocus="renderFabricResults(this.parentElement)" onkeydown="fabricSearchKey(event)" onchange="fabricSearchChange(this)">
     <div class="fabric-results" aria-label="Fabric search results" hidden style="max-height:260px;overflow:auto;border:1px solid var(--line);padding:5px"></div></div>`;
 }

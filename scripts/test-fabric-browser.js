@@ -30,6 +30,7 @@ async function run() {
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
     await context.route('https://**', route => route.abort());
+    if(process.env.UW_TEST_PRESET_CATALOG)await context.route(url=>url.pathname==='/item-presets.js',route=>route.fulfill({contentType:'application/javascript',body:fs.readFileSync(process.env.UW_TEST_PRESET_CATALOG,'utf8')}));
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
     page.on('dialog', dialog => dialog.accept());
@@ -44,6 +45,59 @@ async function run() {
     await page.addStyleTag({content:'#boot-screen,#login-screen{display:none!important}'});
     const catalog = await page.evaluate(() => window.UW_FABRIC_CATALOG);
     assert.equal(catalog.fabrics.length, 1421);
+    // Category gating, historical consumable selection and custom colour persistence.
+    await page.evaluate(()=>newQuote());
+    const gated=page.locator('#f-items tr').nth(1);
+    assert.equal(await gated.locator('.line-fabric').isVisible(),false);
+    await gated.getByLabel('Item category').selectOption('Fabric');
+    const gateFabric=catalog.fabrics.find(f=>f.sourceId==='helm'&&!f.needsPriceConfirmation);
+    await gated.locator('.line-fabric').fill(await page.evaluate(id=>fabricLookupLabel(findFabric(id)),gateFabric.id));
+    await gated.locator('.line-fabric').dispatchEvent('change');
+    await gated.locator('.line-colour').fill('Custom Ocean Mist');
+    assert.equal((await page.evaluate(()=>collectDocumentItems('f-items','i')))[0].colour,'Custom Ocean Mist');
+    await gated.getByLabel('Item category').selectOption('Labour');
+    assert.equal(await gated.locator('.line-fabric').isVisible(),false);
+    assert.equal(await gated.locator('.line-fabric').isDisabled(),true);
+    assert.equal(await gated.locator('.i-price').inputValue(),'');
+    assert.equal(await page.evaluate(()=>document.querySelector('#f-items tr:nth-child(2)')._lineItem.fabricId),undefined);
+    await gated.getByLabel('Item category').selectOption('Consumables');
+    const glue=await page.evaluate(()=>archiveLinePresets('Consumables').find(p=>p.desc==='Consumables - Glue'&&p.price===143));
+    await gated.locator('.line-preset-choice').selectOption(glue.id);
+    assert.equal(await gated.locator('.i-desc').inputValue(),'Consumables - Glue');
+    assert.equal(await gated.locator('.i-price').inputValue(),'143');
+    assert.equal(await gated.locator('.line-cost').inputValue(),'');
+    assert((await gated.locator('.line-profit').innerText()).includes('Historical source rate'));
+    const beforeRefresh=await gated.locator('.i-desc').inputValue();
+    await page.locator('#f-colour').fill('Terracotta');await page.locator('#f-colour').dispatchEvent('change');
+    assert.equal(await gated.locator('.i-desc').inputValue(),beforeRefresh);
+    await page.locator('#preset-type').selectOption('Complete item');
+    await page.locator('#f-preset').selectOption('0');await page.getByRole('button',{name:'Add preset lines'}).click();
+    assert.equal(await page.locator('#f-items tr').count(),5,'Existing consumable and three preset lines are retained');
+    assert.equal(await gated.locator('.i-desc').inputValue(),'Consumables - Glue');
+    assert.equal(await page.evaluate(()=>quotePresets().length),110+ (await page.evaluate(()=>archiveLinePresets().length+archiveJobPresets().length)));
+    await page.setViewportSize({width:480,height:900});
+    assert(await page.locator('#modal-root .modal').evaluate(el=>el.scrollWidth<=el.clientWidth+2),'Mobile editor should fit without horizontal overflow');
+    const mobileBounds=await gated.evaluate(row=>{
+      const selection=row.querySelector('.line-selection').getBoundingClientRect(),selling=row.querySelector('.line-selling').getBoundingClientRect();
+      return {selectionBottom:selection.bottom,sellingTop:selling.top};
+    });
+    assert(mobileBounds.sellingTop>=mobileBounds.selectionBottom,'Mobile price fields should sit below material choices');
+    await page.setViewportSize({width:1440,height:1000});
+    await page.evaluate(()=>closeModal());
+    const historicalBundle=await page.evaluate(()=>archiveJobPresets()[0]);
+    if(historicalBundle){
+      await page.evaluate(()=>newQuote());
+      await page.locator('#f-preset').selectOption('110');
+      assert((await page.locator('#preset-preview').innerText()).includes('Keeps original job quantities'));
+      assert((await page.locator('#f-qty').locator('..').innerText()).toLowerCase().includes('multiplier'));
+      await page.locator('#f-qty').fill('2');
+      await page.getByRole('button',{name:'Add preset lines'}).click();
+      const lines=await page.evaluate(()=>collectDocumentItems('f-items','i'));
+      assert.equal(lines.length,historicalBundle.lines.length);
+      assert.equal(Math.round(lines.reduce((s,l)=>s+l.qty*l.price,0)*100)/100,2*historicalBundle.total);
+      assert(!(await page.locator('#f-introduction').inputValue()).includes('source job'));
+      await page.evaluate(()=>closeModal());
+    }
     await page.evaluate(()=>go('suppliers'));
     assert((await page.locator('#content').innerText()).includes('1421 selectable source entries'));
     assert.equal(await page.getByRole('button',{name:'Browse fabrics',exact:true}).count(),6);
@@ -56,6 +110,7 @@ async function run() {
       if (index) await page.evaluate(() => addItemRow());
       const row = page.locator('#f-items tr').nth(index + 1);
       const label = await page.evaluate(id => fabricLookupLabel(findFabric(id)), representatives[index].id);
+      await row.locator('[aria-label="Item category"]').selectOption('Fabric');
       await row.locator('.line-fabric').fill(label);
       await row.locator('.line-fabric').dispatchEvent('change');
       const expected = await page.evaluate(id => fabricDefaultPrice(findFabric(id)).amount, representatives[index].id);
@@ -90,6 +145,7 @@ async function run() {
     for (let i = 0; i < 2; i++) {
       if (i) await page.evaluate(() => addItemRow());
       const row = page.locator('#f-items tr').nth(i + 1);
+      await row.locator('[aria-label="Item category"]').selectOption('Fabric');
       await row.locator('.line-fabric').fill(await page.evaluate(id => fabricLookupLabel(findFabric(id)), gazelles[i].id));
       await row.locator('.line-fabric').dispatchEvent('change');
     }
@@ -131,14 +187,17 @@ async function run() {
     // Explicit VAT conversions, blocked unknown choices and blank supplier prices.
     const helm = catalog.fabrics.find(f => f.sourceId === 'helm');
     await page.evaluate(() => newInvoice());
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('.line-fabric').fill(await page.evaluate(id => fabricLookupLabel(findFabric(id)), helm.id));
     await page.locator('.line-fabric').dispatchEvent('change');
     await page.locator('.line-fabric-vat').selectOption('incl');
     assert.equal(Number(await page.locator('.i-price').inputValue()), 117.3);
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('.line-fabric').fill('not a supplier fabric');
     await page.locator('.line-fabric').dispatchEvent('change');
     assert.equal(await page.evaluate(() => collectDocumentItems('f-items', 'i')), null);
     const zero = catalog.fabrics.find(f => f.needsPriceConfirmation);
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('.line-fabric').fill(await page.evaluate(id => fabricLookupLabel(findFabric(id)), zero.id));
     await page.locator('.line-fabric').dispatchEvent('change');
     assert.equal(await page.locator('.i-price').inputValue(), '');
@@ -173,6 +232,7 @@ async function run() {
     await page.evaluate(() => { go('pricing'); const before = document.getElementById('pc-fab').value; document.getElementById('pc-item').value = '1'; loadPricePreset(); window.presetChanged = before !== document.getElementById('pc-fab').value || Number(document.getElementById('pc-mtr').value) === Number(DB.priceBook[1].mtr); });
     assert.equal(await page.evaluate(() => window.presetChanged), true);
     await page.evaluate(() => newInvoice());
+    await page.locator('[aria-label="Item category"]').selectOption('Other');
     await page.locator('.i-qty').fill('0');
     await page.locator('.i-desc').fill('Deliberate zero quantity');
     assert.equal((await page.evaluate(() => collectDocumentItems('f-items', 'i')))[0].qty, 0);
@@ -187,6 +247,7 @@ async function run() {
     assert.equal(await page.evaluate(()=>document.querySelector('#f-items tr:nth-child(2)')._lineItem.fabricId),helm.id);
     await page.evaluate(()=>{closeModal();newInvoice();});
     const bulk=catalog.fabrics.find(f=>f.prices.some(p=>p.minimumExclusive===200));
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('.line-fabric').fill(await page.evaluate(id=>fabricLookupLabel(findFabric(id)),bulk.id));
     await page.locator('.line-fabric').dispatchEvent('change');
     await page.locator('.line-fabric-price').selectOption('bulk-200m');
@@ -195,18 +256,22 @@ async function run() {
     await page.locator('.i-qty').fill('201');
     assert.equal((await page.evaluate(()=>collectDocumentItems('f-items','i')))[0].price,57);
     const leather=catalog.fabrics.find(f=>f.sourceId==='mill'&&f.desc==='LEATHER AGAVE');
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('.line-fabric').fill(await page.evaluate(id=>fabricLookupLabel(findFabric(id)),leather.id));
     await page.locator('.line-fabric').dispatchEvent('change');
     assert.equal((await page.evaluate(()=>collectDocumentItems('f-items','i')))[0].unit,'m²');
     assert.equal(Number(await page.locator('.i-price').inputValue()),583);
     const panel=catalog.fabrics.find(f=>f.sourceId==='mill'&&f.desc==='MADAME');
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('.line-fabric').fill(await page.evaluate(id=>fabricLookupLabel(findFabric(id)),panel.id));
     await page.locator('.line-fabric').dispatchEvent('change');
     assert.equal((await page.evaluate(()=>collectDocumentItems('f-items','i')))[0].unit,'panel');
     assert.equal(Number(await page.locator('.i-price').inputValue()),750);
     // Visible picker selection, independent cost/selling prices, and accepted revisions.
     await page.evaluate(()=>{closeModal();newQuote();});
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('#modal-root .fabric-supplier').selectOption('Helm');
+    await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
     await page.locator('.line-fabric').fill(helm.desc);
     const searchResult=page.locator(`.fabric-result[data-fabric-id="${helm.id}"]`);
     assert((await searchResult.innerText()).includes('excl VAT'));
@@ -261,6 +326,7 @@ async function run() {
     await page.locator('#f-cust').fill('Expired client');
     await page.locator('#f-date').fill('2026-01-01');
     await page.locator('#f-expiry').fill('2026-01-31');
+    await page.locator('[aria-label="Item category"]').selectOption('Labour');
     await page.locator('.i-desc').fill('Expired work');
     await page.locator('.i-price').fill('50');
     await page.evaluate(()=>saveInvoice());
@@ -318,10 +384,12 @@ async function run() {
     if (process.env.UW_TEST_SCREENSHOT){
       await page.evaluate(()=>{closeModal();newQuote();});
       await page.locator('#f-cust').fill('Sample client');
-      await page.locator('.line-fabric').fill(await page.evaluate(id=>fabricLookupLabel(findFabric(id)),helm.id));
+      await page.locator('[aria-label="Item category"]').first().selectOption('Fabric');
+    await page.locator('.line-fabric').fill(await page.evaluate(id=>fabricLookupLabel(findFabric(id)),helm.id));
       await page.locator('.line-fabric').dispatchEvent('change');
       await page.locator('.i-qty').fill('2.5');
       await page.locator('.i-qty').dispatchEvent('input');
+      await page.locator('#f-items tr').nth(1).screenshot({path:process.env.UW_TEST_SCREENSHOT.replace(/\.png$/,'.line.png')});
       await page.screenshot({ path: process.env.UW_TEST_SCREENSHOT, fullPage: true });
       await page.evaluate(()=>{closeModal();go('fabrics');setDocFilter('fabrics','q','');setDocFilter('fabrics','category','The Mill');applyDocFilter('fabrics');});
       await page.screenshot({path:process.env.UW_TEST_SCREENSHOT.replace(/\.png$/,'.catalog.png'),fullPage:true});

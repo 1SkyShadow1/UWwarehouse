@@ -98,10 +98,10 @@ function quoteFromCalc(){
   const r=priceCalc(p,g('pc-fqty'),g('pc-fab'),g('pc-mtr'),g('pc-mqty'),g('pc-mat'),g('pc-lqty'),g('pc-lrate'),g('pc-lhrs'),g('pc-mu'),g('pc-extra'));
   const qid=nextQuoteNo(today());
   const items=[
-    {...snapshot,item:'Fabric',desc:f?`${f.supplier} — ${f.desc} (${snapshot.unit}; ${basis.label}${basis.approximate?'; approximate':''})`:`${p.desc} - Fabric (m)`,qty:r.fabricQuantity*g('pc-mtr'),price:g('pc-fab'),priceOverridden:snapshot.fabricSource?g('pc-fab')!==snapshot.fabricSource.rate:false},
-    {item:'Consumables',desc:`${p.desc} - Consumables`,qty:r.consumableQuantity,price:g('pc-mat')},
-    {item:'Labour',desc:`${p.desc} - Labour`,qty:r.laborQuantity,price:g('pc-lrate')*g('pc-lhrs')},
-    ...(g('pc-extra')>0?[{item:'Other',desc:`${p.desc} - Transport / extras`,qty:1,price:g('pc-extra')}]:[]),
+    {...snapshot,item:'Fabric',desc:f?`Fabric - ${f.desc}`:'Fabric',qty:r.fabricQuantity*g('pc-mtr'),price:g('pc-fab'),priceOverridden:snapshot.fabricSource?g('pc-fab')!==snapshot.fabricSource.rate:false},
+    {item:'Consumables',desc:'Consumables',qty:r.consumableQuantity,price:g('pc-mat')},
+    {item:'Labour',desc:'Labour - Upholster',qty:r.laborQuantity,price:g('pc-lrate')*g('pc-lhrs')},
+    ...(g('pc-extra')>0?[{item:'Delivery',desc:'Delivery - Transport / extras',qty:1,price:g('pc-extra')}]:[]),
   ];
   items.forEach(item=>{item.unitCost=item.price;item.price=sellingFromCost(item.unitCost,g('pc-mu'));item.pricingMode='markup';item.markupPercent=g('pc-mu');});
   DB.quotes.unshift(initializeQuoteHistory({id:qid,date:today(),customer:'',contact:'',email:'',expiry:dateAfterDays(today()),projectReference:'',workType:'Reupholster',colour:'',introduction:`${p.desc} pricing calculation. ${r.fabricQuantity} fabric item(s), ${r.laborQuantity} labour item(s), ${r.consumableQuantity} consumables item(s).`,notes:'',items,status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false,calculator:{markup:Number(document.getElementById('pc-mu').value)||0,total:r.sell}}));

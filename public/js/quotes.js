@@ -1,25 +1,8 @@
 /* ---------- QUOTES ---------- */
 function quoteItemOptions(selected=''){
-  const groups={Materials:[],Labour:[],Consumables:[]};
-  const add=(group,value,label)=>{if(value&&!groups[group].some(x=>x.value===value))groups[group].push({value,label});};
-  const categories=[
-    ['Fabric','Fabric'],
-    ['Foam','Foam'],
-    ['Labour','Labour'],
-    ['Consumables','Consumables'],
-    ['Delivery','Delivery'],
-    ['Other','Other'],
-  ];
-  (DB.stock||[]).forEach(s=>{
-    const name=String(s.name||'').trim();if(name)add('Materials',s.sku||name,`${name}${s.supplier?' — '+s.supplier:''}`);
-  });
-  (DB.priceBook||[]).forEach(p=>add('Materials',p.code||p.desc,p.desc||p.code));
-  (DB.payables||[]).filter(p=>/material|fabric|foam|consum/i.test(`${p.category||''} ${p.description||''} ${p.vendor||''}`))
-    .forEach(p=>add(/consum/i.test(p.category||'')?'Consumables':'Materials',p.description||p.vendor,`${p.description||p.vendor}${p.vendor?' — '+p.vendor:''}`));
-  ['Upholstery labour','Removal and preparation labour','Cutting and sewing labour','Installation labour'].forEach(x=>add('Labour',x,x));
-  ['Foam','High-density foam','Webbing','Springs','Batting / Dacron','Staples','Adhesive / glue','Thread','Zips','Calico / lining','Dust cover fabric','Screws and fasteners','Packaging and delivery consumables'].forEach(x=>add('Consumables',x,x));
-  if(selected&&!categories.some(([value])=>value===selected)&&!Object.values(groups).some(items=>items.some(x=>x.value===selected)))add('Materials',selected,quoteItemLabel(selected));
-  return `<optgroup label="Cost category">${categories.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===selected?'selected':''}>${escapeHtml(label)}</option>`).join('')}</optgroup>${Object.entries(groups).map(([group,items])=>`<optgroup label="${group}">${items.map(x=>`<option value="${escapeHtml(x.value)}" ${x.value===selected?'selected':''}>${escapeHtml(x.label)}</option>`).join('')}</optgroup>`).join('')}`;
+  const categories=['Fabric','Foam','Labour','Consumables','Delivery','Other'];
+  if(selected&&!categories.includes(selected))categories.push(selected);
+  return categories.map(value=>`<option value="${escapeHtml(value)}" ${value===selected?'selected':''}>${escapeHtml(value)}</option>`).join('');
 }
 function quoteItemLabel(value){
   if(!value)return '—';
@@ -42,10 +25,10 @@ function vQuotes(c){
 function newQuote(){newInvoice('quote');document.querySelector('#modal-root h3').textContent='New Quote';}
 function editQuote(id){
   const q=DB.quotes.find(x=>x.id===id);if(!q)return;
-  modal(`<h3>Edit Quote ${q.id} · r${q.revision||1}</h3>${q.status==='Accepted'?'<p>Saving changes creates a draft revision. The accepted version and any issued invoice are preserved.</p>':''}<div class="frm"><div class="fld"><label>Quote No</label><input id="eq-no" value="${q.id}"></div><div class="fld"><label>Date</label><input id="eq-date" type="date" value="${q.date}"></div><div class="fld"><label>Customer</label><input id="eq-cust" value="${q.customer||''}"></div><div class="fld"><label>Contact</label><input id="eq-contact" value="${q.contact||''}"></div><div class="fld"><label>Telephone</label><input id="eq-phone" value="${escapeHtml(q.phone||'')}"></div><div class="fld"><label>Email</label><input id="eq-email" value="${escapeHtml(q.email||'')}"></div><div class="fld"><label>Billing address</label><textarea id="eq-billing-address">${escapeHtml(q.billingAddress||'')}</textarea></div><div class="fld"><label>Prepared by</label><input id="eq-prepared-by" value="${escapeHtml(q.preparedBy||'')}"></div><div class="fld"><label>Expiry</label><input id="eq-expiry" type="date" value="${q.expiry||''}"></div><div class="fld"><label>Project Reference</label><input id="eq-project" value="${q.projectReference||''}"></div><div class="fld"><label>Work type</label><select id="eq-work-type">${['Manufacturing','Repair','Reupholster'].map(x=>`<option ${q.workType===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="fld"><label>Colour</label><input id="eq-colour" value="${q.colour||''}" placeholder="e.g. Stone, Charcoal, Navy"></div><div class="fld"><label>Introduction, notes and specifications</label><textarea id="eq-introduction" rows="3">${q.introduction||q.notes||''}</textarea></div></div><div class="fld"><label>Line Items</label></div><table id="eq-items"><tr><th>Description</th><th>Supplier fabric / price basis</th><th>Item</th><th>Qty</th><th>Selling / unit · internal cost</th><th></th></tr></table><button class="btn sm" onclick="addEditQuoteRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedQuote('${id}')">Save Changes</button></div>`);
+  modal(`${fabricColourOptions()}<h3>Edit Quote ${q.id} · r${q.revision||1}</h3>${q.status==='Accepted'?'<p>Saving changes creates a draft revision. The accepted version and any issued invoice are preserved.</p>':''}<div class="frm"><div class="fld"><label>Quote No</label><input id="eq-no" value="${q.id}"></div><div class="fld"><label>Date</label><input id="eq-date" type="date" value="${q.date}"></div><div class="fld"><label>Customer</label><input id="eq-cust" value="${q.customer||''}"></div><div class="fld"><label>Contact</label><input id="eq-contact" value="${q.contact||''}"></div><div class="fld"><label>Telephone</label><input id="eq-phone" value="${escapeHtml(q.phone||'')}"></div><div class="fld"><label>Email</label><input id="eq-email" value="${escapeHtml(q.email||'')}"></div><div class="fld"><label>Billing address</label><textarea id="eq-billing-address">${escapeHtml(q.billingAddress||'')}</textarea></div><div class="fld"><label>Prepared by</label><input id="eq-prepared-by" value="${escapeHtml(q.preparedBy||'')}"></div><div class="fld"><label>Expiry</label><input id="eq-expiry" type="date" value="${q.expiry||''}"></div><div class="fld"><label>Project Reference</label><input id="eq-project" value="${q.projectReference||''}"></div><div class="fld"><label>Work type</label><select id="eq-work-type">${['Manufacturing','Repair','Reupholster'].map(x=>`<option ${q.workType===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="fld"><label>Colour</label><input id="eq-colour" list="fabric-colours" value="${q.colour||''}" placeholder="e.g. Stone, Charcoal, Navy"></div><div class="fld"><label>Introduction, notes and specifications</label><textarea id="eq-introduction" rows="3">${q.introduction||q.notes||''}</textarea></div></div><div class="fld"><label>Line Items</label></div><table id="eq-items"><tr><th>Description</th><th>Supplier fabric / price basis</th><th>Item</th><th>Qty</th><th>Selling / unit · internal cost</th><th></th></tr></table><button class="btn sm" onclick="addEditQuoteRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedQuote('${id}')">Save Changes</button></div>`);
   (q.items||[]).forEach(addEditQuoteRow);if(!(q.items||[]).length)addEditQuoteRow();
 }
-function addEditQuoteRow(item={}){appendDocumentItem('eq-items','eq',item,true,false);}
+function addEditQuoteRow(item={}){appendDocumentItem('eq-items','eq',item,false);}
 function saveEditedQuote(id){
   const quote=DB.quotes.find(x=>x.id===id);if(!quote)return;
   const items=collectDocumentItems('eq-items','eq');if(!items)return;
