@@ -1,6 +1,14 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $dataRoot = Join-Path $root "data"
+$storageConfig = Join-Path $root 'local-storage.json'
+if (Test-Path -LiteralPath $storageConfig) {
+  $localConfig=Get-Content -LiteralPath $storageConfig -Raw | ConvertFrom-Json
+  if ($localConfig.localOnly) {
+    if (-not (Test-Path -LiteralPath ([IO.Path]::GetPathRoot($localConfig.dataRoot)))) { throw 'Connect the external data drive before starting the app.' }
+    $dataRoot=$localConfig.dataRoot
+  }
+}
 $logRoot = Join-Path $dataRoot "logs"
 $logFile = Join-Path $logRoot "server.log"
 $maxLogBytes = 5MB

@@ -11,7 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=41">
+<link rel="stylesheet" href="css/pricing.css?v=42">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -269,6 +269,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
+<link rel="stylesheet" href="css/documents.css?v=42">
 </head>
 <body>
 
@@ -332,30 +333,31 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <button class="tb-btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
   </div>
   <div id="content"></div>
-  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span><span id="workspace-sync-label"></span> · <span id="app-build-label"></span> · Data stored locally on this device · FNB Gold Business 63173509557 · Branch 250655</span></div>
+  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span><span id="workspace-sync-label"></span> · <span id="app-build-label"></span> · <span id="storage-location-label">Data stored locally on this device</span> · FNB Gold Business 63173509557 · Branch 250655</span></div>
 </div>
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=41"></script>
-<script src="income-2026.js?v=41"></script>
-<script src="operations-data.js?v=41"></script>
-<script src="scanned-data.js?v=41"></script>
-<script src="bank-statements.js?v=41"></script>
-<script src="js/pricing-core.js?v=41"></script>
-<script src="js/fabrics.js?v=41"></script>
-<script src="js/fabric-picker.js?v=41"></script>
-<script src="js/pricing.js?v=41"></script>
-<script src="js/quote-history.js?v=41"></script>
-<script src="js/document-editor.js?v=41"></script>
-<script src="js/document-views.js?v=41"></script>
-<script src="js/quotes.js?v=41"></script>
-<script src="js/dashboard.js?v=41"></script>
-<script src="js/suppliers.js?v=41"></script>
-<script src="js/app-version.js?v=41"></script>
-<script src="js/shared-sync.js?v=41"></script>
+<script src="imported-data.js?v=42"></script>
+<script src="income-2026.js?v=42"></script>
+<script src="operations-data.js?v=42"></script>
+<script src="scanned-data.js?v=42"></script>
+<script src="bank-statements.js?v=42"></script>
+<script src="js/pricing-core.js?v=42"></script>
+<script src="js/fabrics.js?v=42"></script>
+<script src="js/fabric-picker.js?v=42"></script>
+<script src="js/pricing.js?v=42"></script>
+<script src="js/quote-history.js?v=42"></script>
+<script src="js/document-editor.js?v=42"></script>
+<script src="js/document-format.js?v=42"></script>
+<script src="js/document-views.js?v=42"></script>
+<script src="js/quotes.js?v=42"></script>
+<script src="js/dashboard.js?v=42"></script>
+<script src="js/suppliers.js?v=42"></script>
+<script src="js/app-version.js?v=42"></script>
+<script src="js/shared-sync.js?v=42"></script>
+<script src="js/local-recovery.js?v=42"></script>
 
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 /* ============================================================
    UW ACCOUNTING SYSTEM — Offline-first local persistence layer
@@ -737,19 +739,14 @@ let pendingAiReview=null;
 let scannedReviewBatch=null;
 const LOCAL_BACKUP_KEY='UW_DB_V1_BACKUP';
 function writeLocalSnapshot(serialized){
-  // The backup is disposable. Never let its quota failure turn a successful
-  // primary save into a failed Global Save.
   try{localStorage.removeItem(LOCAL_BACKUP_KEY);}catch(_){}
+  if(typeof browserRecoveryWrite==='function')browserRecoveryWrite('pending-workspace',serialized).catch(()=>{if(!serverSyncAvailable)sharedSyncStatus('Local server disconnected · keep this page open until saved');});
   try{
     localStorage.setItem(DB_KEY,serialized);
   }catch(error){
-    // Conflict data is useful for recovery but is not required for the next
-    // save. Remove it if the browser is already at its storage limit.
-    try{localStorage.removeItem('UW_STATE_CONFLICT');localStorage.setItem(DB_KEY,serialized);}
-    catch(retryError){return {ok:false,error:retryError};}
+    if(typeof browserRecoveryWrite==='function')return {ok:true,backup:false,browserCachePending:true};
+    return {ok:false,error};
   }
-  try{localStorage.setItem(LOCAL_BACKUP_KEY,serialized);}
-  catch(error){console.warn('Local backup snapshot could not be written; primary snapshot is safe.',error);}
   return {ok:true,backup:false};
 }
 async function waitForServerSync(timeout=12000){
@@ -796,11 +793,14 @@ async function initializeServerSync(){
     serverSyncError=null;
     serverRetryAttempt=0;
     clearTimeout(serverRetryTimer);
-    if(serverConflict){sharedSyncStatus('Shared edit conflict · review Settings');return false;}
+    if(serverConflict&&JSON.stringify(syncComparable(serverConflict.local))===JSON.stringify(syncComparable(snapshot.data))){serverConflict=null;if(typeof clearConflictRecovery==='function')clearConflictRecovery();applySharedSnapshot(snapshot);}
+    if(serverConflict){if(typeof cacheConflictRecovery==='function')cacheConflictRecovery(serverConflict);sharedSyncStatus('Shared edit conflict · review Settings');return false;}
     if(!hasSharedAccounting(snapshot.data)){
       // A documents-only initial server snapshot must not erase the imported ledger.
       DB={...DB,...snapshot.data,meta:{...DB.meta,...snapshot.data?.meta}};
       sharedSyncBase=JSON.parse(JSON.stringify(DB));queueServerStateSave();
+    }else if(DB.meta?.syncPending&&JSON.stringify(syncComparable(DB))===JSON.stringify(syncComparable(snapshot.data))){
+      applySharedSnapshot(snapshot);
     }else if(DB.meta?.syncPending){
       if(sharedSyncBase){
         const merged=mergeSharedState(sharedSyncBase,DB,snapshot.data);
@@ -935,21 +935,24 @@ async function syncServerState(force=false,silent=false){
     if(serverSyncPromise===syncPromise)serverSyncPromise=null;
   }
 }
-function resolveStateConflict(choice){
+async function resolveStateConflict(choice){
   if(!serverConflict)return;
+  if(typeof preserveConflictOnDisk==='function'){
+    try{await preserveConflictOnDisk(serverConflict);}catch(error){toast('Connect the local server before resolving; both recovery copies must be backed up first.');return;}
+  }
   if(choice==='server'){
     DB={...DB,...serverConflict.remote,meta:{...DB.meta,...(serverConflict.remote.meta||{})}};
     serverRevision=serverConflict.revision;
     sharedSyncBase=JSON.parse(JSON.stringify(serverConflict.remote));
     serverSyncAvailable=true;
     DB.meta.syncPending=false;DB.meta.syncRevision=serverRevision;
-    localStorage.setItem(DB_KEY,JSON.stringify(DB));sharedSyncStatus('Shared workspace up to date');
+    writeLocalSnapshot(JSON.stringify(DB));sharedSyncStatus('Shared workspace up to date');
   }else if(choice==='local'){
     DB=serverConflict.local;
     serverRevision=serverConflict.revision;
     sharedSyncBase=JSON.parse(JSON.stringify(serverConflict.remote));
     serverSyncAvailable=true;
-    serverConflict=null;localStorage.removeItem('UW_STATE_CONFLICT');
+    serverConflict=null;clearConflictRecovery();
     queueServerStateSave();
     toast('Local copy queued for overwrite');
     return;
@@ -958,7 +961,7 @@ function resolveStateConflict(choice){
     const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`UW_CONFLICT_BACKUP_${today()}.json`;link.click();URL.revokeObjectURL(link.href);
     return;
   }
-  serverConflict=null;localStorage.removeItem('UW_STATE_CONFLICT');render();toast(choice==='server'?'Server copy restored':'Conflict backup exported');
+  serverConflict=null;clearConflictRecovery();render();toast(choice==='server'?'Server copy restored':'Conflict backup exported');
 }
 async function uploadManagedDocument(file){
   if(!(file instanceof File)||!file.size)throw new Error('Choose a non-empty image or PDF file.');
@@ -1257,10 +1260,10 @@ function save(){
   }
   queueServerStateSave();
   clearTimeout(cloudSyncTimer);
-  if(DB.meta.cloud&&DB.meta.cloud.url&&DB.meta.cloud.key) cloudSyncTimer=setTimeout(()=>cloudSync('push'),1200);
+  if(!localServerOnly&&DB.meta.cloud&&DB.meta.cloud.url&&DB.meta.cloud.key) cloudSyncTimer=setTimeout(()=>cloudSync('push'),1200);
   clearTimeout(driveSyncTimer);
   const drive=DB.meta.googleDrive||{};
-  if(drive.autoBackup&&drive.token) driveSyncTimer=setTimeout(()=>googleDriveSync('push',true),1800);
+  if(!localServerOnly&&drive.autoBackup&&drive.token) driveSyncTimer=setTimeout(()=>googleDriveSync('push',true),1800);
   return true;
 }
 async function globalSave(){
@@ -1277,7 +1280,8 @@ async function globalSave(){
     }
     if(serverSyncAvailable&&serverRevision!==null){
       const synced=await syncServerState(true,true);
-      if(synced?.cloudSynced)toast('Global save complete — local and database copies updated');
+      if(synced?.serverSaved&&localServerOnly)toast('Saved to D:\\UW FOREVER — shared workspace updated');
+      else if(synced?.cloudSynced)toast('Global save complete — local and database copies updated');
       else if(synced?.serverSaved&&synced.supabaseConfigured)toast('Saved locally and on this computer — database sync is queued and will retry');
       else if(synced?.serverSaved)toast('Saved locally and on this computer — Supabase is not configured');
       else if(serverConflict)toast('Saved locally — a database conflict needs review in Settings');
@@ -1311,6 +1315,7 @@ function startPeriodicSync(){
 }
 function cloudConfig(){return DB.meta.cloud||{};}
 async function cloudSync(direction){
+  if(localServerOnly){if(direction==='push')return globalSave();await refreshSharedWorkspace();render();toast('Shared local workspace refreshed');return;}
   try{
     if(direction==='push'){
       const response=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:serverRevision===null?0:serverRevision,data:DB})});
@@ -1362,6 +1367,7 @@ async function googleDriveBackendRequest(path,options={}){
   return data;
 }
 async function googleDriveSync(direction,silent=false){
+  if(localServerOnly){toast('External local storage is active');return;}
   const cfg=DB.meta.googleDrive||{};
   const backend=await googleDriveBackendStatus();
   if(backend){
@@ -1399,6 +1405,7 @@ async function googleDriveSync(direction,silent=false){
   }catch(err){console.error(err);if(!silent)toast(err.message||'Google Drive sync failed');}
 }
 async function googleDriveTest(){
+  if(localServerOnly){toast('External local storage is active');return;}
   const cfg=DB.meta.googleDrive||{};
   const backend=await googleDriveBackendStatus();
   if(backend){
@@ -1414,6 +1421,7 @@ async function googleDriveTest(){
   try{const r=await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota',{headers:{Authorization:'Bearer '+cfg.token}});if(!r.ok)throw new Error('Connection failed ('+r.status+')');const data=await r.json();DB.meta.googleDrive={...cfg,connected:true,lastChecked:new Date().toISOString(),account:data.user?.emailAddress||''};save();render();toast('Google Drive connected'+(data.user?.emailAddress?' as '+data.user.emailAddress:''));}catch(err){DB.meta.googleDrive={...cfg,connected:false};save();render();toast(err.message||'Google Drive connection failed');}
 }
 async function googleDriveOAuthLogin(){
+  if(localServerOnly){toast('External local storage is active');return;}
   const backend=await googleDriveBackendStatus();
   if(backend){
     window.location.href='/api/google-drive/auth';
@@ -1421,6 +1429,7 @@ async function googleDriveOAuthLogin(){
   }
   const cfg=DB.meta.googleDrive||{},clientId=cfg.clientId||'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com';
   if(!window.google?.accounts?.oauth2){toast('Google sign-in is still loading; try again in a moment');return;}
+  if(!window.google?.accounts?.oauth2)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://accounts.google.com/gsi/client';script.onload=resolve;script.onerror=()=>reject(new Error('Google authorization could not be loaded'));document.head.appendChild(script);});
   const client=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:'https://www.googleapis.com/auth/drive.file',callback:async response=>{
     if(response.error){
       const message=response.error==='redirect_uri_mismatch'
@@ -1778,7 +1787,7 @@ function viewInvoiceLegacy(id){
   modal(`<h3>Invoice ${i.id} <span style="float:right">${statusBadge(i.status)}</span></h3>
   <div class="doc-preview" id="print-area">
     <div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px">
-      <div><b style="font-size:17px;letter-spacing:2px">UPHOLSTERY WAREHOUSE</b><br><i>ALL THINGS UPHOLSTERY...</i><br>${m.address}<br>Tel: ${m.phone} · ${m.email}</div>
+      <div><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address}<br>Tel: ${m.phone} · ${m.email}</div>
       <div style="text-align:right"><b style="font-size:15px">INVOICE</b><br>No: ${i.id}<br>Date: ${i.date}</div>
     </div>
     <p style="margin:12px 0"><b>Invoice To:</b> ${i.customer}<br>${i.contact||''} ${i.email?'<br>'+i.email:''}</p>
@@ -1839,7 +1848,7 @@ function saveReceipt(){
 function viewReceipt(receiptNo){
   const r=DB.receipts.find(x=>(x.receiptNo||String(x.id))===receiptNo);if(!r)return;
   const inv=DB.invoices.find(i=>i.id===r.invoiceId),m=DB.meta;
-  modal(`<h3>Receipt ${r.receiptNo||r.id}</h3><div class="doc-preview" id="print-area"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px"><div><b style="font-size:17px;letter-spacing:2px">UPHOLSTERY WAREHOUSE</b><br><i>ALL THINGS UPHOLSTERY...</i><br>${m.address}<br>${m.phone} · ${m.email}</div><div style="text-align:right"><b>RECEIPT</b><br>No: ${r.receiptNo||r.id}<br>Date: ${r.date}</div></div><p style="margin:18px 0"><b>Received from:</b> ${r.customer}<br><b>For invoice:</b> ${r.invoiceId}<br><b>Payment method:</b> ${r.method}</p><h2 style="text-align:right">Amount received: ${R(r.amount)}</h2><p>Thank you for your payment. This receipt confirms the amount recorded against the invoice above.</p></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
+  modal(`<h3>Receipt ${r.receiptNo||r.id}</h3><div class="doc-preview template-doc" id="print-area"><img class="template-logo" src="uw-document-logo.png" alt="Upholstery Warehouse"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px"><div><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address}<br>${m.phone} · ${m.email}</div><div style="text-align:right"><b>RECEIPT</b><br>No: ${r.receiptNo||r.id}<br>Date: ${r.date}</div></div><p style="margin:18px 0"><b>Received from:</b> ${r.customer}<br><b>For invoice:</b> ${r.invoiceId}<br><b>Payment method:</b> ${r.method}</p><h2 style="text-align:right">Amount received: ${R(r.amount)}</h2><p>Thank you for your payment. This receipt confirms the amount recorded against the invoice above.</p></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
 }
 
 /* ---------- EXPENSES ---------- */
@@ -2653,7 +2662,7 @@ function vSettings(c){
       <button class="btn danger" onclick="if(confirm('Wipe ALL local data and restore factory seed?')){localStorage.removeItem(DB_KEY);location.reload()}">Factory Reset</button>
     </div>
 
-    <h3 style="margin-top:22px">Google Drive</h3>
+    ${localServerOnly?'<h3>External local storage</h3><p>Shared ledger and managed documents: D:\\UW FOREVER\\Accounting Data<br>Daily verified backups: D:\\UW FOREVER\\Local Backups<br>Both profiles use the same local server.</p>':`    <h3 style="margin-top:22px">Google Drive</h3>
     <div class="frm">
       <div class="fld"><label>Google OAuth client ID</label><input value="${drive.clientId||'543852392281-hgn4dojctifs8lh31lldullqd7bsfmd5.apps.googleusercontent.com'}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),clientId:this.value};save()"></div>
       <div class="fld"><label>OAuth access token (advanced fallback)</label><input type="password" autocomplete="off" value="${drive.token||''}" onchange="DB.meta.googleDrive={...(DB.meta.googleDrive||{}),token:this.value,connected:false};save()"></div>
@@ -2673,10 +2682,11 @@ function vSettings(c){
       <span style="font-size:12px;color:${drive.connected?'var(--green)':'var(--muted)'}">${drive.connected?'Connected':'Not connected'}${drive.account?' · '+drive.account:''}${drive.lastSync?' · Last sync '+new Date(drive.lastSync).toLocaleString():''}</span>
     </div>
 
-    <h3 style="margin-top:22px">Supabase database</h3>
+`}
+    <h3 style="margin-top:22px">${localServerOnly?'Shared local datastore':'Supabase database'}</h3>
     ${serverConflict?`<div class="panel" style="border-color:var(--amber)"><b style="color:var(--amber)">Sync conflict detected.</b><p style="font-size:12px;color:var(--muted)">Your local work was preserved instead of being overwritten.</p><div class="toolbar"><button class="btn" onclick="resolveStateConflict('server')">Use server copy</button><button class="btn gold" onclick="resolveStateConflict('local')">Keep local copy</button><button class="btn" onclick="resolveStateConflict('export')">Export local backup</button></div></div>`:''}
     <div class="toolbar">
-      <button class="btn gold" onclick="supabaseStatus()">Test Supabase connection</button>
+      ${localServerOnly?'':'<button class="btn gold" onclick="supabaseStatus()">Test Supabase connection</button>'}
       <button class="btn" onclick="cloudSync('push')">Save state now</button>
       <button class="btn" onclick="cloudSync('pull')">Restore state</button>
       <span style="font-size:12px;color:var(--muted)">Server-controlled sync · workspace default</span>
@@ -2689,7 +2699,7 @@ function vSettings(c){
       <button class="btn" onclick="go('bank')">Open bank reconciliation</button>
     </div>
 
-    <p style="font-size:11.5px;color:var(--muted);margin-top:14px">The app keeps a local offline cache and syncs authoritative state through the protected server to Supabase. Google Drive remains an optional backup layer. Financial year filter: <b style="color:var(--gold2)">${DB.meta.fy}</b>.</p>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:14px">${localServerOnly?'The protected local server stores the shared ledger on D:\\UW FOREVER. Automatic cloud storage is disabled.':'The protected server syncs the shared ledger to Supabase with optional Google Drive backups.'} Financial year filter: <b style="color:var(--gold2)">${DB.meta.fy}</b>.</p>
   </div>`;
 }
 
@@ -2813,6 +2823,8 @@ function initializeAccessFlow(){
 
 async function startApplication(user){
   sharedSyncStatus('Loading shared workspace…');
+  await loadLocalStorageMode();
+  await restoreBrowserRecovery();
   await initializeServerSync();
   startPeriodicSync();
   renderNav();

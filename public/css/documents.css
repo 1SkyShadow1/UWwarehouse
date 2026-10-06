@@ -1,0 +1,20 @@
+.template-doc .template-logo{height:auto;width:100%;max-height:none;object-fit:contain;background:transparent}
+.quote-template .quote-top-header{grid-template-columns:minmax(0,2.3fr) minmax(180px,1fr);gap:20px;min-height:0}
+.quote-template .quote-top-header .template-logo{height:auto;align-self:center;margin:0}
+.quote-template .quote-doc-heading{padding:8px 0;margin:8px 0 12px}
+.quote-template .quote-doc-heading h1{font-size:24px;text-decoration:underline}
+.quote-template .field-grid{gap:0 24px;margin-bottom:10px}
+.quote-template .field{min-height:22px;padding:2px 0}
+.quote-template .quote-reference{grid-template-columns:170px 1fr;border:1px solid #111;padding:0;gap:0;margin:10px 0}
+.quote-template .quote-reference>*{padding:4px 6px}
+.quote-template .quote-reference b{border-right:1px solid #111}
+.quote-template .quote-introduction{border:1px solid #111;min-height:58px;padding:6px;white-space:pre-line}
+.template-doc table th,.template-doc table td{color:#111;background:#fff;letter-spacing:normal;text-transform:none}
+.quote-template table th,.quote-template table td{border:1px solid #111;padding:4px 6px;font-size:12px}
+.quote-template table th:first-child{width:45%}.quote-template table th:nth-child(2){width:8%}
+.quote-template table th:nth-child(3){width:18%}.quote-template table th:nth-child(4){width:29%}
+.quote-template .terms{margin-top:6px;line-height:1.5}
+.template-doc tr,.template-doc .signature-grid{break-inside:avoid}
+.template-doc thead{display:table-header-group}
+.template-doc tfoot{display:table-row-group}
+@media print{.quote-template{padding:10mm}.invoice-template{padding:10mm 14mm}.template-doc .template-logo{width:100%;height:auto}}

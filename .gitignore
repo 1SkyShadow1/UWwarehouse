@@ -1,3 +1,6 @@
 node_modules/
 .env
 .DS_Store
+
+# Machine-specific external datastore configuration
+local-storage.json

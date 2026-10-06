@@ -1,6 +1,6 @@
-const CACHE_NAME = 'uw-accounting-v41';
+const CACHE_NAME = 'uw-accounting-v42';
 const DOCUMENT_CACHE = 'uw-accounting-documents-v2';
-const APP_SHELL = ['./', './index.html', './css/pricing.css?v=41', './js/pricing-core.js?v=41', './js/fabrics.js?v=41', './js/fabric-picker.js?v=41', './js/pricing.js?v=41', './js/quote-history.js?v=41', './js/document-editor.js?v=41', './js/document-views.js?v=41', './js/quotes.js?v=41', './js/dashboard.js?v=41', './js/suppliers.js?v=41', './js/app-version.js?v=41', './js/shared-sync.js?v=41', './imported-data.js?v=41', './income-2026.js?v=41', './operations-data.js?v=41', './scanned-data.js?v=41', './bank-statements.js?v=41', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
+const APP_SHELL = ['./', './index.html', './css/documents.css?v=42', './css/pricing.css?v=42', './js/pricing-core.js?v=42', './js/fabrics.js?v=42', './js/fabric-picker.js?v=42', './js/pricing.js?v=42', './js/quote-history.js?v=42', './js/document-editor.js?v=42', './js/document-format.js?v=42', './js/local-recovery.js?v=42', './js/document-views.js?v=42', './js/quotes.js?v=42', './js/dashboard.js?v=42', './js/suppliers.js?v=42', './js/app-version.js?v=42', './js/shared-sync.js?v=42', './imported-data.js?v=42', './income-2026.js?v=42', './operations-data.js?v=42', './scanned-data.js?v=42', './bank-statements.js?v=42', './manifest.webmanifest', './icon.svg', './uw-round-logo.png', './uw-document-logo.png', './uw-official-logo.png', './uw-logo.png', './uw-logo-quote.png', './Invoice%20Template.docx', './Quote%20Template.xlsx'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
@@ -19,6 +19,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) return;
   const isDocumentRequest = (requestUrl.pathname === '/api/source-file'
     || /^\/api\/documents\/[a-f0-9]{32}$/i.test(requestUrl.pathname)
     || requestUrl.pathname.startsWith('/__source/'));
@@ -27,7 +28,7 @@ self.addEventListener('fetch', event => {
       const cached = await cache.match(event.request);
       const network = fetch(event.request, { cache: 'default' }).then(response => {
         const type = response.headers.get('content-type') || '';
-        if (response.ok && (type.startsWith('application/pdf') || type.startsWith('image/'))) cache.put(event.request, response.clone());
+        if (response.ok && (type.startsWith('application/pdf') || type.startsWith('image/'))) cache.put(event.request, response.clone()).catch(()=>{});
         return response;
       }).catch(() => cached || Response.error());
       const cachedType = cached ? (cached.headers.get('content-type') || '') : '';
@@ -36,14 +37,14 @@ self.addEventListener('fetch', event => {
     return;
   }
   if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname === '/build-info.json') {
-    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    event.respondWith(fetch(event.request, { cache: 'no-store' }).catch(()=>new Response(JSON.stringify({error:'The local server is unavailable. Your unsynced work is retained; reconnect the local server to save.'}),{status:503,headers:{'Content-Type':'application/json'}})));
     return;
   }
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
       const copy = response.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+      if(response.ok)caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(()=>{});
       return response;
-    }).catch(() => caches.match('./index.html')))
+    }).catch(async () => event.request.mode==='navigate' ? await caches.match('./index.html') || Response.error() : Response.error()))
   );
 });

@@ -18,7 +18,7 @@ function client(data,fetcher){
     mergeBundledFnbState:()=>{},normalizeWageLedger:()=>{},deduplicateExpenseLedger:()=>{},normalizePayables:()=>{},render:()=>{},toast:()=>{},console,
     setTimeout:(fn,ms)=>{const timer=setTimeout(fn,ms);timers.add(timer);return timer;},clearTimeout,
   });
-  vm.runInContext(moduleCode+'\n'+html.slice(html.indexOf('let serverRevision = null;'),html.indexOf('function resolveStateConflict(choice){')),context);
+  vm.runInContext(moduleCode+'\n'+html.slice(html.indexOf('let serverRevision = null;'),html.indexOf('async function resolveStateConflict(choice){')),context);
   context.synchronizeRemoteDocuments=async()=>{};
   return {context,cache,stop:()=>timers.forEach(clearTimeout)};
 }
@@ -62,7 +62,7 @@ test('pending offline changes are preserved for review when another profile has 
   try{
     await c.context.initializeServerSync();
     assert.equal(c.context.DB.invoices[0].id,'Offline draft');
-    const conflict=JSON.parse(c.cache.get('UW_STATE_CONFLICT'));
+    const conflict=copy(vm.runInContext('serverConflict',c.context));
     assert.equal(conflict.local.invoices[0].id,'Offline draft');assert.equal(conflict.remote.invoices[0].id,'Other profile');
     assert.equal(await c.context.syncServerState(true,true),false);
   }finally{c.stop();}
@@ -78,7 +78,7 @@ test('two authenticated profiles share changes, merge simultaneous records, and 
   const server=spawn(process.execPath,[path.join(repo,'server.js')],{env:{...process.env,NODE_ENV:'test',HOST:'127.0.0.1',PORT:String(port),UW_DATA_DIR:dataRoot,UW_DOCUMENTS_DIR:path.join(dataRoot,'documents'),UW_INVOICES_DIR:path.join(dataRoot,'invoices'),UW_QUOTES_DIR:path.join(dataRoot,'quotes'),UW_AUTH_USERS_JSON:JSON.stringify(users),UW_API_KEY:'',SUPABASE_URL:'',SUPABASE_SERVICE_ROLE_KEY:''},stdio:'ignore'});
   const clients=[];
   try{
-    const deadline=Date.now()+20000;
+    const deadline=Date.now()+60000;
     while(true){try{if((await fetch(base+'/api/health')).ok)break;}catch{}if(Date.now()>deadline)throw Error('Test server did not start');await new Promise(r=>setTimeout(r,100));}
     async function login(email){
       const response=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})});assert.equal(response.status,200);

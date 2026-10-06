@@ -40,8 +40,7 @@ function sharedSyncStatus(message){
 function hasSharedAccounting(data){return Array.isArray(data?.invoices)||Array.isArray(data?.quotes)||Array.isArray(data?.expenses);}
 function preserveSharedConflict(snapshot,paths=[]){
   serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:snapshot.data||{},revision:snapshot.revision,paths};
-  try{localStorage.setItem('UW_STATE_CONFLICT',JSON.stringify(serverConflict));}
-  catch(error){console.warn('Conflict remains in memory; current local copy is retained.',error);}
+  if(typeof cacheConflictRecovery==='function')cacheConflictRecovery(serverConflict);
   serverSyncAvailable=false;serverSyncPending=false;
   sharedSyncStatus('Shared edit conflict · review Settings');
 }

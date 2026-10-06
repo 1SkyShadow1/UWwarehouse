@@ -288,6 +288,21 @@ async function run() {
     assert.equal(await page.evaluate(()=>DB.fnbStatements[0].transactions[0].allocationNeedsReview),false);
     await page.evaluate(()=>go('dashboard'));
     assert(!(await page.evaluate(()=>dailyActions(DB).map(a=>a.id))).includes('daily-bank'));
+    // Printed material descriptions and contact fields follow the supplied templates.
+    await page.evaluate(()=>{
+      closeModal();DB.quotes.push({id:'TEMPLATE-QA',date:'2026-10-06',expiry:'2026-11-06',customer:'Template client',contact:'Client manager',phone:'011 555 0100',email:'client@example.com',billingAddress:'42 Client Road',projectReference:'Train seats',items:[{item:'Fabric',desc:'Fabric - Fabric - Prasa',qty:144,price:351},{item:'Foam',desc:'Foam - Foam - Yellow',qty:72,price:58.5}]});viewQuote('TEMPLATE-QA');
+    });
+    assert.deepEqual(await page.locator('#quote-preview thead th').allTextContents(),['Description','Qty','Unit Price','Total Price']);
+    const printed=await page.locator('#quote-preview tbody').innerText();
+    assert.equal((printed.match(/Fabric/g)||[]).length,1);assert.equal((printed.match(/Foam/g)||[]).length,1);
+    assert((await page.locator('#quote-preview').innerText()).includes('42 Client Road'));
+    assert.equal(await page.locator('#quote-preview .template-logo').getAttribute('src'),'uw-document-logo.png');
+    await page.locator('#quote-preview .template-logo').evaluate(img=>img.decode());
+    await page.locator('#quote-preview').screenshot({path:path.join(__dirname,'..','tmp','quote-browser-proof.png')});
+    await page.evaluate(()=>{closeModal();DB.receipts.push({id:'TEMPLATE-R',receiptNo:'TEMPLATE-R',invoiceId:'TEMPLATE-I',date:'2026-10-06',customer:'Template client',method:'EFT',amount:100});viewReceipt('TEMPLATE-R');});
+    assert.equal(await page.locator('#print-area .template-logo').getAttribute('src'),'uw-document-logo.png');
+    await page.locator('#print-area .template-logo').evaluate(img=>img.decode());
+    await page.locator('#print-area').screenshot({path:path.join(__dirname,'..','tmp','receipt-browser-proof.png')});
     assert.deepEqual(errors, []);
     if (process.env.UW_TEST_SCREENSHOT){
       await page.evaluate(()=>{closeModal();newQuote();});

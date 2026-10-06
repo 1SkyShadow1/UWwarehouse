@@ -22,6 +22,11 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 function Get-NormalizedFullPath([string]$Path) {
   return [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 }
+function Get-FileHash([string]$LiteralPath,[string]$Algorithm='SHA256') {
+  $stream=[IO.File]::OpenRead($LiteralPath);$sha=[Security.Cryptography.SHA256]::Create()
+  try { return [pscustomobject]@{Hash=([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-','')} }
+  finally {$stream.Dispose();$sha.Dispose()}
+}
 
 function Test-PathWithin([string]$Path, [string]$Parent) {
   $normalizedPath = (Get-NormalizedFullPath $Path) + [System.IO.Path]::DirectorySeparatorChar
@@ -173,8 +178,8 @@ if (-not (Test-Path -LiteralPath $DataRoot -PathType Container)) {
 if (-not (Test-Path -LiteralPath $AppRoot -PathType Container)) {
   throw "Installed application folder does not exist: $AppRoot"
 }
-if (-not (Test-PathWithin $DataRoot $AppRoot)) {
-  throw "Application data must be inside the installed application folder so backup exclusions can be verified."
+if (Test-PathWithin $BackupRoot $DataRoot -or Test-PathWithin $DataRoot $BackupRoot) {
+  throw 'The backup and primary application data directories must be separate.'
 }
 if (-not (Test-Path -LiteralPath $InvoicesRoot -PathType Container)) {
   throw "Saved invoices folder does not exist: $InvoicesRoot"
@@ -292,6 +297,7 @@ try {
     files = $fileEntries
   }
   [System.IO.File]::WriteAllText((Join-Path $temporary $manifestName), ($manifest | ConvertTo-Json -Depth 8), $utf8NoBom)
+  if (-not (Test-PathWithin $temporary $BackupRoot) -or -not (Test-PathWithin $destination $BackupRoot)) { throw 'Backup move escaped the backup directory.' }
   Move-Item -LiteralPath $temporary -Destination $destination
 
   $verifiedManifest = Assert-BackupValid $destination
@@ -299,11 +305,13 @@ try {
     Where-Object { $_.Name -match '^UWAccounting-\d{8}-\d{6}-\d{3}$' } |
     Sort-Object Name -Descending)
   foreach ($oldBackup in $backups | Select-Object -Skip $RetentionCount) {
+    if (-not (Test-PathWithin $oldBackup.FullName $BackupRoot)) { throw 'Backup cleanup escaped the backup directory.' }
     Remove-Item -LiteralPath $oldBackup.FullName -Recurse -Force
   }
   Write-Host "Local system backup created and verified: $destination ($($verifiedManifest.fileCount) files, $($verifiedManifest.totalBytes) bytes)."
 } finally {
   if (Test-Path -LiteralPath $temporary) {
+    if (-not (Test-PathWithin $temporary $BackupRoot)) { throw 'Temporary cleanup escaped the backup directory.' }
     Remove-Item -LiteralPath $temporary -Recurse -Force
   }
 }

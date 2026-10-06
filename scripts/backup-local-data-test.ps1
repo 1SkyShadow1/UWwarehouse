@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 $backupScript = Join-Path $PSScriptRoot "backup-local-data.ps1"
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) "uw-backup-test-$PID"
 $appRoot = Join-Path $testRoot "app"
-$dataRoot = Join-Path $appRoot "data"
+$dataRoot = Join-Path $testRoot "external-data"
 $invoiceRoot = Join-Path $testRoot "invoices"
 $quoteRoot = Join-Path $testRoot "quotes"
 $sourceRoot = Join-Path $testRoot "UW"
@@ -100,6 +100,7 @@ try {
   Write-Host "Backup test passed: app files, persistent data, managed documents, invoice/quote exports, source files, encrypted configuration, and integrity checks."
 } finally {
   if (Test-Path -LiteralPath $testRoot) {
+    if (-not ([IO.Path]::GetFullPath($testRoot)).StartsWith([IO.Path]::GetTempPath(),[StringComparison]::OrdinalIgnoreCase)) { throw "Test cleanup escaped the temporary directory." }
     Remove-Item -LiteralPath $testRoot -Recurse -Force
   }
 }

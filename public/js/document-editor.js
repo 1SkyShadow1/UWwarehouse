@@ -11,8 +11,8 @@ function newInvoice(mode='invoice'){
     ${mode==='quote'?`<div class="fld"><label>Valid until</label><input id="f-expiry" type="date" value="${dateAfterDays(initialDate)}"></div>`:''}
     ${mode==='invoice'?'<div class="fld"><label>Payment due date (optional)</label><input id="f-due" type="date"></div>':''}
     <div class="fld"><label>Customer</label><input id="f-cust"></div>
-    <div class="fld"><label>Contact / Phone</label><input id="f-contact"></div>
-    <div class="fld"><label>Email</label><input id="f-email"></div>
+    <div class="fld"><label>Contact name</label><input id="f-contact"></div><div class="fld"><label>Telephone</label><input id="f-phone"></div>
+    <div class="fld"><label>Email</label><input id="f-email"></div><div class="fld"><label>Billing address</label><textarea id="f-billing-address" rows="2"></textarea></div>
     <div class="fld"><label>${mode==='quote'?'Project Reference':'Project'}</label><input id="f-project" value="${mode==='quote'?'':'Re-Upholstery'}"></div>
     ${mode==='quote'?`<div class="fld"><label>Quote item preset</label><select id="f-preset" onchange="applyQuotePreset(this.value, this)"><option value="">Choose size/type/material preset…</option>${(Array.isArray(DB.priceBook)?DB.priceBook:[]).map((p,i)=>`<option value="${i}">${p.code||'Preset '+(i+1)} — ${p.desc||'Priced item'}</option>`).join('')}</select></div>
     <div class="fld"><label>Number of items</label><input id="f-qty" type="number" min="1" step="1" value="1" onchange="refreshQuotePreset()"></div>
@@ -69,7 +69,7 @@ function quotePresetLines(preset,quantity=1,lengthOverride=null,colour=''){
 function addItemRow(item={}){appendDocumentItem('f-items','i',item,window.invoiceFormMode==='quote');}
 function saveInvoice(){
   const items=collectDocumentItems('f-items','i');if(!items)return;
-  const common={id:document.getElementById('f-no').value,date:document.getElementById('f-date').value,customer:document.getElementById('f-cust').value,contact:document.getElementById('f-contact').value,email:document.getElementById('f-email').value,items};
+  const common={id:document.getElementById('f-no').value,date:document.getElementById('f-date').value,customer:document.getElementById('f-cust').value,contact:document.getElementById('f-contact').value,phone:document.getElementById('f-phone').value,billingAddress:document.getElementById('f-billing-address').value,email:document.getElementById('f-email').value,items};
   if(!common.id||!common.date||!common.customer||!items.length){toast('Enter invoice number, date, customer and at least one line item');return;}
   const collection=window.invoiceFormMode==='quote'?DB.quotes:DB.invoices;
   if(collection.some(doc=>doc.id===common.id)){toast('This document number already exists');return;}
@@ -89,7 +89,7 @@ function editInvoice(id){
       <div class="fld"><label>Invoice No</label><input id="ef-no" value="${i.id}"></div><div class="fld"><label>Date</label><input id="ef-date" type="date" value="${i.date}"></div>
       <div class="fld"><label>Payment due date (optional)</label><input id="ef-due" type="date" value="${i.dueDate||''}"></div>
       <div class="fld"><label>Customer</label><input id="ef-cust" value="${i.customer||''}"></div><div class="fld"><label>Contact / Phone</label><input id="ef-contact" value="${i.contact||''}"></div>
-      <div class="fld"><label>Email</label><input id="ef-email" value="${i.email||''}"></div><div class="fld"><label>Project</label><input id="ef-project" value="${i.project||''}"></div>
+      <div class="fld"><label>Telephone</label><input id="ef-phone" value="${escapeHtml(i.phone||'')}"></div><div class="fld"><label>Billing address</label><textarea id="ef-billing-address">${escapeHtml(i.billingAddress||'')}</textarea></div><div class="fld"><label>Email</label><input id="ef-email" value="${i.email||''}"></div><div class="fld"><label>Project</label><input id="ef-project" value="${i.project||''}"></div>
     </div><div class="fld"><label>Line Items</label></div><table id="ef-items"><tr><th>Code</th><th>Description</th><th>Supplier fabric / price basis</th><th>Qty</th><th>Selling / unit · internal cost</th><th></th></tr></table>
     <button class="btn sm" onclick="addEditItemRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedInvoice('${id}')">Save Changes</button></div>`);
     (i.items||[]).forEach(addEditItemRow); if(!(i.items||[]).length)addEditItemRow();
@@ -102,7 +102,7 @@ function saveEditedInvoice(id){
   if(!nextId||!fa('ef-date')||!fa('ef-cust')||!items.length){toast('Complete invoice number, date, customer and line items');return;}
   if(!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
   if(DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
-  Object.assign(invoice,{id:nextId,date:fa('ef-date'),dueDate:fa('ef-due'),customer:fa('ef-cust'),contact:fa('ef-contact'),email:fa('ef-email'),project:fa('ef-project'),items});
+  Object.assign(invoice,{id:nextId,date:fa('ef-date'),dueDate:fa('ef-due'),customer:fa('ef-cust'),contact:fa('ef-contact'),phone:fa('ef-phone'),billingAddress:fa('ef-billing-address'),email:fa('ef-email'),project:fa('ef-project'),items});
   if(nextId!==id){
     for(const row of [...(DB.receipts||[]),...(DB.jobs||[]),...(DB.quotes||[])])if(row.invoiceId===id)row.invoiceId=nextId;
   }

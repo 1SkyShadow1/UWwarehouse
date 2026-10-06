@@ -25,7 +25,7 @@ if (-not (Test-Path -LiteralPath $targetLock) -or (Get-CodeHash $sourceLock) -ne
 # Never mirror the checkout: accounting state, .env, node_modules and source
 # document libraries are outside this allowlist.
 $files = @('server.js','package.json','package-lock.json','README.md')
-foreach ($folder in @('public','scripts','docs')) {
+foreach ($folder in @('public','scripts','docs','lib')) {
   $folderPath = Join-Path $SourceRoot $folder
   if (Test-Path -LiteralPath $folderPath) {
     $files += @(Get-ChildItem -LiteralPath $folderPath -File -Recurse | ForEach-Object {
@@ -36,9 +36,16 @@ foreach ($folder in @('public','scripts','docs')) {
 }
 $files = @($files | Sort-Object -Unique)
 $protected = @{}
-foreach ($relative in @('.env','data\uw-state.json')) {
+foreach ($relative in @('.env','data\uw-state.json','local-storage.json')) {
   $file = Join-Path $InstallRoot $relative
   if (Test-Path -LiteralPath $file) { $protected[$relative] = (Get-CodeHash $file) }
+}
+$externalState = $null
+$configFile = Join-Path $InstallRoot 'local-storage.json'
+if (Test-Path -LiteralPath $configFile) {
+  $storageConfig = Get-Content -LiteralPath $configFile -Raw | ConvertFrom-Json
+  $externalState = Join-Path $storageConfig.dataRoot 'uw-state.json'
+  if (Test-Path -LiteralPath $externalState) { $externalHash = Get-CodeHash $externalState }
 }
 $backupRoot = Join-Path ([IO.Path]::GetTempPath()) ('uw-code-update-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $backupRoot | Out-Null
@@ -71,6 +78,7 @@ try {
   foreach ($relative in $protected.Keys) {
     if ((Get-CodeHash (Join-Path $InstallRoot $relative)) -ne $protected[$relative]) { throw "Protected file changed unexpectedly: $relative" }
   }
+  if ($externalState -and $externalHash -and (Get-CodeHash $externalState) -ne $externalHash) { throw 'External ledger changed during code update.' }
   $revision = 'local'
   if (Get-Command git -ErrorAction SilentlyContinue) {
     $gitRevision = & git -C $SourceRoot rev-parse HEAD 2>$null

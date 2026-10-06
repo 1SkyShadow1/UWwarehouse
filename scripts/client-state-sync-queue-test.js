@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 const start = html.indexOf('function queueServerStateSave(){');
-const end = html.indexOf('function resolveStateConflict(choice){', start);
+const end = html.indexOf('async function resolveStateConflict(choice){', start);
 assert.notEqual(start, -1, 'Client state-save queue was not found.');
 assert.notEqual(end, -1, 'Client state-save queue end was not found.');
 

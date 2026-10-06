@@ -1,8 +1,8 @@
 // Code version only; no accounting state or credentials are read here.
-const UW_RELEASE='2026-10-05-pricing-v41';
+const UW_RELEASE='2026-10-06-local-documents-v42';
 window.addEventListener('DOMContentLoaded',async()=>{
   const label=document.getElementById('app-build-label');if(!label)return;
-  label.textContent='Pricing update · '+UW_RELEASE;
+  label.textContent='Documents update · '+UW_RELEASE;
   try{
     const response=await fetch('./build-info.json',{cache:'no-store'});
     if(response.ok){const build=await response.json();label.textContent=`Build ${String(build.revision||'').slice(0,7)||UW_RELEASE} · ${UW_RELEASE}`;}
