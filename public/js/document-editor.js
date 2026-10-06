@@ -9,7 +9,7 @@ function newInvoice(mode='invoice'){
     ${prefixField}
     <div class="fld"><label>Date</label><input id="f-date" type="date" value="${initialDate}" onchange="${dateHandler};if(document.getElementById('f-expiry'))document.getElementById('f-expiry').value=dateAfterDays(this.value)"></div>
     ${mode==='quote'?`<div class="fld"><label>Valid until</label><input id="f-expiry" type="date" value="${dateAfterDays(initialDate)}"></div>`:''}
-    ${mode==='invoice'?'<div class="fld"><label>Payment due date (optional)</label><input id="f-due" type="date"></div>':''}
+    ${mode==='invoice'?'<div class="fld"><label>Payment due date (optional)</label><input id="f-due" type="date"></div><div class="fld"><label>Order number</label><input id="f-order-no"></div><div class="fld"><label>Client VAT number</label><input id="f-vat-no"></div>':`<div class="fld"><label>Prepared by</label><input id="f-prepared-by" value="${escapeHtml(window.UW_OPERATOR?.name||'')}"></div>`}
     <div class="fld"><label>Customer</label><input id="f-cust"></div>
     <div class="fld"><label>Contact name</label><input id="f-contact"></div><div class="fld"><label>Telephone</label><input id="f-phone"></div>
     <div class="fld"><label>Email</label><input id="f-email"></div><div class="fld"><label>Billing address</label><textarea id="f-billing-address" rows="2"></textarea></div>
@@ -75,11 +75,11 @@ function saveInvoice(){
   if(collection.some(doc=>doc.id===common.id)){toast('This document number already exists');return;}
   if(window.invoiceFormMode==='quote'){
     const expiry=fa('f-expiry');if(!validQuoteExpiry(common.date,expiry)){toast('Quote expiry must be on or after its date');return;}
-    DB.quotes.unshift(initializeQuoteHistory({...common,expiry,projectReference:document.getElementById('f-project').value,workType:document.getElementById('f-work-type')?.value||'Reupholster',colour:document.getElementById('f-colour')?.value||'',introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false}));
+    DB.quotes.unshift(initializeQuoteHistory({...common,expiry,preparedBy:fa('f-prepared-by'),projectReference:document.getElementById('f-project').value,workType:document.getElementById('f-work-type')?.value||'Reupholster',colour:document.getElementById('f-colour')?.value||'',introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false}));
     save();closeModal();toast('Quote '+common.id+' created');go('quotes');
   }else{
     if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
-    const inv={...common,dueDate:fa('f-due'),project:document.getElementById('f-project').value,deposit:0,paid:0,status:'Pending',fy:DB.meta.fy};
+    const inv={...common,dueDate:fa('f-due'),orderNo:fa('f-order-no'),vatNo:fa('f-vat-no'),project:document.getElementById('f-project').value,deposit:0,paid:0,status:'Pending',fy:DB.meta.fy};
     DB.invoices.unshift(inv);save();closeModal();toast('Invoice '+inv.id+' created');render();
   }
 }
@@ -88,7 +88,7 @@ function editInvoice(id){
     modal(`<h3>Edit Invoice ${i.id}</h3><div class="frm">
       <div class="fld"><label>Invoice No</label><input id="ef-no" value="${i.id}"></div><div class="fld"><label>Date</label><input id="ef-date" type="date" value="${i.date}"></div>
       <div class="fld"><label>Payment due date (optional)</label><input id="ef-due" type="date" value="${i.dueDate||''}"></div>
-      <div class="fld"><label>Customer</label><input id="ef-cust" value="${i.customer||''}"></div><div class="fld"><label>Contact / Phone</label><input id="ef-contact" value="${i.contact||''}"></div>
+      <div class="fld"><label>Order number</label><input id="ef-order-no" value="${escapeHtml(i.orderNo||'')}"></div><div class="fld"><label>Client VAT number</label><input id="ef-vat-no" value="${escapeHtml(i.vatNo||'')}"></div><div class="fld"><label>Customer</label><input id="ef-cust" value="${i.customer||''}"></div><div class="fld"><label>Contact name</label><input id="ef-contact" value="${i.contact||''}"></div>
       <div class="fld"><label>Telephone</label><input id="ef-phone" value="${escapeHtml(i.phone||'')}"></div><div class="fld"><label>Billing address</label><textarea id="ef-billing-address">${escapeHtml(i.billingAddress||'')}</textarea></div><div class="fld"><label>Email</label><input id="ef-email" value="${i.email||''}"></div><div class="fld"><label>Project</label><input id="ef-project" value="${i.project||''}"></div>
     </div><div class="fld"><label>Line Items</label></div><table id="ef-items"><tr><th>Code</th><th>Description</th><th>Supplier fabric / price basis</th><th>Qty</th><th>Selling / unit · internal cost</th><th></th></tr></table>
     <button class="btn sm" onclick="addEditItemRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedInvoice('${id}')">Save Changes</button></div>`);
@@ -102,7 +102,7 @@ function saveEditedInvoice(id){
   if(!nextId||!fa('ef-date')||!fa('ef-cust')||!items.length){toast('Complete invoice number, date, customer and line items');return;}
   if(!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
   if(DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
-  Object.assign(invoice,{id:nextId,date:fa('ef-date'),dueDate:fa('ef-due'),customer:fa('ef-cust'),contact:fa('ef-contact'),phone:fa('ef-phone'),billingAddress:fa('ef-billing-address'),email:fa('ef-email'),project:fa('ef-project'),items});
+  Object.assign(invoice,{id:nextId,date:fa('ef-date'),dueDate:fa('ef-due'),orderNo:fa('ef-order-no'),vatNo:fa('ef-vat-no'),customer:fa('ef-cust'),contact:fa('ef-contact'),phone:fa('ef-phone'),billingAddress:fa('ef-billing-address'),email:fa('ef-email'),project:fa('ef-project'),items});
   if(nextId!==id){
     for(const row of [...(DB.receipts||[]),...(DB.jobs||[]),...(DB.quotes||[])])if(row.invoiceId===id)row.invoiceId=nextId;
   }

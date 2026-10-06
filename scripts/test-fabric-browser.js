@@ -39,7 +39,7 @@ async function run() {
       document.getElementById('boot-screen').style.display = 'none';
       document.getElementById('login-screen').classList.add('hidden');
       document.body.classList.add('app-ready');
-      DB.invoices = []; DB.quotes = []; DB.receipts = [];
+      DB.invoices = []; DB.quotes = []; DB.receipts = []; window.UW_OPERATOR={name:'Evans'};
     });
     await page.addStyleTag({content:'#boot-screen,#login-screen{display:none!important}'});
     const catalog = await page.evaluate(() => window.UW_FABRIC_CATALOG);
@@ -64,9 +64,12 @@ async function run() {
       if(representatives[index].unitUnspecified)await row.locator('.line-fabric-unit').selectOption('m');
     }
     await page.locator('#f-cust').fill('Fabric browser test');
+    await page.locator('#f-order-no').fill('ORDER-QA');
+    await page.locator('#f-vat-no').fill('VAT-QA');
     await page.evaluate(() => saveInvoice());
     const invoice = await page.evaluate(() => DB.invoices[0]);
     assert.equal(invoice.items.length, 6);
+    assert.equal(invoice.orderNo,'ORDER-QA');assert.equal(invoice.vatNo,'VAT-QA');
     assert.equal(new Set(invoice.items.map(i => i.fabricId)).size, 6);
     assert(invoice.items.every(i => i.fabricSource && i.qty === 2.5));
     assert.equal(invoice.items.find(i=>i.fabricSource.supplier==='Sullies').unit,'m');
@@ -80,6 +83,7 @@ async function run() {
     assert.equal(Number(await page.locator('.ei-price').first().inputValue()), 321.09);
     await page.evaluate(() => closeModal());
 
+    await page.evaluate(()=>newQuote());assert.equal(await page.locator('#f-prepared-by').inputValue(),'Evans');await page.evaluate(()=>closeModal());
     const gazelles = catalog.fabrics.filter(f => f.sourceId === 'gameskin' && f.desc === 'GAZELLE');
     assert.equal(gazelles.length, 2);
     await page.evaluate(() => newQuote());
