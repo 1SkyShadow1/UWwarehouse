@@ -17,4 +17,19 @@
 .template-doc tr,.template-doc .signature-grid{break-inside:avoid}
 .template-doc thead{display:table-header-group}
 .template-doc tfoot{display:table-row-group}
-@media print{.quote-template{padding:10mm}.invoice-template{padding:10mm 14mm}.template-doc .template-logo{width:100%;height:auto}}
+@page{size:A4;margin:0}
+@page invoice{size:Letter;margin:0}
+@page quote{size:A4;margin:0}
+@media print{
+  html,body{background:#fff!important;color:#111!important;height:auto!important;min-height:0!important}
+  body>:not(#modal-root){display:none!important}
+  #modal-root,.modal-bg,.modal{position:static!important;display:block!important;overflow:visible!important;height:auto!important;max-height:none!important;min-height:0!important;max-width:none!important;width:auto!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important;background:#fff!important}
+  .modal>:not(.doc-viewer):not(#print-area){display:none!important}
+  .doc-viewer{overflow:visible!important;height:auto!important;max-height:none!important;min-height:0!important;padding:0!important;border:0!important;background:#fff!important}
+  #invoice-preview,#quote-preview,#print-area{position:static!important;inset:auto!important;transform:none!important}
+  .quote-template{page:quote;padding:10mm}
+  .invoice-template{page:invoice;padding:10mm 14mm}
+  .template-doc .template-logo{width:100%;height:auto}
+  .quote-template .template-section{margin:12px 0 5px}
+  .quote-template .signature-grid{margin-top:24px;row-gap:24px}
+}

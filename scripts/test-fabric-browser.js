@@ -303,10 +303,17 @@ async function run() {
     assert.equal(await page.locator('#quote-preview .template-logo').getAttribute('src'),'uw-document-logo.png');
     await page.locator('#quote-preview .template-logo').evaluate(img=>img.decode());
     await page.locator('#quote-preview').screenshot({path:path.join(__dirname,'..','tmp','quote-browser-proof.png')});
+    await page.emulateMedia({media:'print'});
+    assert.equal(await page.locator('.doc-viewer').evaluate(el=>getComputedStyle(el).overflow),'visible');
+    await page.pdf({path:path.join(__dirname,'..','tmp','quote-browser-print-proof.pdf'),printBackground:true,preferCSSPageSize:true});
+    await page.emulateMedia({media:'screen'});
     await page.evaluate(()=>{closeModal();DB.receipts.push({id:'TEMPLATE-R',receiptNo:'TEMPLATE-R',invoiceId:'TEMPLATE-I',date:'2026-10-06',customer:'Template client',method:'EFT',amount:100});viewReceipt('TEMPLATE-R');});
     assert.equal(await page.locator('#print-area .template-logo').getAttribute('src'),'uw-document-logo.png');
     await page.locator('#print-area .template-logo').evaluate(img=>img.decode());
     await page.locator('#print-area').screenshot({path:path.join(__dirname,'..','tmp','receipt-browser-proof.png')});
+    await page.emulateMedia({media:'print'});
+    await page.pdf({path:path.join(__dirname,'..','tmp','receipt-browser-print-proof.pdf'),printBackground:true,preferCSSPageSize:true});
+    await page.emulateMedia({media:'screen'});
     assert.deepEqual(errors, []);
     if (process.env.UW_TEST_SCREENSHOT){
       await page.evaluate(()=>{closeModal();newQuote();});
