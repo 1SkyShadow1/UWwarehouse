@@ -18,6 +18,7 @@ try {
   Set-Content -LiteralPath (Join-Path $invoices 'invoice.pdf') -Value 'same document bytes' -Encoding UTF8
   Copy-Item -LiteralPath (Join-Path $invoices 'invoice.pdf') -Destination (Join-Path $quotes 'quote.pdf')
   Set-Content -LiteralPath (Join-Path $source 'old.txt') -Value 'old source content' -Encoding UTF8
+  (Get-Item -LiteralPath (Join-Path $source 'old.txt')).Attributes=[IO.FileAttributes]::Hidden
   $openSource=[IO.File]::Open((Join-Path $source 'old.txt'),[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
   try {$first=Run-Backup} finally {$openSource.Dispose()}
   $m1=Manifest $first
@@ -27,12 +28,12 @@ try {
   Assert ($m2.newObjects -eq 0 -and $m2.newBytes -eq 0) 'Unchanged backup copied data again.'
   $lock=[IO.File]::Open((Join-Path $backups '.incremental-backup.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
   try {Throws {Run-Backup|Out-Null} 'Concurrent incremental backup was allowed.'} finally {$lock.Dispose()}
-  $stamp=(Get-Item -LiteralPath (Join-Path $source 'old.txt')).LastWriteTimeUtc
-  Set-Content -LiteralPath (Join-Path $source 'old.txt') -Value 'new source content' -Encoding UTF8
-  (Get-Item -LiteralPath (Join-Path $source 'old.txt')).LastWriteTimeUtc=$stamp
+  $stamp=(Get-Item -LiteralPath (Join-Path $source 'old.txt') -Force).LastWriteTimeUtc
+  Set-Content -LiteralPath (Join-Path $source 'old.txt') -Value 'new source content' -Encoding UTF8 -Force
+  (Get-Item -LiteralPath (Join-Path $source 'old.txt') -Force).LastWriteTimeUtc=$stamp
   $third=Run-Backup;$m3=Manifest $third
   Assert ($m3.newObjects -eq 1) 'Changed content with the same timestamp was missed.'
-  Remove-Item -LiteralPath (Join-Path $source 'old.txt')
+  Remove-Item -LiteralPath (Join-Path $source 'old.txt') -Force
   Rename-Item -LiteralPath (Join-Path $quotes 'quote.pdf') -NewName 'renamed.pdf'
   $fourth=Run-Backup;$m4=Manifest $fourth
   Assert ($m4.newObjects -eq 0 -and $m4.fileCount -eq 5) 'Deletion or rename recopied unchanged contents.'
@@ -41,7 +42,8 @@ try {
   $restoreFirst=Join-Path $root 'restored-first';$restoreFourth=Join-Path $root 'restored-fourth'
   & $script -RestorePath $first -RestoreDestination $restoreFirst
   & $script -RestorePath $fourth -RestoreDestination $restoreFourth
-  Assert ((Get-Content -LiteralPath (Join-Path $restoreFirst 'Source Library/UW/old.txt') -Raw).Trim() -eq 'old source content') 'An older snapshot did not restore its original data.'
+  Assert ((Get-Content -LiteralPath (Join-Path $restoreFirst 'Source Library/UW/old.txt') -Raw -Force).Trim() -eq 'old source content') 'An older snapshot did not restore its original data.'
+  Assert (((Get-Item -LiteralPath (Join-Path $restoreFirst 'Source Library/UW/old.txt') -Force).Attributes -band [IO.FileAttributes]::Hidden) -ne 0) 'Hidden file attributes were lost.'
   Assert (-not (Test-Path -LiteralPath (Join-Path $restoreFourth 'Source Library/UW/old.txt'))) 'Deleted file reappeared in the newest restore.'
   Assert (Test-Path -LiteralPath (Join-Path $restoreFourth 'Saved Quotes/renamed.pdf')) 'Renamed document did not restore.'
   Assert (-not (Test-Path -LiteralPath (Join-Path $restoreFourth 'Saved Quotes/quote.pdf'))) 'Old filename reappeared in the newest restore.'

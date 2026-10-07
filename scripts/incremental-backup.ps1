@@ -36,7 +36,7 @@ function Assert-IncrementalBackupValid([string]$Path,$Manifest) {
     if (-not (Test-Path -LiteralPath $objectPath -PathType Leaf)) { throw "Backup object missing: $($entry.path)" }
     if (-not $verified.ContainsKey($entry.sha256)) {
       if ((Get-FileHash -LiteralPath $objectPath).Hash.ToLowerInvariant() -cne $entry.sha256) { throw "Backup object integrity failed: $($entry.path)" }
-      $verified[$entry.sha256] = (Get-Item -LiteralPath $objectPath).Length
+      $verified[$entry.sha256] = (Get-Item -LiteralPath $objectPath -Force).Length
     }
     if ([long]$verified[$entry.sha256] -ne [long]$entry.length) { throw "Backup object length differs: $($entry.path)" }
   }
@@ -55,7 +55,7 @@ function Add-BackupObject([string]$Source,[string]$Hash,[long]$Length,[string]$S
     return
   }
   if (Test-Path -LiteralPath $destination -PathType Leaf) {
-    if ((Get-Item -LiteralPath $destination).Length -ne $Length -or (Get-FileHash -LiteralPath $destination).Hash.ToLowerInvariant() -cne $Hash) {
+    if ((Get-Item -LiteralPath $destination -Force).Length -ne $Length -or (Get-FileHash -LiteralPath $destination).Hash.ToLowerInvariant() -cne $Hash) {
       throw "Existing backup object is corrupt; previous snapshots are retained: $Hash"
     }
   } else {
@@ -68,7 +68,7 @@ function Add-BackupObject([string]$Source,[string]$Hash,[long]$Length,[string]$S
         $outputStream = [IO.File]::Open($temporaryObject,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
         try { $inputStream.CopyTo($outputStream); $outputStream.Flush($true) } finally { $outputStream.Dispose() }
       } finally { $inputStream.Dispose() }
-      if ((Get-Item -LiteralPath $temporaryObject).Length -ne $Length -or (Get-FileHash -LiteralPath $temporaryObject).Hash.ToLowerInvariant() -cne $Hash) {
+      if ((Get-Item -LiteralPath $temporaryObject -Force).Length -ne $Length -or (Get-FileHash -LiteralPath $temporaryObject).Hash.ToLowerInvariant() -cne $Hash) {
         throw "Source changed while copying or backup verification failed: $Source. Run the backup again."
       }
       [IO.File]::Move($temporaryObject,$destination)
@@ -95,7 +95,7 @@ function New-IncrementalBackup($CopySets,[string]$Temporary,[string]$Destination
       foreach ($file in @(Get-TreeFiles $set.Source $set.ExcludedDirectories $set.ExcludedFiles)) {
         if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Linked backup source is unsupported: $($file.FullName)" }
         $hash = (Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant()
-        $length = (Get-Item -LiteralPath $file.FullName).Length
+        $length = (Get-Item -LiteralPath $file.FullName -Force).Length
         Add-BackupObject $file.FullName $hash $length $storeRoot $verified $stats
         $entries += [ordered]@{group=$set.Name;path=($set.Name+'/'+(Get-RelativeFilePath $set.Source $file.FullName));length=[long]$length;sha256=$hash;lastWriteUtc=$file.LastWriteTimeUtc.ToString('o');attributes=[int]$file.Attributes}
       }
@@ -123,7 +123,7 @@ function New-IncrementalBackup($CopySets,[string]$Temporary,[string]$Destination
     $environmentTemporary = Join-Path $Temporary 'local-environment.dpapi'
     [IO.File]::WriteAllText($environmentTemporary,$encryptedText,$utf8NoBom)
     $environmentHash = (Get-FileHash -LiteralPath $environmentTemporary).Hash.ToLowerInvariant()
-    $environmentLength = (Get-Item -LiteralPath $environmentTemporary).Length
+    $environmentLength = (Get-Item -LiteralPath $environmentTemporary -Force).Length
     Add-BackupObject $environmentTemporary $environmentHash $environmentLength $storeRoot $verified $stats
     $entries += [ordered]@{group='Encrypted Local Configuration';path='local-environment.dpapi';length=[long]$environmentLength;sha256=$environmentHash}
     Remove-Item -LiteralPath $environmentTemporary
@@ -157,10 +157,10 @@ function Restore-BackupSnapshot([string]$Snapshot,[string]$Destination,$Manifest
       if (-not (Test-PathWithin $target $staging)) { throw 'Restore path escaped its staging directory.' }
       $source = if ($Manifest.schemaVersion -eq 3) { Get-BackupObjectPath (Join-Path (Split-Path -Parent $Snapshot) '_objects') $entry.sha256 } else { Join-Path $Snapshot $entry.path }
       New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
-      Copy-Item -LiteralPath $source -Destination $target
-      if ((Get-Item -LiteralPath $target).Length -ne [long]$entry.length -or (Get-FileHash -LiteralPath $target).Hash.ToLowerInvariant() -cne $entry.sha256) { throw "Restored file verification failed: $($entry.path)" }
-      if ($entry.lastWriteUtc) { (Get-Item -LiteralPath $target).LastWriteTimeUtc = [datetime]::Parse($entry.lastWriteUtc) }
-      if ($null -ne $entry.attributes) { (Get-Item -LiteralPath $target).Attributes = [IO.FileAttributes]$entry.attributes }
+      Copy-Item -LiteralPath $source -Destination $target -Force
+      if ((Get-Item -LiteralPath $target -Force).Length -ne [long]$entry.length -or (Get-FileHash -LiteralPath $target).Hash.ToLowerInvariant() -cne $entry.sha256) { throw "Restored file verification failed: $($entry.path)" }
+      if ($entry.lastWriteUtc) { (Get-Item -LiteralPath $target -Force).LastWriteTimeUtc = [datetime]::Parse($entry.lastWriteUtc) }
+      if ($null -ne $entry.attributes) { (Get-Item -LiteralPath $target -Force).Attributes = [IO.FileAttributes]$entry.attributes }
     }
     Assert-ValidAccountingSnapshot (Join-Path $staging 'Application Data\uw-state.json')
     [IO.Directory]::Move($staging,$destinationPath)
