@@ -97,7 +97,7 @@ function New-IncrementalBackup($CopySets,[string]$Temporary,[string]$Destination
         $hash = (Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant()
         $length = (Get-Item -LiteralPath $file.FullName -Force).Length
         Add-BackupObject $file.FullName $hash $length $storeRoot $verified $stats
-        $entries += [ordered]@{group=$set.Name;path=($set.Name+'/'+(Get-RelativeFilePath $set.Source $file.FullName));length=[long]$length;sha256=$hash;lastWriteUtc=$file.LastWriteTimeUtc.ToString('o');attributes=[int]$file.Attributes}
+        $entries += [ordered]@{group=$set.Name;path=($set.Name+'/'+(Get-RelativeFilePath $set.Source $file.FullName));length=[long]$length;sha256=$hash;lastWriteUtc=$file.LastWriteTimeUtc.ToString('o');creationUtc=$file.CreationTimeUtc.ToString('o');attributes=[int]$file.Attributes}
       }
     }
     # Keep DPAPI encryption and reuse the prior encrypted object when its plaintext
@@ -159,7 +159,8 @@ function Restore-BackupSnapshot([string]$Snapshot,[string]$Destination,$Manifest
       New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
       Copy-Item -LiteralPath $source -Destination $target -Force
       if ((Get-Item -LiteralPath $target -Force).Length -ne [long]$entry.length -or (Get-FileHash -LiteralPath $target).Hash.ToLowerInvariant() -cne $entry.sha256) { throw "Restored file verification failed: $($entry.path)" }
-      if ($entry.lastWriteUtc) { (Get-Item -LiteralPath $target -Force).LastWriteTimeUtc = [datetime]::Parse($entry.lastWriteUtc) }
+      if ($entry.creationUtc) { (Get-Item -LiteralPath $target -Force).CreationTimeUtc = [datetime]::Parse($entry.creationUtc).ToUniversalTime() }
+      if ($entry.lastWriteUtc) { (Get-Item -LiteralPath $target -Force).LastWriteTimeUtc = [datetime]::Parse($entry.lastWriteUtc).ToUniversalTime() }
       if ($null -ne $entry.attributes) { (Get-Item -LiteralPath $target -Force).Attributes = [IO.FileAttributes]$entry.attributes }
     }
     Assert-ValidAccountingSnapshot (Join-Path $staging 'Application Data\uw-state.json')

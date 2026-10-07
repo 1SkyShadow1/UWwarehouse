@@ -29,6 +29,7 @@ try {
   $lock=[IO.File]::Open((Join-Path $backups '.incremental-backup.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
   try {Throws {Run-Backup|Out-Null} 'Concurrent incremental backup was allowed.'} finally {$lock.Dispose()}
   $stamp=(Get-Item -LiteralPath (Join-Path $source 'old.txt') -Force).LastWriteTimeUtc
+  $created=(Get-Item -LiteralPath (Join-Path $source 'old.txt') -Force).CreationTimeUtc
   Set-Content -LiteralPath (Join-Path $source 'old.txt') -Value 'new source content' -Encoding UTF8 -Force
   (Get-Item -LiteralPath (Join-Path $source 'old.txt') -Force).LastWriteTimeUtc=$stamp
   $third=Run-Backup;$m3=Manifest $third
@@ -44,6 +45,8 @@ try {
   & $script -RestorePath $fourth -RestoreDestination $restoreFourth
   Assert ((Get-Content -LiteralPath (Join-Path $restoreFirst 'Source Library/UW/old.txt') -Raw -Force).Trim() -eq 'old source content') 'An older snapshot did not restore its original data.'
   Assert (((Get-Item -LiteralPath (Join-Path $restoreFirst 'Source Library/UW/old.txt') -Force).Attributes -band [IO.FileAttributes]::Hidden) -ne 0) 'Hidden file attributes were lost.'
+  $restoredMetadata=Get-Item -LiteralPath (Join-Path $restoreFirst 'Source Library/UW/old.txt') -Force
+  Assert ($restoredMetadata.LastWriteTimeUtc -eq $stamp -and $restoredMetadata.CreationTimeUtc -eq $created) 'Original creation/modification times were lost.'
   Assert (-not (Test-Path -LiteralPath (Join-Path $restoreFourth 'Source Library/UW/old.txt'))) 'Deleted file reappeared in the newest restore.'
   Assert (Test-Path -LiteralPath (Join-Path $restoreFourth 'Saved Quotes/renamed.pdf')) 'Renamed document did not restore.'
   Assert (-not (Test-Path -LiteralPath (Join-Path $restoreFourth 'Saved Quotes/quote.pdf'))) 'Old filename reappeared in the newest restore.'
