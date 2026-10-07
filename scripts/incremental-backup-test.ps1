@@ -53,6 +53,11 @@ try {
   Assert (Test-Path -LiteralPath (Join-Path $restoreFourth 'Source Library/UW/empty-folder') -PathType Container) 'Empty source folder was lost.'
   Assert (-not ((Get-Content -LiteralPath (Join-Path $restoreFourth 'local-environment.dpapi') -Raw) -match 'fixture-private')) 'Restored configuration is plaintext.'
   Throws {& $script -RestorePath $first -RestoreDestination $restoreFourth} 'Restore overwrote an existing destination.'
+  $originalManifest=Get-Content -LiteralPath (Join-Path $fourth 'backup-manifest.json') -Raw -Encoding UTF8
+  $changedManifest=$originalManifest.Replace('Application Files/server.js','Application Files/renamed.js')
+  [IO.File]::WriteAllText((Join-Path $fourth 'backup-manifest.json'),$changedManifest,(New-Object Text.UTF8Encoding($false)))
+  Throws {& $script -VerifyPath $fourth} 'A changed filename in the manifest passed integrity checks.'
+  [IO.File]::WriteAllText((Join-Path $fourth 'backup-manifest.json'),$originalManifest,(New-Object Text.UTF8Encoding($false)))
   & $script -AppRoot $app -DataRoot $data -BackupRoot $backups -InvoicesRoot $invoices -QuotesRoot $quotes -SourceRoots @($source) -EnvironmentFile (Join-Path $app '.env') -FullBackup -RetentionCount 1
   foreach($snapshot in @($first,$second,$third,$fourth)){Assert (Test-Path -LiteralPath $snapshot) 'Legacy retention removed incremental history.'}
   $before=(Get-ChildItem -LiteralPath $backups -Directory | Where-Object Name -like 'UWAccounting-*').Count
@@ -67,6 +72,9 @@ try {
   Assert (-not (Test-Path -LiteralPath (Join-Path $root 'corrupt-restore'))) 'A corrupt restore was published.'
   $m4.files[0].path='../escape.txt'
   $m4 | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $fourth 'backup-manifest.json') -Encoding UTF8
+  $sealStream=[IO.File]::OpenRead((Join-Path $fourth 'backup-manifest.json'));$sealAlgorithm=[Security.Cryptography.SHA256]::Create()
+  try {$updatedSeal=([BitConverter]::ToString($sealAlgorithm.ComputeHash($sealStream))).Replace('-','').ToLowerInvariant()} finally {$sealStream.Dispose();$sealAlgorithm.Dispose()}
+  [IO.File]::WriteAllText((Join-Path $fourth 'backup-manifest.sha256'),$updatedSeal)
   Throws {& $script -RestorePath $fourth -RestoreDestination (Join-Path $root 'escaped-restore')} 'Invalid manifest path was accepted.'
   Write-Host 'Incremental backup tests passed: deduplication, zero-copy unchanged runs, unchanged timestamps, deletion/rename history, independent restores, encryption, failures and corruption.'
 } finally {

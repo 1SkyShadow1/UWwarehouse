@@ -28,6 +28,12 @@ function Assert-IncrementalInventory($Manifest) {
 }
 
 function Assert-IncrementalBackupValid([string]$Path,$Manifest) {
+  $sealPath = Join-Path $Path 'backup-manifest.sha256'
+  if ($Manifest.manifestSealVersion -or (Test-Path -LiteralPath $sealPath)) {
+    if (-not (Test-Path -LiteralPath $sealPath -PathType Leaf)) { throw 'Snapshot manifest checksum is missing.' }
+    $seal = (Get-Content -LiteralPath $sealPath -Raw -Encoding UTF8).Trim()
+    if ($seal -cnotmatch '^[a-f0-9]{64}$' -or (Get-FileHash -LiteralPath (Join-Path $Path 'backup-manifest.json')).Hash.ToLowerInvariant() -cne $seal) { throw 'Snapshot manifest integrity verification failed.' }
+  }
   Assert-IncrementalInventory $Manifest
   $storeRoot = Join-Path (Split-Path -Parent $Path) '_objects'
   $verified = @{}
@@ -130,7 +136,9 @@ function New-IncrementalBackup($CopySets,[string]$Temporary,[string]$Destination
     $totalBytes = [long]0; foreach ($entry in $entries) { $totalBytes += [long]$entry.length }
     $manifest = [ordered]@{schemaVersion=3;createdAt=(Get-Date).ToString('o');storage='sha256-objects';fileCount=$entries.Count;totalBytes=$totalBytes;newObjects=$stats.newObjects;newBytes=$stats.newBytes;files=$entries;directories=@($directories | Sort-Object -Unique);sourceLibraries=@($SourceRoots);applicationDataSource=$DataRoot;applicationFilesSource=$AppRoot;invoiceExportsSource=$InvoicesRoot;quoteExportsSource=$QuotesRoot;environmentBackup='DPAPI-encrypted for this Windows user';historyPolicy='Snapshots and content objects retained; no automatic history deletion.'}
     Assert-IncrementalInventory $manifest
+    $manifest.Add('manifestSealVersion',1)
     [IO.File]::WriteAllText((Join-Path $Temporary 'backup-manifest.json'),($manifest | ConvertTo-Json -Depth 8),$utf8NoBom)
+    [IO.File]::WriteAllText((Join-Path $Temporary 'backup-manifest.sha256'),((Get-FileHash -LiteralPath (Join-Path $Temporary 'backup-manifest.json')).Hash.ToLowerInvariant()),$utf8NoBom)
     # Objects were individually verified before publication; the ledger must also parse.
     $state = $entries | Where-Object path -eq 'Application Data/uw-state.json'
     Assert-ValidAccountingSnapshot (Get-BackupObjectPath $storeRoot $state.sha256)
