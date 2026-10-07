@@ -7,17 +7,24 @@ param(
   [string[]]$SourceRoots = @("D:\UW"),
   [string]$EnvironmentFile = (Join-Path (Split-Path -Parent $PSScriptRoot) ".env"),
   [string]$VerifyPath = "",
+  [string]$RestorePath = "",
+  [string]$RestoreDestination = "",
+  [switch]$FullBackup,
   [ValidateRange(1, 365)]
   [int]$RetentionCount = 30
 )
 
 $ErrorActionPreference = "Stop"
+# Use the encryption module belonging to this PowerShell runtime. Launchers such
+# as npm can inherit another PowerShell version's module search path.
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
 $manifestName = "backup-manifest.json"
 $encryptedEnvironmentName = "local-environment.dpapi"
 $excludedDataDirectories = @("logs", "upload-tmp")
 $excludedAppDirectories = @(".git", "node_modules", "data", ".agents", ".claude")
 $excludedAppFiles = @(".env")
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+. (Join-Path $PSScriptRoot 'incremental-backup.ps1')
 
 function Get-NormalizedFullPath([string]$Path) {
   return [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
@@ -115,6 +122,7 @@ function Assert-BackupValid([string]$Path) {
   } catch {
     throw "Backup manifest is not valid JSON: $manifestPath"
   }
+  if ($manifest.schemaVersion -eq 3) { return Assert-IncrementalBackupValid $Path $manifest }
   if ($manifest.schemaVersion -ne 2 -or -not $manifest.files) {
     throw "Backup manifest format is unsupported or contains no file inventory: $manifestPath"
   }
@@ -158,6 +166,13 @@ function Assert-BackupValid([string]$Path) {
   return $manifest
 }
 
+if ($RestorePath) {
+  if (-not $RestoreDestination) { throw 'RestoreDestination is required.' }
+  $snapshotPath = Get-NormalizedFullPath $RestorePath
+  $verifiedManifest = Assert-BackupValid $snapshotPath
+  Restore-BackupSnapshot $snapshotPath $RestoreDestination $verifiedManifest
+  return
+}
 if ($VerifyPath) {
   $verifiedManifest = Assert-BackupValid (Get-NormalizedFullPath $VerifyPath)
   Write-Host "Backup verified: $VerifyPath ($($verifiedManifest.files.Count) files, $($verifiedManifest.totalBytes) bytes)."
@@ -234,6 +249,10 @@ try {
     $copySets += @{ Name = "Source Library/$sourceName"; Source = $sourceRoot; Destination = (Join-Path $temporary "Source Library\$sourceName"); ExcludedDirectories = @() }
   }
 
+  if (-not $FullBackup) {
+    New-IncrementalBackup $copySets $temporary $destination $BackupRoot $EnvironmentFile
+    return
+  }
   $fileEntries = @()
   foreach ($copySet in $copySets) {
     New-Item -ItemType Directory -Path $copySet.Destination -Force | Out-Null

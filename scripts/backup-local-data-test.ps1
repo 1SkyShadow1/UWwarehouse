@@ -74,6 +74,7 @@ try {
     -QuotesRoot $quoteRoot `
     -SourceRoots @($sourceRoot) `
     -EnvironmentFile $environmentFile `
+    -FullBackup `
     -RetentionCount 5
   $backup = Get-ChildItem -LiteralPath $backupRoot -Directory | Select-Object -First 1
   Assert-True ($null -ne $backup) "Backup script did not create a backup directory."
@@ -93,6 +94,9 @@ try {
   $encryptedEnvironment = Get-Content -LiteralPath (Join-Path $backup.FullName "local-environment.dpapi") -Raw -Encoding UTF8
   Assert-True ($encryptedEnvironment -notmatch "backup-test-secret") "Environment secrets must not be stored as plaintext."
   & $backupScript -VerifyPath $backup.FullName
+  $restoredRoot = Join-Path $testRoot 'restored-full-backup'
+  & $backupScript -RestorePath $backup.FullName -RestoreDestination $restoredRoot
+  Assert-True ((Test-Path -LiteralPath (Join-Path $restoredRoot 'Application Data\uw-state.json')) -and (Test-Path -LiteralPath (Join-Path $restoredRoot 'Saved Quotes\quote.pdf'))) 'Legacy full backup did not restore.'
 
   Set-Content -LiteralPath (Join-Path $backup.FullName "Saved Invoices\invoice.pdf") -Value "modified invoice" -Encoding UTF8
   Assert-Throws { & $backupScript -VerifyPath $backup.FullName } "Verifier accepted a modified backup file."
