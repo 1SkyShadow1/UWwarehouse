@@ -11,7 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=48">
+<link rel="stylesheet" href="css/pricing.css?v=49">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -269,7 +269,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=48">
+<link rel="stylesheet" href="css/documents.css?v=49">
 </head>
 <body>
 
@@ -338,30 +338,31 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=48"></script>
-<script src="income-2026.js?v=48"></script>
-<script src="operations-data.js?v=48"></script>
-<script src="scanned-data.js?v=48"></script>
-<script src="bank-statements.js?v=48"></script>
-<script src="js/pricing-core.js?v=48"></script>
-<script src="js/fabrics.js?v=48"></script>
-<script src="item-presets.js?v=48"></script>
-<script src="js/item-presets.js?v=48"></script>
-<script src="js/document-lines.js?v=48"></script>
-<script src="js/fabric-picker.js?v=48"></script>
-<script src="js/pricing.js?v=48"></script>
-<script src="js/quote-history.js?v=48"></script>
-<script src="js/document-numbers.js?v=48"></script>
-<script src="js/imported-quotes.js?v=48"></script>
-<script src="js/document-editor.js?v=48"></script>
-<script src="js/document-format.js?v=48"></script>
-<script src="js/document-views.js?v=48"></script>
-<script src="js/quotes.js?v=48"></script>
-<script src="js/dashboard.js?v=48"></script>
-<script src="js/suppliers.js?v=48"></script>
-<script src="js/app-version.js?v=48"></script>
-<script src="js/shared-sync.js?v=48"></script>
-<script src="js/local-recovery.js?v=48"></script>
+<script src="imported-data.js?v=49"></script>
+<script src="income-2026.js?v=49"></script>
+<script src="operations-data.js?v=49"></script>
+<script src="scanned-data.js?v=49"></script>
+<script src="bank-statements.js?v=49"></script>
+<script src="js/pricing-core.js?v=49"></script>
+<script src="js/fabrics.js?v=49"></script>
+<script src="item-presets.js?v=49"></script>
+<script src="js/item-presets.js?v=49"></script>
+<script src="js/document-lines.js?v=49"></script>
+<script src="js/fabric-picker.js?v=49"></script>
+<script src="js/pricing.js?v=49"></script>
+<script src="js/quote-history.js?v=49"></script>
+<script src="js/document-numbers.js?v=49"></script>
+<script src="js/imported-quotes.js?v=49"></script>
+<script src="js/scan-duplicates.js?v=49"></script>
+<script src="js/document-editor.js?v=49"></script>
+<script src="js/document-format.js?v=49"></script>
+<script src="js/document-views.js?v=49"></script>
+<script src="js/quotes.js?v=49"></script>
+<script src="js/dashboard.js?v=49"></script>
+<script src="js/suppliers.js?v=49"></script>
+<script src="js/app-version.js?v=49"></script>
+<script src="js/shared-sync.js?v=49"></script>
+<script src="js/local-recovery.js?v=49"></script>
 
 <script>
 /* ============================================================
@@ -2079,7 +2080,7 @@ function viewDocument(d){
   if(url&&['png','jpg','jpeg','gif','webp','avif'].includes(ext))loadDocumentViewerAsset(url,'image');
   if(url&&ext==='pdf')loadDocumentViewerAsset(url,'pdf');
 }
-function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
+function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;if(found.aiReview?.duplicateMatches?.length&&!confirm('Possible duplicate receipt. Compare the listed originals first. Approve this as a separate transaction?'))return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
 function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
 function scanDuplicateKey(document){
   const hash=String(document?.contentHash||document?.hash||'').trim();
@@ -2189,9 +2190,8 @@ function reviewAgainstFnb(path){
   save();render();
   toast(result.accountConfirmed===true?'FNB transaction matched — verify the statement row before approving':result.status==='insufficient-receipt-data'?'FNB review needs a receipt date and amount; run AI review or enter them first':result.status==='ambiguous'?'More than one FNB debit matches; review the statement rows manually':result.status==='already-matched'?'That FNB debit is already linked to another scanned receipt':'No matching FNB transaction found — kept out of totals');
 }
-function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}if(found.fnbReview.accountConfirmed!==true){toast('This receipt has no confirmed FNB transaction match; review it in the Document Register if it was paid another way');return}found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
+function approveFnbReviewed(path){const found=(DB.scannedDocuments||[]).find(x=>x.path===path);if(!found||!found.fnbReview){toast('Review the scan against an FNB statement first');return}if(found.fnbReview.accountConfirmed!==true){toast('This receipt has no confirmed FNB transaction match; review it in the Document Register if it was paid another way');return}if(found.aiReview?.duplicateMatches?.length&&!confirm('Possible duplicate receipt. Compare the listed originals first. Approve this as a separate transaction?'))return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();render();toast('Scanned document approved after FNB review')}
 async function aiReviewDocument(doc){
-  if(geminiReviewComplete(doc)){toast(`${doc.name} has already been reviewed by Gemini`);return;}
   const resultHost=`ai-review-${String(doc.id||Date.now()).replace(/[^a-z0-9]/gi,'')}`;
   modal(`<h3>Gemini document review</h3><p style="color:var(--muted)">Reading <b>${escapeHtml(doc.name||'document')}</b> and extracting only visible facts. Nothing will be saved until you confirm.</p><pre id="${resultHost}" class="ai-result">Working…</pre><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
   try{
@@ -2199,6 +2199,9 @@ async function aiReviewDocument(doc){
     const host=document.getElementById(resultHost);
     if(!host)return;
     host.textContent=`Date: ${result.documentDate||'Not found'}\nStore / business: ${result.merchant||'Not found'}\nAmount paid: ${result.amountPaid===null||result.amountPaid===undefined?'Not found':`${result.currency||'R'} ${Number(result.amountPaid).toFixed(2)}`}\nType: ${result.documentType||'other'}\nConfidence: ${Math.round((result.confidence||0)*100)}%\nNotes: ${result.notes||'None'}`;
+    const localMatches=typeof UWScanDuplicates!=='undefined'?UWScanDuplicates.matches({...doc,...result},DB.scannedDocuments):[];
+    result.duplicateMatches=[...new Map([...(result.duplicateMatches||[]),...localMatches].map(match=>[match.id,match])).values()];
+    host.textContent+='\nDuplicate check: '+(result.duplicateMatches.length?result.duplicateMatches.map(match=>`${match.name} — ${match.reason}`).join('\n'):'No likely duplicate found among reviewed scans; verify the original before approval.');
     pendingAiReview={id:String(doc.id||''),result};
     host.insertAdjacentHTML('afterend','<div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Discard</button><button class="btn gold" onclick="applyPendingAiReview()">Save extracted fields</button></div>');
   }catch(error){
@@ -2223,6 +2226,10 @@ function applyAiReview(id,result,options={}){
   if(result.amountPaid!==null&&result.amountPaid!==undefined)found.amount=Number(result.amountPaid);
   if(result.currency)found.currency=result.currency;
   if(result.documentType)found.documentType=result.documentType;
+  if(result.invoiceNumber)found.invoiceNumber=result.invoiceNumber;
+  const localMatches=typeof UWScanDuplicates!=='undefined'?UWScanDuplicates.matches(found,DB.scannedDocuments):[];
+  found.aiReview.duplicateMatches=[...new Map([...(result.duplicateMatches||[]),...localMatches].map(match=>[match.id,match])).values()];
+  found.aiReview.duplicateCheckedAt=new Date().toISOString();
   if(result.notes)found.notes=result.notes;
   if(result.documentType==='invoice')found.category='Invoice scan';
   else if(result.documentType==='receipt')found.category='Receipt scan';
@@ -2233,7 +2240,7 @@ function applyAiReview(id,result,options={}){
   if(!options.silent){
     closeModal();
     render();
-    toast('Gemini extraction saved for '+found.name);
+    toast('Gemini extraction saved for '+found.name+(found.aiReview.duplicateMatches.length?' · possible duplicate: compare the originals':''));
   }
 }
 async function requestGeminiReview(doc){
@@ -2344,8 +2351,7 @@ function updateScannedReviewProgress(){
 async function storeUploadedScan(file){
   const contentHash=await fileContentHash(file).catch(()=>`${file.name}|${file.size}`);
   const duplicate=(DB.scannedDocuments||[]).find(document=>!isLegacyBulkScan(document)&&(
-    document.contentHash===contentHash ||
-    (Number(document.size)===Number(file.size)&&String(document.name||'').trim().toLowerCase()===String(file.name||'').trim().toLowerCase())
+    /^[a-f0-9]{64}$/i.test(contentHash)&&document.contentHash===contentHash
   ));
   if(duplicate){duplicate.duplicateCount=Number(duplicate.duplicateCount||1)+1;save();toast(`Duplicate skipped: ${file.name}`);return;}
   let managed;
@@ -2420,13 +2426,13 @@ function vScanned(c){
     const action=approved?'':d.fnbReview?.accountConfirmed===true?` <button class="btn sm gold" onclick='approveFnbReviewed(${path})'>Confirm match & approve</button>`:` <button class="btn sm" onclick='reviewAgainstFnb(${path})'>${d.fnbReview?'Review FNB again':'Review FNB'}</button>`;
     const fnbStatus=d.fnbReview?.accountConfirmed===true?'FNB matched':d.fnbReview?.status==='ambiguous'?'FNB match needs review':d.fnbReview?.status==='already-matched'?'FNB debit already linked':d.fnbReview?.status==='insufficient-receipt-data'?'FNB needs receipt date + amount':d.fnbReview?.accountConfirmed===false?'FNB not matched':d.fnbReview?.status==='statement-period-only'?'FNB period only':'';
     const aiAction=geminiReviewComplete(d)
-      ? '<span class="tag paid">Gemini reviewed</span>'
+      ? `<span class="tag paid">Gemini reviewed</span> <button class="btn sm" onclick='aiReviewDocument(${payload})'>Check duplicates</button>`
       : ` <button class="btn sm gold" onclick='aiReviewDocument(${payload})'>AI review</button>`;
     const categoryOptions=['Receipt scan','Invoice scan','Unclassified scan','Other'];
     const categoryId=String(d.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const categorySelect=`<select class="search" aria-label="Category for ${escapeHtml(d.name)}" onchange="setScannedCategory('${categoryId}',this.value)">${categoryOptions.map(category=>`<option ${d.category===category?'selected':''}>${category}</option>`).join('')}</select>`;
     const merchant=d.merchant||d.store||d.business||d.vendor||d.aiReview?.merchant||d.extraction?.merchant||'—',amount=extractedDocumentAmount(d)>0?R(extractedDocumentAmount(d)):'—',date=extractedDocumentDate(d)||'—';
-    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${d.name}${duplicate?'<small style="display:block;color:var(--amber)">Duplicate candidate · Gemini can still review</small>':''}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${date}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}${fnbStatus?`<small style="display:block;color:${d.fnbReview.accountConfirmed===true?'var(--green)':d.fnbReview.accountConfirmed===false?'var(--amber)':'var(--muted)'}">${fnbStatus}</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.transaction?`${d.fnbReview.transaction.description||d.fnbReview.transaction.merchant||''} · ${d.fnbReview.statementName}`:d.fnbReview?.evidence||d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
+    return `<tr class="${approved?'review-approved':'review-needed'}"><td>${escapeHtml(d.name)}${d.aiReview?.duplicateMatches?.length?`<small style="display:block;color:var(--amber)">Possible duplicate: ${d.aiReview.duplicateMatches.map(match=>escapeHtml(match.name)+" ("+escapeHtml(match.reason)+")").join("; ")}</small>`:""}${duplicate?'<small style="display:block;color:var(--amber)">Duplicate candidate · Gemini can still review</small>':''}</td><td>${categorySelect}</td><td>${amount}</td><td>${merchant}</td><td>${date}</td><td><b>${d.reviewStatus}</b>${geminiReviewComplete(d)?`<small style="display:block;color:var(--green)">Gemini · ${Math.round((d.aiReview?.confidence||0)*100)}%</small>`:d.aiReview?.error?'<small style="display:block;color:var(--amber)">Gemini failed</small>':''}${fnbStatus?`<small style="display:block;color:${d.fnbReview.accountConfirmed===true?'var(--green)':d.fnbReview.accountConfirmed===false?'var(--amber)':'var(--muted)'}">${fnbStatus}</small>`:''}</td><td style="font-size:10px;color:var(--muted)">${d.fnbReview?.transaction?`${d.fnbReview.transaction.description||d.fnbReview.transaction.merchant||''} · ${d.fnbReview.statementName}`:d.fnbReview?.evidence||d.fnbReview?.statementName||candidate?.name||sourceLabel(d)}</td><td><button class="btn sm" onclick='viewDocument(${payload})'>View</button>${aiAction}${action}</td></tr>`;
   }).join('');
   const batchRunning=Boolean(scannedReviewBatch?.running);
   const batchButton=batchRunning

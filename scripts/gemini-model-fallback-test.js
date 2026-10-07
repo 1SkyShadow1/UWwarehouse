@@ -52,6 +52,7 @@ const startServer = async mode => {
             currency: 'ZAR',
             documentType: 'receipt',
             invoiceNumber: 'TEST-1',
+            possibleDuplicateIds: ['existing-receipt','invented-receipt'],
             confidence: 0.99,
             notes: ''
           })
@@ -160,6 +161,10 @@ const runChatFallbackTest = async () => {
 const runDocumentReviewFallbackTest = async () => {
   const server = await startServer('local-document-review');
   try {
+    const headers={'content-type':'application/json','x-api-key':'gemini-fallback-test-key'};
+    const state=await (await fetch(server.base+'/api/state',{headers})).json();
+    const saved=await fetch(server.base+'/api/state',{method:'PUT',headers,body:JSON.stringify({revision:state.revision,data:{...state.data,scannedDocuments:[{id:'existing-receipt',name:'old-photo.jpg',merchant:'Test Merchant',scanDate:'2026-09-28',amount:123.45,aiReview:{successful:true}}]}})});
+    assert.equal(saved.status,200,await saved.text());
     const body = { name: 'receipt.png', path: server.sourcePath };
     const firstResponse = await server.request('/api/ai/review-document', body);
     assert.equal(firstResponse.status, 200);
@@ -167,6 +172,8 @@ const runDocumentReviewFallbackTest = async () => {
     assert.equal(first.model, 'gemini-flash-latest');
     assert.equal(first.merchant, 'Test Merchant');
     assert.equal(first.amountPaid, 123.45);
+    assert.equal(first.duplicateMatches[0].id,'existing-receipt');
+    assert(!first.possibleDuplicateIds.includes('invented-receipt'),'Gemini cannot invent an existing scan ID');
     const config = await (await fetch(server.base + '/api/ai/config')).json();
     assert.equal(config.configured, true, 'Local storage must retain the configured Gemini review integration');
     const health = await (await fetch(server.base + '/api/health')).json();
@@ -185,6 +192,7 @@ const runDocumentReviewFallbackTest = async () => {
       'gemini-flash-latest',
     ]);
     assert.ok(requests.every(item => item.hasInlineData), 'Receipt-review requests must retain the source image when switching models.');
+    assert.ok(requests.every(item=>item.prompt.includes('existing-receipt')),'Gemini reviews existing receipt metadata for duplicate evidence');
     console.log('Gemini receipt review falls back on quota exhaustion and retains the document bytes.');
   } finally {
     await stopServer(server);

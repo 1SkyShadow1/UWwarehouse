@@ -426,6 +426,21 @@ async function run() {
     },Array.from(png));
     assert.equal(uploads,1);assert.equal(reviews,1);
     assert.equal(await page.evaluate(()=>DB.scannedDocuments.length),1);
+    await page.evaluate(()=>{
+      const rescan={id:'receipt-rescan',name:'receipt-rescan.jpg',path:'test-rescan',canonical:true,existingMatch:false,includedInTotals:false};
+      DB.scannedDocuments.push(rescan);
+      applyAiReview(rescan.id,{provider:'gemini',model:'fixture',documentDate:'2026-10-07',merchant:'Receipt test shop',amountPaid:123.45,currency:'ZAR',documentType:'receipt'},{silent:true});
+      go('scanned');
+    });
+    const rescan=await page.evaluate(()=>DB.scannedDocuments.find(doc=>doc.id==='receipt-rescan'));
+    assert.equal(rescan.aiReview.duplicateMatches[0].id,scanId);
+    assert.equal(rescan.includedInTotals,false);
+    assert((await page.locator('#content tr').filter({hasText:'receipt-rescan.jpg'}).innerText()).includes('Possible duplicate: receipt-test.png'));
+    const approval=await page.evaluate(()=>{
+      const oldConfirm=confirm;confirm=()=>false;approveDocument('test-rescan');confirm=oldConfirm;
+      return DB.scannedDocuments.find(doc=>doc.id==='receipt-rescan').reviewStatus;
+    });
+    assert.equal(approval,'AI reviewed','Declining the duplicate warning must preserve the unapproved record');
     assert.deepEqual(errors, []);
     if (process.env.UW_TEST_SCREENSHOT){
       await page.evaluate(()=>{closeModal();newQuote();});

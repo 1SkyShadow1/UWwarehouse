@@ -19,3 +19,11 @@ The receipt review regression came from clearing `GEMINI_API_KEY` during local-m
 - Live review of a previously failed receipt image successfully returned its date, merchant and R1,819.35 total at 95% provider confidence. The extraction was discarded after inspection; no accounting record was posted or approved. This verifies the configured provider connection and confirmation screen, not the accuracy of every historical receipt.
 
 The outstanding dependency, historical-source and shared-conflict findings in [the full audit](final-readiness-audit.md) still apply. Passing regression checks is not a guarantee against provider quota, connectivity failures or unresolved financial-source conflicts.
+
+## Gemini duplicate checks — v49
+
+Gemini now compares each scan with up to 400 existing reviewed scans using compact receipt metadata (merchant, receipt/invoice number, date and total). It returns possible existing record IDs; the server rejects invented IDs. Deterministic checks also compare the extraction with all reviewed server scans and the browser workspace, covering identical content, merchant plus receipt number, and merchant plus date and total. Matching amounts alone do not establish a duplicate. A rescan can therefore be flagged even when its filename or image bytes differ.
+
+Potential duplicates are listed by filename and reason in the confirmation screen and scan register. They are retained for source comparison. Approval asks the operator to confirm that the receipt represents a separate transaction; nothing is automatically deleted or posted. Existing reviewed receipts have a **Check duplicates** action. Upload skipping now requires a real matching content hash, rather than assuming that equal filenames and sizes mean identical receipts.
+
+Validation: 47 Node tests and all integration checks passed. Provider fixtures verify that Gemini receives candidate metadata and cannot invent match IDs. Browser checks verify rescan warnings, retained source records and cancellation of duplicate approval, alongside the existing pricing and document workflows.
