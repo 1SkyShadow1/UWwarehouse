@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=51">
-<link rel="stylesheet" href="css/scans.css?v=51">
+<link rel="stylesheet" href="css/pricing.css?v=52">
+<link rel="stylesheet" href="css/scans.css?v=52">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=51">
+<link rel="stylesheet" href="css/documents.css?v=52">
 </head>
 <body>
 
@@ -339,32 +339,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=51"></script>
-<script src="income-2026.js?v=51"></script>
-<script src="operations-data.js?v=51"></script>
-<script src="scanned-data.js?v=51"></script>
-<script src="bank-statements.js?v=51"></script>
-<script src="js/pricing-core.js?v=51"></script>
-<script src="js/fabrics.js?v=51"></script>
-<script src="item-presets.js?v=51"></script>
-<script src="js/item-presets.js?v=51"></script>
-<script src="js/document-lines.js?v=51"></script>
-<script src="js/fabric-picker.js?v=51"></script>
-<script src="js/pricing.js?v=51"></script>
-<script src="js/quote-history.js?v=51"></script>
-<script src="js/document-numbers.js?v=51"></script>
-<script src="js/imported-quotes.js?v=51"></script>
-<script src="js/scan-duplicates.js?v=51"></script>
-<script src="js/scan-cleanup.js?v=51"></script>
-<script src="js/document-editor.js?v=51"></script>
-<script src="js/document-format.js?v=51"></script>
-<script src="js/document-views.js?v=51"></script>
-<script src="js/quotes.js?v=51"></script>
-<script src="js/dashboard.js?v=51"></script>
-<script src="js/suppliers.js?v=51"></script>
-<script src="js/app-version.js?v=51"></script>
-<script src="js/shared-sync.js?v=51"></script>
-<script src="js/local-recovery.js?v=51"></script>
+<script src="imported-data.js?v=52"></script>
+<script src="income-2026.js?v=52"></script>
+<script src="operations-data.js?v=52"></script>
+<script src="scanned-data.js?v=52"></script>
+<script src="bank-statements.js?v=52"></script>
+<script src="js/pricing-core.js?v=52"></script>
+<script src="js/fabrics.js?v=52"></script>
+<script src="item-presets.js?v=52"></script>
+<script src="js/item-presets.js?v=52"></script>
+<script src="js/document-lines.js?v=52"></script>
+<script src="js/fabric-picker.js?v=52"></script>
+<script src="js/pricing.js?v=52"></script>
+<script src="js/quote-history.js?v=52"></script>
+<script src="js/document-numbers.js?v=52"></script>
+<script src="js/imported-quotes.js?v=52"></script>
+<script src="js/scan-duplicates.js?v=52"></script>
+<script src="js/scan-cleanup.js?v=52"></script>
+<script src="js/document-editor.js?v=52"></script>
+<script src="js/document-format.js?v=52"></script>
+<script src="js/document-views.js?v=52"></script>
+<script src="js/quotes.js?v=52"></script>
+<script src="js/dashboard.js?v=52"></script>
+<script src="js/suppliers.js?v=52"></script>
+<script src="js/app-version.js?v=52"></script>
+<script src="js/shared-sync.js?v=52"></script>
+<script src="js/local-recovery.js?v=52"></script>
 
 <script>
 /* ============================================================
@@ -753,7 +753,7 @@ function writeLocalSnapshot(serialized){
   try{localStorage.removeItem(LOCAL_BACKUP_KEY);}catch(_){}
   if(typeof browserRecoveryWrite==='function')browserRecoveryWrite('pending-workspace',serialized).catch(()=>{if(!serverSyncAvailable)sharedSyncStatus('Local server disconnected · keep this page open until saved');});
   try{
-    localStorage.setItem(DB_KEY,serialized);
+    if(typeof browserRecoveryWrite!=='function')localStorage.setItem(DB_KEY,serialized);
   }catch(error){
     if(typeof browserRecoveryWrite==='function')return {ok:true,backup:false,browserCachePending:true};
     return {ok:false,error};
@@ -805,7 +805,7 @@ async function initializeServerSync(){
     serverRetryAttempt=0;
     clearTimeout(serverRetryTimer);
     if(serverConflict&&JSON.stringify(syncComparable(serverConflict.local))===JSON.stringify(syncComparable(snapshot.data))){serverConflict=null;if(typeof clearConflictRecovery==='function')clearConflictRecovery();applySharedSnapshot(snapshot);}
-    if(serverConflict){if(typeof cacheConflictRecovery==='function')cacheConflictRecovery(serverConflict);sharedSyncStatus('Shared edit conflict · review Settings');return false;}
+    if(serverConflict){if(!await resumePreservedSharedChanges(snapshot)){sharedSyncStatus('Shared edit conflict · review Settings');return false;}}
     if(!hasSharedAccounting(snapshot.data)){
       // A documents-only initial server snapshot must not erase the imported ledger.
       DB={...DB,...snapshot.data,meta:{...DB.meta,...snapshot.data?.meta}};
@@ -815,12 +815,12 @@ async function initializeServerSync(){
     }else if(DB.meta?.syncPending){
       if(sharedSyncBase){
         const merged=mergeSharedState(sharedSyncBase,DB,snapshot.data);
-        if(merged.conflicts.length){preserveSharedConflict(snapshot,merged.conflicts);return false;}
+        if(merged.conflicts.length){preserveSharedConflict(snapshot,merged.conflicts);await resumePreservedSharedChanges(snapshot);return true;}
         DB={...merged.data,meta:{...merged.data.meta,localSavedAt:DB.meta.localSavedAt,syncPending:true}};
         sharedSyncBase=JSON.parse(JSON.stringify(snapshot.data));queueServerStateSave();
       }else if(Number(DB.meta.syncRevision)===serverRevision){
         sharedSyncBase=JSON.parse(JSON.stringify(snapshot.data));queueServerStateSave();
-      }else{preserveSharedConflict(snapshot,['Offline changes require review']);return false;}
+      }else{preserveSharedConflict(snapshot,['Offline changes require review']);if(typeof preserveConflictOnDisk==='function')await resumePreservedSharedChanges(snapshot);else return false;}
     }else{
       const before=JSON.stringify(syncComparable(snapshot.data));applySharedSnapshot(snapshot);
       if(JSON.stringify(syncComparable(DB))!==before)queueServerStateSave();
@@ -859,7 +859,7 @@ async function synchronizeRemoteDocuments(){
         changed=true;
       }
     });
-    if(changed){localStorage.setItem(DB_KEY,JSON.stringify(DB));queueServerStateSave();}
+    if(changed){writeLocalSnapshot(JSON.stringify(DB));queueServerStateSave();}
   }catch(error){console.warn('Remote document catalog unavailable; source resolver remains active.',error);}
 }
 function queueServerStateSave(){
@@ -867,7 +867,7 @@ function queueServerStateSave(){
   DB.meta=DB.meta||{};DB.meta.syncPending=true;writeLocalSnapshot(JSON.stringify(DB));sharedSyncStatus('Saving shared workspace…');
   if(!serverSyncAvailable||serverSyncInFlight)return;
   clearTimeout(serverSyncTimer);
-  serverSyncTimer=setTimeout(syncServerState,900);
+  serverSyncTimer=setTimeout(syncServerState,100);
 }
 async function syncServerState(force=false,silent=false){
   if(serverConflict)return false;
@@ -901,13 +901,13 @@ async function syncServerState(force=false,silent=false){
           sharedSyncStatus('Combining shared changes…');
         }else{
           preserveSharedConflict(payload.snapshot,merged.conflicts);
-          if(!silent)toast('Both profiles changed the same record. Both versions are preserved; review Settings.');
+          await resumePreservedSharedChanges(payload.snapshot);
         }
         return false;
       }else if(!response.ok) throw await stateRequestError(response,'Server save failed');
       else {
         serverRevision=payload.revision;
-        sharedSyncBase=submitted;DB.meta=DB.meta||{};DB.meta.syncRevision=serverRevision;DB.meta.syncPending=serverSyncPending;
+        sharedSyncBase=submitted;cacheSharedBaseline();DB.meta=DB.meta||{};DB.meta.syncRevision=serverRevision;DB.meta.syncPending=serverSyncPending;
         writeLocalSnapshot(JSON.stringify(DB));sharedSyncStatus(serverSyncPending?'Saving shared workspace…':'Shared workspace up to date');
         serverSyncAvailable=true;
         serverSyncError=null;
@@ -976,12 +976,12 @@ async function resolveStateConflict(choice){
   }
   serverConflict=null;clearConflictRecovery();render();toast(choice==='server'?'Server copy restored':'Conflict backup exported');
 }
-async function uploadManagedDocument(file){
+async function uploadManagedDocument(file,scan=false){
   if(!(file instanceof File)||!file.size)throw new Error('Choose a non-empty image or PDF file.');
   if(!['image/jpeg','image/png','image/webp','image/gif','application/pdf'].includes(file.type)){
     throw new Error('Scanned uploads must be JPG, PNG, WEBP, GIF, or PDF files.');
   }
-  const form=new FormData(); form.append('file',file);
+  const form=new FormData(); form.append('file',file);if(scan)form.append('kind','scan');
   const response=await fetch('/api/documents',{method:'POST',body:form});
   const payload=await response.json().catch(()=>({}));
   if(!response.ok) throw new Error(payload.error||'Document upload failed');
@@ -1323,12 +1323,13 @@ function persistLocalSnapshot(){
 }
 function startPeriodicSync(){
   clearInterval(periodicSyncTimer);
+  startSharedEvents();
   periodicSyncTimer=setInterval(()=>{
     if(serverSyncPending||DB.meta?.syncPending){
       if(!serverSyncInFlight&&!serverConflict){if(serverSyncAvailable)syncServerState();else initializeServerSync();}
     }
     else refreshSharedWorkspace();
-  },5000);
+  },1000);
 }
 function cloudConfig(){return DB.meta.cloud||{};}
 async function cloudSync(direction){
@@ -2367,15 +2368,16 @@ async function storeUploadedScan(file){
   if(duplicate){duplicate.duplicateCount=Number(duplicate.duplicateCount||1)+1;save();toast(`Duplicate skipped: ${file.name}`);return;}
   let managed;
   try{
-    managed=await uploadManagedDocument(file);
+    managed=await uploadManagedDocument(file,true);
   }catch(error){
     const r=new FileReader();
     r.onload=async()=>{const doc={id:'upload-'+Date.now(),name:file.name,path:'Local upload / '+file.name,data:r.result,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};DB.scannedDocuments.push(doc);saveFnbReview(doc);save();render();toast(error.message+' Using offline storage; Gemini requires managed server storage.');};
     r.readAsDataURL(file);
     return;
   }
-  const doc={id:managed.id,name:managed.name,path:managed.url,data:null,url:managed.url,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};
-  DB.scannedDocuments.push(doc);saveFnbReview(doc);save();render();
+  const doc={...managed,id:managed.id,name:managed.name,path:managed.url,data:null,url:managed.url,extension:'.'+file.name.split('.').pop().toLowerCase(),size:file.size,contentHash,hash:contentHash,duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:scannedCategory({name:file.name}),reviewStatus:'Needs review',includedInTotals:false};
+  const registered=DB.scannedDocuments.find(scan=>scan.id===doc.id);
+  if(registered)Object.assign(registered,doc);else DB.scannedDocuments.push(doc);saveFnbReview(doc);save();render();
   try{
     await confirmManagedDocumentReadable(managed);
     await autoReviewScannedDocument(doc);

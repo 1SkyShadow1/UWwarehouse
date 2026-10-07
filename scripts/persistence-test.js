@@ -105,7 +105,7 @@ const run = async () => {
     assert.deepEqual(saved.documentExports, { invoices: 1, quotes: 1, errors: [] });
     assert.ok(fs.statSync(path.join(invoicesRoot, 'invoice-BB2026-09-2801.pdf')).size > 500);
     assert.ok(fs.statSync(path.join(quotesRoot, 'quote-QU2026-09-2801.pdf')).size > 500);
-    assert.ok(fs.existsSync(`${path.join(dataRoot, 'state', 'uw-state.json')}.bak`));
+    assert.ok(!fs.existsSync(`${path.join(dataRoot, 'state', 'uw-state.json')}.bak`),'Routine saves must not create a backup; scheduled backups protect daily history.');
     const sourceResponse = await request(`/api/source-file?path=${encodeURIComponent(referencePath)}`);
     assert.equal(sourceResponse.status, 200);
     assert.equal(await sourceResponse.text(), 'Accessible through configured absolute source paths.');

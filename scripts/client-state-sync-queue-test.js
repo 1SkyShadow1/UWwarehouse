@@ -25,6 +25,7 @@ const context = {
   serverRetryTimer: null,
   serverRetryAttempt: 0,
   sharedSyncBase: null,
+  cacheSharedBaseline:()=>{},
   sharedSyncStatus: () => {},
   writeLocalSnapshot: () => ({ok:true}),
   fetch: async (_, options) => {

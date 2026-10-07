@@ -230,6 +230,7 @@ const requireCsrf = async (req, res, next) => {
   return next();
 };
 
+const sharedStateListeners = new Set();
 let stateSnapshot;
 let stateWrite = Promise.resolve();
 let bootstrapReady = Promise.resolve();
@@ -257,8 +258,21 @@ const ensureStorage = () => {
       }
     }
     stateSnapshot = stateSnapshot || { version: stateVersion, revision: 0, updatedAt: new Date().toISOString(), data: {} };
+    // Recover only identifiable managed scans, never arbitrary source PDFs.
+    const scanIds=new Set((stateSnapshot.data.scannedDocuments||[]).map(scan=>String(scan.id)));
+    let recoveredScans=0;
+    for(const doc of stateSnapshot.data.documents||[]){
+      if(scanIds.has(String(doc.id))||!doc.createdAt||!/^[a-f0-9]{32}$/.test(doc.id)||!/^Scanned_\d{8}/i.test(doc.name||''))continue;
+      const file=safeDocumentPath(doc.id);if(!fs.existsSync(file))continue;
+      const hash=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      (stateSnapshot.data.scannedDocuments??=[]).push({...doc,path:doc.url,data:null,extension:path.extname(doc.name).toLowerCase(),contentHash:hash,hash,
+        canonical:true,duplicateCount:1,existingMatch:false,scanDate:'',category:'Scanned receipt',reviewStatus:'Needs review',includedInTotals:false});
+      scanIds.add(doc.id);recoveredScans++;
+    }
+    if(recoveredScans){stateSnapshot.revision++;stateSnapshot.updatedAt=new Date().toISOString();console.log(`Recovered ${recoveredScans} managed scans into the shared register.`);}
     const repairedQuotes=recoverImportedQuotes(stateSnapshot.data,historicalQuotes);
     if(repairedQuotes){stateSnapshot.revision++;stateSnapshot.updatedAt=new Date().toISOString();console.log(`Recovered source content for ${repairedQuotes} historical quotes.`);}
+    if((recoveredScans||repairedQuotes)&&fs.existsSync(stateFile))fs.copyFileSync(stateFile,`${stateFile}.bak`);
     atomicWrite(stateSnapshot);
   }
   return stateSnapshot;
@@ -266,9 +280,12 @@ const ensureStorage = () => {
 const atomicWrite = (snapshot) => {
   fs.mkdirSync(path.dirname(stateFile), { recursive: true });
   const temp = `${stateFile}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-  if (fs.existsSync(stateFile)) fs.copyFileSync(stateFile, `${stateFile}.bak`);
-  fs.writeFileSync(temp, JSON.stringify(snapshot, null, 2), { encoding: 'utf8', flag: 'wx' });
+  const descriptor=fs.openSync(temp,'wx');
+  try{fs.writeFileSync(descriptor,JSON.stringify(snapshot,null,2),{encoding:'utf8'});fs.fsyncSync(descriptor);}finally{fs.closeSync(descriptor);}
   fs.renameSync(temp, stateFile);
+  for (const response of sharedStateListeners) {
+    try{response.write(`event: revision\ndata: ${snapshot.revision}\n\n`);}catch{sharedStateListeners.delete(response);}
+  }
 };
 const safeExportId = id => String(id || '').trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/[. ]+$/g, '').slice(0, 100) || 'document';
 const writeInvoiceQuotePdf = async (kind, record, meta) => {
@@ -312,6 +329,7 @@ const persistInvoiceQuoteDocuments = async (previousData, nextData) => {
 };
 const queueStateWrite = (next) => {
   const write = stateWrite.then(() => {
+    if (typeof next === "function") next = next(ensureStorage());
     atomicWrite(next);
     stateSnapshot = next;
     return next;
@@ -1081,6 +1099,16 @@ app.post('/api/auth/logout', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// Only revision notifications travel on this authenticated connection.
+app.get('/api/state/events', requireApiKey, async (req,res) => {
+  await bootstrapReady;
+  res.set({'Content-Type':'text/event-stream','Cache-Control':'no-cache','Connection':'keep-alive'});
+  res.flushHeaders();sharedStateListeners.add(res);
+  res.write(`event: revision\ndata: ${ensureStorage().revision}\n\n`);
+  const heartbeat=setInterval(()=>res.write(': keepalive\n\n'),20000);
+  req.on('close',()=>{clearInterval(heartbeat);sharedStateListeners.delete(res);});
+});
+
 app.get('/api/state', requireApiKey, async (req, res) => {
   await bootstrapReady;
   await stateWrite;
@@ -1227,14 +1255,17 @@ app.post('/api/documents', requireApiKey, (req, res) => {
       storagePath = await syncDocumentToSupabase(id, req.file);
       if (storagePath) metadata.storagePath = storagePath;
       await recordDocumentInSupabase(metadata);
-      await stateWrite;
-      const latest = ensureStorage();
-      await queueStateWrite({
-        version: stateVersion,
-        revision: latest.revision + 1,
-        updatedAt: new Date().toISOString(),
-        data: { ...latest.data, documents: [...(latest.data.documents || []), metadata] },
-      });
+      const scan = req.body?.kind === 'scan' ? {
+        ...metadata,path:metadata.url,data:null,extension:path.extname(metadata.name).toLowerCase(),
+        contentHash:crypto.createHash('sha256').update(await fs.promises.readFile(safeDocumentPath(id))).digest('hex'),
+        duplicateCount:1,canonical:true,existingMatch:false,scanDate:'',category:'Scanned receipt',
+        reviewStatus:'Needs review',includedInTotals:false,
+      } : null;
+      await queueStateWrite(latest => ({
+        version:stateVersion,revision:latest.revision+1,updatedAt:new Date().toISOString(),
+        data:{...latest.data,documents:[...(latest.data.documents||[]),metadata],
+          ...(scan?{scannedDocuments:[...(latest.data.scannedDocuments||[]),scan]}:{})},
+      }));
       res.status(201).json(metadata);
     } catch (writeError) {
       try { fs.rmSync(safeDocumentPath(id), { force: true }); } catch (_) {}

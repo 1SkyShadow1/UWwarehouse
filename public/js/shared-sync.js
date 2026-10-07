@@ -5,7 +5,7 @@ function syncComparable(value){
   if(copy.meta)for(const key of ['localSavedAt','syncPending','syncRevision'])delete copy.meta[key];
   return copy;
 }
-function mergeSharedState(base,local,remote){
+function mergeSharedState(base,local,remote,preferShared=false){
   const conflicts=[],equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
   const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
   const key=row=>String(row.id??row.sku);
@@ -13,7 +13,8 @@ function mergeSharedState(base,local,remote){
   function merge(b,l,r,path){
     if(equal(l,b))return r;
     if(equal(r,b)||equal(l,r))return l;
-    if(object(b)&&object(l)&&object(r)){
+    if((object(b)||b===undefined)&&object(l)&&object(r)){
+      b=b||{};
       const result={};
       for(const key of new Set([...Object.keys(b),...Object.keys(l),...Object.keys(r)])){
         const value=merge(b[key],l[key],r[key],path?path+'.'+key:key);
@@ -29,7 +30,7 @@ function mergeSharedState(base,local,remote){
       }
       return result;
     }
-    conflicts.push(path);return l;
+    conflicts.push(path);return preferShared?r:l;
   }
   return {data:merge(syncComparable(base),syncComparable(local),syncComparable(remote),''),conflicts};
 }
@@ -39,7 +40,7 @@ function sharedSyncStatus(message){
 }
 function hasSharedAccounting(data){return Array.isArray(data?.invoices)||Array.isArray(data?.quotes)||Array.isArray(data?.expenses);}
 function preserveSharedConflict(snapshot,paths=[]){
-  serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:snapshot.data||{},revision:snapshot.revision,paths};
+  serverConflict={local:JSON.parse(JSON.stringify(DB)),remote:snapshot.data||{},revision:snapshot.revision,paths,base:sharedSyncBase?JSON.parse(JSON.stringify(sharedSyncBase)):null};
   if(typeof cacheConflictRecovery==='function')cacheConflictRecovery(serverConflict);
   serverSyncAvailable=false;serverSyncPending=false;
   sharedSyncStatus('Shared edit conflict · review Settings');
@@ -47,6 +48,7 @@ function preserveSharedConflict(snapshot,paths=[]){
 function applySharedSnapshot(snapshot){
   DB={...DB,...snapshot.data,meta:{...DB.meta,...snapshot.data?.meta,syncPending:false,syncRevision:snapshot.revision}};
   sharedSyncBase=JSON.parse(JSON.stringify(DB));serverRevision=Number(snapshot.revision||0);
+  cacheSharedBaseline();
   mergeBundledFnbState(DB);normalizeWageLedger(DB);deduplicateExpenseLedger(DB);normalizePayables(DB);
   writeLocalSnapshot(JSON.stringify(DB));render();sharedSyncStatus('Shared workspace up to date');
 }
@@ -67,4 +69,44 @@ async function refreshSharedWorkspace(){
     }
   }catch(error){serverSyncAvailable=false;serverSyncError=error;sharedSyncStatus('Offline · changes pending sync');}
   finally{serverSyncInFlight=false;if(serverSyncPending&&serverSyncAvailable)queueServerStateSave();}
+}
+
+function cacheSharedBaseline(){
+  if(typeof browserRecoveryWrite==='function')browserRecoveryWrite('shared-base',JSON.stringify(sharedSyncBase)).catch(()=>{});
+}
+let sharedEventSource=null;
+function startSharedEvents(){
+  if(typeof EventSource==='undefined')return;
+  if(sharedEventSource)sharedEventSource.close();
+  sharedEventSource=new EventSource('/api/state/events');
+  sharedEventSource.addEventListener('revision',event=>{
+    if(Number(event.data)!==serverRevision)refreshSharedWorkspace();
+  });
+}
+// A saved conflict retains both versions on D:. Rebase independent changes
+// against its acknowledged shared copy; disputed fields keep the shared value.
+async function resumePreservedSharedChanges(snapshot){
+  const conflict=serverConflict;if(!conflict)return false;
+  if(typeof preserveConflictOnDisk!=='function')return false;
+  await preserveConflictOnDisk({...conflict,local:DB});
+  const unknownBaseline=!conflict.base&&(conflict.paths||[]).some(path=>/Offline changes|No acknowledged baseline/.test(path));
+  const merged=unknownBaseline?{data:JSON.parse(JSON.stringify(snapshot.data)),conflicts:['Older offline changes']}:
+    mergeSharedState(conflict.base||conflict.remote,DB,snapshot.data,true);
+  // Upload metadata proves these files were accepted by the shared server.
+  // Recover their browser-only scan entries without guessing financial edits.
+  if(unknownBaseline){
+    const managed=new Set((snapshot.data.documents||[]).map(doc=>String(doc.id)));
+    const ids=new Set((merged.data.scannedDocuments||[]).map(doc=>String(doc.id)));
+    for(const scan of DB.scannedDocuments||[]){
+      if(!ids.has(String(scan.id))&&managed.has(String(scan.id))&&/^[a-f0-9]{32}$/.test(String(scan.id))){
+        (merged.data.scannedDocuments??=[]).push({...scan,includedInTotals:false});ids.add(String(scan.id));
+      }
+    }
+  }
+  serverConflict=null;serverSyncAvailable=true;clearConflictRecovery();
+  applySharedSnapshot({...snapshot,data:merged.data});
+  sharedSyncBase=JSON.parse(JSON.stringify(snapshot.data));cacheSharedBaseline();
+  if(JSON.stringify(syncComparable(merged.data))!==JSON.stringify(syncComparable(snapshot.data)))queueServerStateSave();
+  if(merged.conflicts.length)toast('Shared data restored. Overlapping older edits are retained in the D: recovery files for review.');
+  return true;
 }

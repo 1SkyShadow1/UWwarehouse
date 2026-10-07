@@ -26,5 +26,5 @@ test('local updater installs all modules while preserving data, secrets and depe
 test('updated service worker precaches every local module and stylesheet',()=>{
   const html=fs.readFileSync(path.join(repo,'public','index.html'),'utf8'),sw=fs.readFileSync(path.join(repo,'public','sw.js'),'utf8');
   for(const match of html.matchAll(/(?:src|href)="((?!https?:)[^" ]+\.(?:js|css)(?:\?[^" ]*)?)"/g))assert(sw.includes("'./"+match[1]+"'"),match[1]+' is missing from the offline shell');
-  assert(sw.includes("'uw-accounting-v51'"));assert(sw.includes("'uw-accounting-documents-v2'"));
+  assert(sw.includes("'uw-accounting-v52'"));assert(sw.includes("'uw-accounting-documents-v2'"));
 });

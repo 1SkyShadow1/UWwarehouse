@@ -1,0 +1,12 @@
+# Shared local save — v52
+
+The authenticated local server writes the single shared ledger at D:\UW FOREVER\Accounting Data\uw-state.json. Brian and Evans read that same ledger; browser caches are recovery only, not account-specific databases. Authentication, configured storage paths, local-only mode and Gemini integration are unchanged.
+
+- Saves are queued after 100 ms, serialized, flushed to disk, and atomically replace the current file. Routine saves do not copy a whole .bak ledger. Existing recovery files remain; startup repair retains the pre-migration ledger once.
+- Authenticated server-sent revision notifications refresh both profiles immediately after a save. A one-second fallback retries missed notifications. An open edit form defers refresh until it closes so typed edits survive.
+- Scan uploads register the file and canonical scan record in one serialized state mutation before replying. Concurrent uploads read the latest state within the queue, preventing dropped records.
+- Startup repairs identifiable orphan managed scan PDFs. Recovery does not classify arbitrary historical quote PDFs as receipts and never includes recovered scans in financial totals automatically.
+- The acknowledged shared baseline is cached for safe three-way merging after reload. Independent edits combine. Disputed older values are retained in recovery files on D:, while current shared values remain active; an unavailable durable recovery write prevents discarding the local version. Unknown old baselines never overwrite current financial records.
+- Daily incremental backup remains scheduled at 13:00 Africa/Johannesburg. Normal save does not run it. Conflict recovery and a one-time migration safeguard are exceptional recovery records, not recurring full backups.
+
+Validation: all 50 Node tests and sequential integration checks passed; disposable browser regression passed without exceptions. Added authenticated two-profile coverage for live revision notifications, concurrent receipt uploads, orphan recovery, reviewed receipt metadata, invoices, quotes, stock, suppliers, revision races and preserved conflict recovery. Business ledger verification and installed build are recorded in the task completion message. Real profile sign-in is required for authenticated live UI verification.

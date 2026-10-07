@@ -23,6 +23,7 @@ function browserRecoveryWrite(key,value){
 async function restoreBrowserRecovery(){
   if(browserRecoveryChecked)return;browserRecoveryChecked=true;
   try{
+    const baseline=await browserRecoveryRead('shared-base');if(baseline)sharedSyncBase=JSON.parse(baseline);
     const serialized=await browserRecoveryRead('pending-workspace');
     if(serialized){const cached=JSON.parse(serialized);if(Date.parse(cached.meta?.localSavedAt||'')>Date.parse(DB.meta?.localSavedAt||'1970-01-01'))DB={...DB,...cached,meta:{...DB.meta,...cached.meta}};}
     const conflict=await browserRecoveryRead('conflict');if(conflict&&!serverConflict)serverConflict=JSON.parse(conflict);

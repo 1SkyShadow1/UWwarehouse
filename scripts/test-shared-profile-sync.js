@@ -38,6 +38,24 @@ test('independent changes merge; overlapping edits and edit/delete races require
   stockLocal.stock[0].quantity=3;stockRemote.stock[1].quantity=4;
   assert.deepEqual(copy(c.mergeSharedState(stock,stockLocal,stockRemote).data.stock),[{sku:'one',quantity:3},{sku:'two',quantity:4}]);
 });
+test('preserved conflicts resume independent changes and retain contested versions on disk',async()=>{
+  const base={meta:{},invoices:[{id:'one',paid:0}],quotes:[],expenses:[],scannedDocuments:[]};
+  const local=copy(base),remote=copy(base);local.invoices[0].paid=10;remote.invoices[0].paid=20;
+  local.scannedDocuments.push({id:'scan-new',name:'Receipt'});remote.quotes.push({id:'shared-quote'});
+  const c=client(local,async()=>{});let preserved;
+  c.context.preserveConflictOnDisk=async value=>{preserved=copy(value);};c.context.clearConflictRecovery=()=>{};
+  vm.runInContext('serverConflict={local:DB,base:'+JSON.stringify(base)+',remote:'+JSON.stringify(remote)+',revision:1};',c.context);
+  try{
+    assert.equal(await c.context.resumePreservedSharedChanges({revision:2,data:remote}),true);
+    assert.equal(preserved.local.invoices[0].paid,10);
+    assert.equal(c.context.DB.invoices[0].paid,20);
+    assert.equal(c.context.DB.scannedDocuments[0].id,'scan-new');
+    assert.equal(c.context.DB.quotes[0].id,'shared-quote');
+    assert.equal(vm.runInContext('serverConflict',c.context),null);
+    assert.equal(vm.runInContext('serverSyncAvailable',c.context),true);
+  }finally{c.stop();}
+});
+
 test('startup reads the shared copy instead of overwriting it from a newer browser timestamp',async()=>{
   const remote={revision:7,data:{meta:{},invoices:[{id:'Brian invoice'}],quotes:[],expenses:[]}},methods=[];
   const c=client({meta:{localSavedAt:'2099-01-01'},invoices:[],quotes:[],expenses:[]},async(_,options={})=>{
@@ -73,7 +91,10 @@ test('two authenticated profiles share changes, merge simultaneous records, and 
   const password='Disposable-test-password',salt=crypto.randomBytes(16).toString('hex');
   const hash=`scrypt$16384$8$1$${salt}$${crypto.scryptSync(password,salt,64,{N:16384,r:8,p:1}).toString('hex')}`;
   const users={brian:{name:'Brian',role:'Owner',passwordHash:hash},evans:{name:'Evans',role:'Manager',passwordHash:hash}};
-  const initial={meta:{},invoices:[],quotes:[],expenses:[],receipts:[]};
+  const recoveredId='a'.repeat(32);
+  fs.mkdirSync(path.join(dataRoot,'documents'));
+  fs.writeFileSync(path.join(dataRoot,'documents',recoveredId+'.bin'),'%PDF-1.4\npreviously orphaned receipt');
+  const initial={meta:{},invoices:[],quotes:[],expenses:[],receipts:[],documents:[{id:recoveredId,name:'Scanned_20261007-0956.pdf',createdAt:'2026-10-07T08:00:00Z',url:'/api/documents/'+recoveredId,mimeType:'application/pdf'}]};
   fs.writeFileSync(path.join(dataRoot,'uw-state.json'),JSON.stringify({version:1,revision:1,updatedAt:new Date().toISOString(),data:initial}));
   const server=spawn(process.execPath,[path.join(repo,'server.js')],{env:{...process.env,NODE_ENV:'test',HOST:'127.0.0.1',PORT:String(port),UW_DATA_DIR:dataRoot,UW_DOCUMENTS_DIR:path.join(dataRoot,'documents'),UW_INVOICES_DIR:path.join(dataRoot,'invoices'),UW_QUOTES_DIR:path.join(dataRoot,'quotes'),UW_AUTH_USERS_JSON:JSON.stringify(users),UW_API_KEY:'',SUPABASE_URL:'',SUPABASE_SERVICE_ROLE_KEY:''},stdio:'ignore'});
   const clients=[];
@@ -86,6 +107,22 @@ test('two authenticated profiles share changes, merge simultaneous records, and 
       return (url,options={})=>fetch(base+url,{...options,headers:{...options.headers,Cookie:cookie,'x-csrf-token':session.csrfToken}});
     }
     const brianFetch=await login('brian'),evansFetch=await login('evans');
+    const eventAbort=new AbortController();
+    const events=await brianFetch('/api/state/events',{signal:eventAbort.signal});
+    assert.equal(events.status,200);assert.match(events.headers.get('content-type'),/text\/event-stream/);
+    const reader=events.body.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/event: revision/);
+    const upload=async(fetcher,name)=>{
+      const form=new FormData();form.append('file',new Blob(['%PDF-1.4\nreceipt'],{type:'application/pdf'}),name);form.append('kind','scan');
+      const result=await fetcher('/api/documents',{method:'POST',body:form});assert.equal(result.status,201);return result.json();
+    };
+    const uploads=await Promise.all([upload(brianFetch,'Brian receipt.pdf'),upload(evansFetch,'Evans receipt.pdf')]);
+    assert.match(new TextDecoder().decode((await reader.read()).value),/event: revision/);
+    eventAbort.abort();await reader.cancel().catch(()=>{});
+    const uploadedSnapshot=await (await evansFetch('/api/state')).json();
+    assert.equal(uploadedSnapshot.data.scannedDocuments.length,3);
+    assert(uploadedSnapshot.data.scannedDocuments.some(scan=>scan.id===recoveredId));
+    assert(uploads.every(doc=>uploadedSnapshot.data.scannedDocuments.some(scan=>scan.id===doc.id&&scan.contentHash.length===64)));
+
     assert.equal((await fetch(base+'/api/state')).status,401);
     const brian=client(initial,brianFetch),evans=client(initial,evansFetch);clients.push(brian,evans);
     await brian.context.initializeServerSync();await evans.context.initializeServerSync();
@@ -95,6 +132,12 @@ test('two authenticated profiles share changes, merge simultaneous records, and 
     evans.context.DB.invoices[0].paid=50;evans.context.queueServerStateSave();
     await evans.context.syncServerState(true,true);await brian.context.refreshSharedWorkspace();
     assert.equal(brian.context.DB.invoices[0].paid,50);
+    evans.context.DB.scannedDocuments.find(scan=>scan.id===uploads[0].id).aiReview={provider:'gemini',successful:true,merchant:'Fixture merchant',amount:12};
+    evans.context.DB.stock=[{sku:'SHARED-STOCK',quantity:3}];evans.context.DB.suppliers=[{id:'SHARED-SUPPLIER',name:'Fixture supplier'}];
+    evans.context.queueServerStateSave();await evans.context.syncServerState(true,true);await brian.context.refreshSharedWorkspace();
+    assert.equal(brian.context.DB.scannedDocuments.find(scan=>scan.id===uploads[0].id).aiReview.amount,12);
+    assert.equal(brian.context.DB.stock[0].quantity,3);assert.equal(brian.context.DB.suppliers[0].id,'SHARED-SUPPLIER');
+
     brian.context.DB.quotes.push({id:'BRIAN-Q',customer:'Brian test',items:[{desc:'Work',qty:1,price:10}]});
     evans.context.DB.invoices.push({id:'EVANS-1',customer:'Evans test',items:[{desc:'Work',qty:1,price:20}]});
     brian.context.queueServerStateSave();evans.context.queueServerStateSave();
