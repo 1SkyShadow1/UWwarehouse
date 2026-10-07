@@ -11,7 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=45">
+<link rel="stylesheet" href="css/pricing.css?v=46">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -269,7 +269,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=45">
+<link rel="stylesheet" href="css/documents.css?v=46">
 </head>
 <body>
 
@@ -338,28 +338,30 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=45"></script>
-<script src="income-2026.js?v=45"></script>
-<script src="operations-data.js?v=45"></script>
-<script src="scanned-data.js?v=45"></script>
-<script src="bank-statements.js?v=45"></script>
-<script src="js/pricing-core.js?v=45"></script>
-<script src="js/fabrics.js?v=45"></script>
-<script src="item-presets.js?v=45"></script>
-<script src="js/item-presets.js?v=45"></script>
-<script src="js/document-lines.js?v=45"></script>
-<script src="js/fabric-picker.js?v=45"></script>
-<script src="js/pricing.js?v=45"></script>
-<script src="js/quote-history.js?v=45"></script>
-<script src="js/document-editor.js?v=45"></script>
-<script src="js/document-format.js?v=45"></script>
-<script src="js/document-views.js?v=45"></script>
-<script src="js/quotes.js?v=45"></script>
-<script src="js/dashboard.js?v=45"></script>
-<script src="js/suppliers.js?v=45"></script>
-<script src="js/app-version.js?v=45"></script>
-<script src="js/shared-sync.js?v=45"></script>
-<script src="js/local-recovery.js?v=45"></script>
+<script src="imported-data.js?v=46"></script>
+<script src="income-2026.js?v=46"></script>
+<script src="operations-data.js?v=46"></script>
+<script src="scanned-data.js?v=46"></script>
+<script src="bank-statements.js?v=46"></script>
+<script src="js/pricing-core.js?v=46"></script>
+<script src="js/fabrics.js?v=46"></script>
+<script src="item-presets.js?v=46"></script>
+<script src="js/item-presets.js?v=46"></script>
+<script src="js/document-lines.js?v=46"></script>
+<script src="js/fabric-picker.js?v=46"></script>
+<script src="js/pricing.js?v=46"></script>
+<script src="js/quote-history.js?v=46"></script>
+<script src="js/document-numbers.js?v=46"></script>
+<script src="js/imported-quotes.js?v=46"></script>
+<script src="js/document-editor.js?v=46"></script>
+<script src="js/document-format.js?v=46"></script>
+<script src="js/document-views.js?v=46"></script>
+<script src="js/quotes.js?v=46"></script>
+<script src="js/dashboard.js?v=46"></script>
+<script src="js/suppliers.js?v=46"></script>
+<script src="js/app-version.js?v=46"></script>
+<script src="js/shared-sync.js?v=46"></script>
+<script src="js/local-recovery.js?v=46"></script>
 
 <script>
 /* ============================================================
@@ -999,6 +1001,7 @@ window.addEventListener('pagehide',()=>persistLocalSnapshot());
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&document.body.classList.contains('app-ready'))refreshSharedWorkspace();});
 window.addEventListener('focus',()=>{if(document.body.classList.contains('app-ready'))refreshSharedWorkspace();});
 function normalizeQuoteFields(db){
+  recoverImportedQuotes(db,(window.UW_IMPORTED||{}).quotes||[]);
   (db.quotes||[]).forEach(q=>{
     if(q.projectReference===undefined) q.projectReference='';
     if(q.introduction===undefined) q.introduction=q.notes||'';
@@ -1724,13 +1727,6 @@ function vInvoices(c){
   </table></div>`;
 }
 function invoiceDateKey(date){return String(date||today()).slice(0,10).replaceAll('-','/');}
-function nextInvoiceNo(date=today(),prefix='BB'){
-  const p=/^(BB|EE)$/.test(prefix)?prefix:'BB', key=invoiceDateKey(date);
-  const re=new RegExp('^'+p+key.replaceAll('/','\\/')+'(\\d+)$');
-  const used=(DB.invoices||[]).map(i=>String(i.id||'').match(re)).filter(Boolean).map(m=>Number(m[1])||0);
-  const sequence=(used.length?Math.max(...used):0)+1;
-  return p+key+String(sequence).padStart(2,'0');
-}
 function nextReceiptNo(date=today(),prefix='BB'){
   const p=/^(BB|SS)$/.test(prefix)?prefix:'BB',key=invoiceDateKey(date);
   const re=new RegExp('^'+p+key.replaceAll('/','\\/')+'(\\d+)$');
@@ -1742,17 +1738,7 @@ function validReceiptNo(id,date){
   return /^(BB|SS)\d{4}\/\d{2}\/\d{2}\d{2}$/.test(String(id||'')) &&
     String(id).slice(2,12)===invoiceDateKey(date);
 }
-function validInvoiceNo(id,date){
-  return /^(BB|EE)\d{4}\/\d{2}\/\d{2}\d{2}$/.test(String(id||'')) &&
-    String(id).slice(2,12)===invoiceDateKey(date);
-}
-function genNo(prefix){const d=today();return prefix==='GM'?nextInvoiceNo(d,'BB'):'QU'+d.replaceAll('-','')+String(++DB.counters.quote).padStart(2,'0');}
-function nextQuoteNo(date=today()){
-  const key=invoiceDateKey(date);
-  const re=new RegExp('^QU'+key.replaceAll('/','\\/')+'(\\d+)$');
-  const used=(DB.quotes||[]).map(q=>String(q.id||'').match(re)).filter(Boolean).map(m=>Number(m[1])||0);
-  return 'QU'+key+String((used.length?Math.max(...used):0)+1).padStart(2,'0');
-}
+function genNo(prefix){return prefix==='GM'?nextInvoiceNo(today(),'BB'):nextQuoteNo(today(),'BB');}
 function setFnbTransactionCategory(statementId,rowId,category){
   const statement=(DB.fnbStatements||[]).find(item=>String(item.id)===String(statementId));
   const transaction=(statement?.transactions||[]).find((item,index)=>String(item.id||`${statementId}-${index+1}`)===String(rowId));

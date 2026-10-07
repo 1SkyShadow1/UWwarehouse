@@ -27,6 +27,9 @@ const HOST = process.env.HOST || '0.0.0.0';
 const isVercel = process.env.VERCEL === '1';
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
+const {recoverImportedQuotes}=require('./public/js/imported-quotes');
+const historicalBundleText=fs.readFileSync(path.join(publicDir,'imported-data.js'),'utf8');
+const historicalQuotes=JSON.parse(historicalBundleText.slice(historicalBundleText.indexOf('=')+1).trim().replace(/;$/,'')).quotes||[];
 const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
 const additionalSourceRoots = String(process.env.UW_SOURCE_DIRS || '')
   .split(';')
@@ -251,6 +254,8 @@ const ensureStorage = () => {
       }
     }
     stateSnapshot = stateSnapshot || { version: stateVersion, revision: 0, updatedAt: new Date().toISOString(), data: {} };
+    const repairedQuotes=recoverImportedQuotes(stateSnapshot.data,historicalQuotes);
+    if(repairedQuotes){stateSnapshot.revision++;stateSnapshot.updatedAt=new Date().toISOString();console.log(`Recovered source content for ${repairedQuotes} historical quotes.`);}
     atomicWrite(stateSnapshot);
   }
   return stateSnapshot;
@@ -319,6 +324,7 @@ const queueSharedStateUpdate = (expectedRevision, data) => {
       if (!incomingIds.has(document.id)) incomingDocuments.push(document);
     }
     const nextData = incomingDocuments.length ? {...data, documents:incomingDocuments} : data;
+    recoverImportedQuotes(nextData,historicalQuotes);
     const next = { version: stateVersion, revision: current.revision + 1, updatedAt: new Date().toISOString(), data:nextData };
     atomicWrite(next);
     stateSnapshot = next;

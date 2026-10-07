@@ -30,6 +30,7 @@ function reviseQuote(q,changes){
   return true;
 }
 function acceptQuoteVersion(q){
+  if(q.sourcePricingWarnings?.some(warning=>/alternative options|differs from/i.test(warning))){toast('Review the source pricing discrepancy or alternative options in Edit Quote before accepting.');return false;}
   const alreadyAccepted=q.status==='Accepted';
   if(!alreadyAccepted&&!q.expiry){toast('Set the quote expiry date before accepting it.');return false;}
   if(!alreadyAccepted&&!validQuoteExpiry(q.date,q.expiry)){toast('Quote expiry must be on or after its date.');return false;}

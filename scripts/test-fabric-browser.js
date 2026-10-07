@@ -43,6 +43,22 @@ async function run() {
       DB.invoices = []; DB.quotes = []; DB.receipts = []; window.UW_OPERATOR={name:'Evans'};
     });
     await page.addStyleTag({content:'#boot-screen,#login-screen{display:none!important}'});
+    await page.evaluate(()=>{DB.quotes=JSON.parse(JSON.stringify(window.UW_IMPORTED.quotes));});
+    const recoveredPreview=await page.evaluate(()=>{
+      let checked=0;
+      for(const quote of DB.quotes){viewQuote(quote.id);const preview=document.getElementById('quote-preview');if(/Imported quote|Imported from/i.test(preview.innerText))throw Error('Placeholder remains '+quote.id);if(preview.querySelectorAll('tbody tr').length!==quote.items.length)throw Error('Missing source lines '+quote.id);checked++;}
+      viewQuote('BB10062501');return {checked,text:document.getElementById('quote-preview').innerText};
+    });
+    assert.equal(recoveredPreview.checked,71);assert(recoveredPreview.text.includes('8 470')||recoveredPreview.text.includes('8 470'));assert(recoveredPreview.text.includes('Scatter Cushions'));
+    await page.locator('#quote-preview').screenshot({path:path.join(root,'..','tmp/recovered-quote-preview.png')});
+    await page.evaluate(()=>{viewQuote('MG27022401');});
+    assert((await page.locator('#quote-preview').innerText()).includes('—'));
+    await page.evaluate(()=>{DB.quotes=[];closeModal();newQuote();});
+    await page.locator('#f-date').fill('2026-10-07');await page.locator('#f-date').dispatchEvent('change');
+    assert.equal(await page.locator('#f-no').inputValue(),'BB26100701');
+    await page.locator('#f-prefix').selectOption('SS');assert.equal(await page.locator('#f-no').inputValue(),'SS26100701');
+    await page.locator('#f-date').fill('2026-10-08');await page.locator('#f-date').dispatchEvent('change');assert.equal(await page.locator('#f-no').inputValue(),'SS26100801');
+    await page.evaluate(()=>closeModal());
     const catalog = await page.evaluate(() => window.UW_FABRIC_CATALOG);
     assert.equal(catalog.fabrics.length, 1421);
     // Category gating, historical consumable selection and custom colour persistence.
@@ -165,16 +181,17 @@ async function run() {
     assert.deepEqual(await page.evaluate(() => DB.invoices[0].items), await page.evaluate(() => DB.quotes[0].items));
     const convertedId=await page.evaluate(()=>DB.invoices[0].id);
     await page.evaluate(id=>{DB.jobs=[{id:'test-job',invoiceId:id}];DB.receipts=[{id:'test-receipt',invoiceId:id,amount:0}];editInvoice(id);},convertedId);
-    const renamedId=await page.evaluate(()=>nextInvoiceNo(document.getElementById('ef-date').value,'EE'));
+    const renamedId=await page.evaluate(()=>nextInvoiceNo(document.getElementById('ef-date').value,'SS'));
     await page.locator('#ef-no').fill(renamedId);
     await page.evaluate(id=>saveEditedInvoice(id),convertedId);
     assert.equal(await page.evaluate(()=>DB.jobs[0].invoiceId),renamedId);
     assert.equal(await page.evaluate(()=>DB.receipts[0].invoiceId),renamedId);
     assert.equal(await page.evaluate(()=>DB.quotes[0].invoiceId),renamedId);
     await page.evaluate(id=>editQuote(id),quote.id);
-    await page.locator('#eq-no').fill('RENAMED-QUOTE-TEST');
+    const renamedQuoteId=await page.evaluate(()=>nextQuoteNo(document.getElementById('eq-date').value,'SS'));
+    await page.locator('#eq-no').fill(renamedQuoteId);
     await page.evaluate(id=>saveEditedQuote(id),quote.id);
-    assert.equal(await page.evaluate(()=>DB.invoices[0].generatedFromQuote),'RENAMED-QUOTE-TEST');
+    assert.equal(await page.evaluate(()=>DB.invoices[0].generatedFromQuote),renamedQuoteId);
     await page.evaluate(()=>newInvoice());
     await page.locator('#f-cust').fill('Duplicate check');
     await page.locator('.i-desc').fill('Work');

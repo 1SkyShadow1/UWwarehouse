@@ -14762,1212 +14762,2708 @@
                      "receipt":  10
                  },
     "quotes":  [
-                   {
-                       "id":  "MG09042401",
-                       "date":  "2024-04-09",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45421
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\APRIL\\MG09042401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB23122402",
-                       "date":  "2024-12-23",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45646
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\DECEMBER\\BB23122402.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG05022403",
-                       "date":  "2024-02-05",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45356
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG05022403.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG15022401",
-                       "date":  "2024-02-15",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45366
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG15022401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG27022401",
-                       "date":  "2024-02-27",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45378
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG27022401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG29022401",
-                       "date":  "2024-02-29",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45380
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG29022401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG22012401",
-                       "date":  "2024-01-22",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45344
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\JANUARY\\MG22012401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG24012401",
-                       "date":  "2024-01-24",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45346
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\JANUARY\\MG24012401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB02072402",
-                       "date":  "2024-07-02",
-                       "customer":  ".",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45506
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\JULY\\BB02072402..xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB10062401",
-                       "date":  "2024-06-10",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45483
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\JUNE\\BB10062401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB21062402",
-                       "date":  "2024-06-21",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45494
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\JUNE\\BB21062402.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB26062402",
-                       "date":  "2024-06-26",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45494
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\JUNE\\BB26062402.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG27032401",
-                       "date":  "2024-03-27",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45409
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\MARCH\\MG27032401.pdf.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "MG27032402",
-                       "date":  "2024-03-27",
-                       "customer":  "(Updated)",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45412
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\MARCH\\MG27032402 (Updated).xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB16052402",
-                       "date":  "2024-05-16",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45459
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\MAY\\BB16052402.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB24112403",
-                       "date":  "2024-11-24",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45620
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\NOVEMBER\\BB24112403.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB02102401",
-                       "date":  "2024-10-02",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45575
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\OCTOBER\\BB02102401.pdf.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB05102401",
-                       "date":  "2024-10-05",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45570
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\OCTOBER\\BB05102401.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB15102403",
-                       "date":  "2024-10-15",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45580
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\OCTOBER\\BB15102403.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB10092402",
-                       "date":  "2024-09-10",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45575
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2024\\SEPTEMBER\\BB10092402.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB13022501",
-                       "date":  "2025-02-13",
-                       "customer":  "Detail Ease",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45701
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\BB13022501 Detail Ease.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "GM24022501",
-                       "date":  "2025-02-24",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45712
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\GM24022501.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP03022501",
-                       "date":  "2025-02-03",
-                       "customer":  "Sheli",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  28400
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP03022501 Sheli.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP03022503",
-                       "date":  "2025-02-03",
-                       "customer":  "JJ Smit",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  500
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP03022503 JJ Smit.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP03022504",
-                       "date":  "2025-02-03",
-                       "customer":  "Adrian",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  550
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP03022504 Adrian.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP31012502",
-                       "date":  "2025-01-31",
-                       "customer":  "Nicolo Giuricich Synthetic Leather",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  8500
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP31012502 Nicolo Giuricich Synthetic Leather.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB11012501",
-                       "date":  "2025-01-11",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45302
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\BB11012501.pdf.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB11012502",
-                       "date":  "2025-01-11",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45668
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\BB11012502.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB11012503",
-                       "date":  "2025-01-11",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45668
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\BB11012503.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP2101257",
-                       "date":  "2025-01-21",
-                       "customer":  "Michelle Collins Amended",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  17320
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP2101257 Michelle Collins Amended.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP2201252",
-                       "date":  "2025-01-22",
-                       "customer":  "Kyle \u0026 Rosa",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  8980
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP2201252 Kyle \u0026 Rosa.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP2201254",
-                       "date":  "2025-01-22",
-                       "customer":  "Charles TNC Logistics",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  8625
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP2201254 Charles TNC Logistics.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP23012501",
-                       "date":  "2025-01-23",
-                       "customer":  "Seva Design",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  1170
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012501 Seva Design.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP23012502",
-                       "date":  "2025-01-23",
-                       "customer":  "Aksa Themba (1)",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  13070
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012502 Aksa Themba (1).xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP23012503",
-                       "date":  "2025-01-23",
-                       "customer":  "Aksa Therma (leather)",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  28395
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012503 Aksa Therma (leather).xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP23012504",
-                       "date":  "2025-01-23",
-                       "customer":  "Janice Botes",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  1040
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012504 Janice Botes.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP24012501",
-                       "date":  "2025-01-24",
-                       "customer":  "Humbulani",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  4100
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP24012501 Humbulani.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP24012502",
-                       "date":  "2025-01-24",
-                       "customer":  "Fhumbulani",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  7730
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP24012502 Fhumbulani.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP24012503",
-                       "date":  "2025-01-24",
-                       "customer":  "Ruby",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  21350
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP24012503 Ruby.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP250120",
-                       "date":  "2025-01-25",
-                       "customer":  "1 Michelle Collins",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45684
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP250120-1 Michelle Collins.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012501",
-                       "date":  "2025-01-27",
-                       "customer":  "Jaco Niemand",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  1160
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012501 Jaco Niemand.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012502",
-                       "date":  "2025-01-27",
-                       "customer":  "Paula",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  23920
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012502 Paula.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012503",
-                       "date":  "2025-01-27",
-                       "customer":  "Grant van Zyl",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  850
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012503 Grant van Zyl.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012504",
-                       "date":  "2025-01-27",
-                       "customer":  "Nicolo Giuricich",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  2385
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012504 Nicolo Giuricich.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012505",
-                       "date":  "2025-01-27",
-                       "customer":  "Loamie van Wyk",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  7540
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012505 Loamie van Wyk.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012506",
-                       "date":  "2025-01-27",
-                       "customer":  "Rudy",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  3888
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012506 Rudy.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012507",
-                       "date":  "2025-01-27",
-                       "customer":  "Zeca Marques",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  8020
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012507 Zeca Marques.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012508",
-                       "date":  "2025-01-27",
-                       "customer":  "Thommie Burger",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  7200
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012508 Thommie Burger.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012509",
-                       "date":  "2025-01-27",
-                       "customer":  "Navin",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  15480
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012509 Navin .xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP27012510",
-                       "date":  "2025-01-27",
-                       "customer":  "Perry Kum",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  2580
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012510 Perry Kum.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP28012501",
-                       "date":  "2025-01-28",
-                       "customer":  "Jandri Ueckermann (1)",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  6200
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP28012501 Jandri Ueckermann (1).xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP28012503",
-                       "date":  "2025-01-28",
-                       "customer":  "Clive Bales Rivonia Church",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  9435
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP28012503 Clive Bales Rivonia Church.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP30012501",
-                       "date":  "2025-01-30",
-                       "customer":  "Eben",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  2432
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP30012501 Eben.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP31012501",
-                       "date":  "2025-01-31",
-                       "customer":  "Naomi",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  34800
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP31012501 Naomi.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP31012503",
-                       "date":  "2025-01-31",
-                       "customer":  "Paul Jabour",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  5350
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP31012503 Paul Jabour.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "RP31012504",
-                       "date":  "2025-01-31",
-                       "customer":  "Lesley Deeley",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  5700
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP31012504 Lesley Deeley.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB15072505",
-                       "date":  "2025-07-15",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45896
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JULY\\BB15072505.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB10062501",
-                       "date":  "2025-06-10",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45848
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\JUNE\\BB10062501.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB1505202502",
-                       "date":  "2025-05-15",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45823
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\MAY\\BB1505202502.pdf.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB15052506",
-                       "date":  "2025-05-15",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45823
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\MAY\\BB15052506.pdf.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB29102502",
-                       "date":  "2025-10-29",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45959
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\OCT\\BB29102502.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB11092501",
-                       "date":  "2025-09-11",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  45911
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2025\\QUOTES\\2025\\2025\\SEPT\\BB11092501.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB02042601",
-                       "date":  "2026-04-02",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46144
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\APR\\BB02042601.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB07042601",
-                       "date":  "2026-04-07",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46120
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\APR\\BB07042601.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB12042602",
-                       "date":  "2026-04-12",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46135
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\APR\\BB12042602.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB25082602",
-                       "date":  "2026-08-25",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46290
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\AUG\\BB25082602.pdf.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB24072601",
-                       "date":  "2026-07-24",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46258
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\JULY\\BB24072601.pdf.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB01032603",
-                       "date":  "2026-03-01",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46113
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\MAR\\BB01032603.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB02032602",
-                       "date":  "2026-03-02",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46113
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\MAR\\BB02032602.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB05032603",
-                       "date":  "2026-03-05",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46117
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\MAR\\BB05032603.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   },
-                   {
-                       "id":  "BB30032601",
-                       "date":  "2026-03-30",
-                       "customer":  "Imported quote",
-                       "contact":  "",
-                       "expiry":  "",
-                       "items":  [
-                                     {
-                                         "desc":  "Imported quote",
-                                         "qty":  1,
-                                         "price":  46169
-                                     }
-                                 ],
-                       "notes":  "Imported from D:\\UW\\2026\\QUOTES\\MAR\\BB30032601.xlsx",
-                       "status":  "Imported",
-                       "terms":  true
-                   }
-               ]
+  {
+    "id": "MG09042401",
+    "date": "2024-04-09",
+    "customer": "Gail Dok-ing",
+    "contact": "Gail Dok-ing",
+    "expiry": "2024-05-09",
+    "items": [
+      {
+        "desc": "Kitchen Chairs",
+        "qty": 6,
+        "price": 680
+      }
+    ],
+    "notes": "6x Kitchen Chairs to be reupholstered in kalahari fabric (Ivory)\n*Once stripped we will advise on the condition of the foam",
+    "status": "Draft",
+    "terms": true,
+    "phone": "723875396",
+    "email": "gail@doking.co.za",
+    "preparedBy": "Michael Grusin",
+    "billingAddress": "14 Juniper Drive, Dowerglen",
+    "projectReference": "PVT Residence",
+    "introduction": "6x Kitchen Chairs to be reupholstered in kalahari fabric (Ivory)\n*Once stripped we will advise on the condition of the foam",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\APRIL\\MG09042401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB23122402",
+    "date": "2024-12-23",
+    "customer": "Wendel Naidoo",
+    "contact": "Wendel Naidoo",
+    "expiry": "2024-12-20",
+    "items": [
+      {
+        "desc": "Dining Chair",
+        "qty": 4,
+        "price": 650
+      }
+    ],
+    "notes": "4 x Dining Chair to be re-upholstered with chosen fabric / Add foam, dacron, etc, if required.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O82 443 1052",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "4 x Dining Chair to be re-upholstered with chosen fabric / Add foam, dacron, etc, if required.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\DECEMBER\\BB23122402.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG05022403",
+    "date": "2024-02-05",
+    "customer": "Carol Van Wyk",
+    "contact": "Carol Van Wyk",
+    "expiry": "2024-03-05",
+    "items": [
+      {
+        "desc": "2 x Electric Recliner",
+        "qty": 2,
+        "price": 6000
+      }
+    ],
+    "notes": "2 x Electric Recliner to be reupholstered in Cullinan fabric - graphite",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O713562096",
+    "email": "",
+    "preparedBy": "Michael Grusin",
+    "billingAddress": "44, 14th Avenue, Edenvale",
+    "projectReference": "PVT Residence",
+    "introduction": "2 x Electric Recliner to be reupholstered in Cullinan fabric - graphite",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG05022403.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG15022401",
+    "date": "2024-02-15",
+    "customer": "Micaela Weinberg",
+    "contact": "Micaela Weinberg",
+    "expiry": "2024-03-15",
+    "items": [
+      {
+        "desc": "Kitchen Chairs",
+        "qty": 3,
+        "price": 1500
+      }
+    ],
+    "notes": "3 x kitchen chairs to be reupholstered in navy blue leather",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O828200506",
+    "email": "raelene@lantic.net",
+    "preparedBy": "Michael Grusin",
+    "billingAddress": "12 Oak Road                                          View Crest",
+    "projectReference": "PVT Residence",
+    "introduction": "3 x kitchen chairs to be reupholstered in navy blue leather",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG15022401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG27022401",
+    "date": "2024-02-27",
+    "customer": "Reena Singh",
+    "contact": "Reena Singh",
+    "expiry": "2024-03-27",
+    "items": [
+      {
+        "desc": "Dining room chairs",
+        "qty": 6,
+        "price": 800
+      },
+      {
+        "desc": "Two seater",
+        "qty": 1,
+        "price": 5000
+      },
+      {
+        "desc": "One seater",
+        "qty": 2,
+        "price": 2850
+      },
+      {
+        "desc": "Longe suite",
+        "qty": 1,
+        "price": 9000
+      },
+      {
+        "desc": "Bed box",
+        "qty": 1,
+        "price": ""
+      }
+    ],
+    "notes": "6x Dining Room Chairs to be re upholstered in fabric - Cullinan (Smoke)\n1x Two seater to be repainted (White) and upholstered in fabric - Nashville (Golden Glow)\n2x One seater to be repainted (White) and upholstered in fabric - Nashville (Golden Glow)\n1x Lounge Suite 3-2-1 to be re upholstered in fabric - Cullinan (Smoke)\n1x Bed Box to be re upholstered in fabric - TBC",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O82 7284 088",
+    "email": "",
+    "preparedBy": "Michael Grusin",
+    "billingAddress": "35 Nile street                            Kensington",
+    "projectReference": "Pvt Residence",
+    "introduction": "6x Dining Room Chairs to be re upholstered in fabric - Cullinan (Smoke)\n1x Two seater to be repainted (White) and upholstered in fabric - Nashville (Golden Glow)\n2x One seater to be repainted (White) and upholstered in fabric - Nashville (Golden Glow)\n1x Lounge Suite 3-2-1 to be re upholstered in fabric - Cullinan (Smoke)\n1x Bed Box to be re upholstered in fabric - TBC",
+    "sourcePricingWarnings": [
+      "Source has no unit price: Bed box"
+    ],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG27022401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG29022401",
+    "date": "2024-02-29",
+    "customer": "Anthea Zidel",
+    "contact": "Anthea Zidel",
+    "expiry": "2024-03-29",
+    "items": [
+      {
+        "desc": "Dining room chairs",
+        "qty": 6,
+        "price": 450
+      },
+      {
+        "desc": "Strip, sand and respray dining room chairs",
+        "qty": 6,
+        "price": 850
+      },
+      {
+        "desc": "Headboard",
+        "qty": 1,
+        "price": 900
+      },
+      {
+        "desc": "Wiingback chair",
+        "qty": 1,
+        "price": 1500
+      }
+    ],
+    "notes": "6x Dining room chairs to be re upholstered (Fabric provided) and repainted (Color)\n1x Headboard to be re upholstered (Fabric provided)\n1x Wingback chair to be re upholstered (Fabric provided)",
+    "status": "Draft",
+    "terms": true,
+    "phone": "083 258 6559",
+    "email": "",
+    "preparedBy": "Michael Grusin",
+    "billingAddress": "66 10th Street                            Houghton",
+    "projectReference": "Pvt Residence",
+    "introduction": "6x Dining room chairs to be re upholstered (Fabric provided) and repainted (Color)\n1x Headboard to be re upholstered (Fabric provided)\n1x Wingback chair to be re upholstered (Fabric provided)",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\FEBRUARY\\MG29022401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG22012401",
+    "date": "2024-01-22",
+    "customer": "Bernadine Lamprecht",
+    "contact": "Bernadine Lamprecht",
+    "expiry": "2024-02-22",
+    "items": [
+      {
+        "desc": "Complete Recover and Refurbishment of lounge suite,\nRe-upholster in genuine leather as per specification",
+        "qty": 1,
+        "price": 18900
+      }
+    ],
+    "notes": "*Complete Recover and Refurbishment of 3-2-1 lounge suite\n*Re-upholster in genuine leather - code 98381",
+    "status": "Draft",
+    "terms": true,
+    "phone": "083 653 8177",
+    "email": "bernadinel@axxess.co.za",
+    "preparedBy": "Mike",
+    "billingAddress": "12 Bruges Avenue, Thornhill Estate, Modderfontein.",
+    "projectReference": "PVT Residence",
+    "introduction": "*Complete Recover and Refurbishment of 3-2-1 lounge suite\n*Re-upholster in genuine leather - code 98381",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\JANUARY\\MG22012401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG24012401",
+    "date": "2024-01-24",
+    "customer": "Bellissimo Lifestyle Designs",
+    "contact": "Kevin Archary",
+    "expiry": "2024-02-24",
+    "items": [
+      {
+        "desc": "Custom Fabric",
+        "qty": 10,
+        "price": 747.5
+      },
+      {
+        "desc": "Foam backing & Decron filling",
+        "qty": 2,
+        "price": 830.3
+      },
+      {
+        "desc": "Consumables",
+        "qty": 1,
+        "price": 1200
+      },
+      {
+        "desc": "Labour",
+        "qty": 9,
+        "price": 957.2
+      }
+    ],
+    "notes": "*Size as per drawing received - 20/1/1\n*Fabric - Fibreguard Deluxe - 01 Feather",
+    "status": "Draft",
+    "terms": true,
+    "phone": "072 400 3069",
+    "email": "kevin@bellissimolifestyle.co.za",
+    "preparedBy": "Mike",
+    "billingAddress": "103 B Terrace Road, Sebenza, Edenvale",
+    "projectReference": "Sibo Ndlovu - Headboard",
+    "introduction": "*Size as per drawing received - 20/1/1\n*Fabric - Fibreguard Deluxe - 01 Feather",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\JANUARY\\MG24012401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB02072402",
+    "date": "2024-07-02",
+    "customer": "Tamarin",
+    "contact": "Tamarin",
+    "expiry": "2024-08-02",
+    "items": [
+      {
+        "desc": "Bar Stools",
+        "qty": 6,
+        "price": 280
+      }
+    ],
+    "notes": "5 x Bar Stools to be upholstered in supplied fabric, 50mm foam to be added and decron.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O614473580",
+    "email": "Tamarinr88@gmail.com",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Bar Stools",
+    "introduction": "5 x Bar Stools to be upholstered in supplied fabric, 50mm foam to be added and decron.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\JULY\\BB02072402..xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB10062401",
+    "date": "2024-06-10",
+    "customer": "Melany",
+    "contact": "Melany",
+    "expiry": "2024-07-10",
+    "items": [
+      {
+        "desc": "Two Seater Couches - Newbury (Gulf)",
+        "qty": 2,
+        "price": 4300
+      },
+      {
+        "desc": "One Seater Couches - Newbury (Gulf)",
+        "qty": 2,
+        "price": 2200
+      },
+      {
+        "desc": "Two Seater Couches - Byron (Spruce)",
+        "qty": 2,
+        "price": 5880
+      },
+      {
+        "desc": "One Seater Couches - Byron (Spruce)",
+        "qty": 2,
+        "price": 3050
+      }
+    ],
+    "notes": "2 x Two Seater Couches to be re upholstered In Newbury (Gulf) @ R180 pm\n2 x One Seater Couches to be re upholstered In Newbury (Gulf) @ R180 pm\n2 x Two Seater Couches to be re upholstered In Byron (Spruce) @ R220 pm\n2 x One Seater Couches to be re upholstered In Byron (Spruce) @ R220 pm",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O827702258",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "One and Two seater couches",
+    "introduction": "2 x Two Seater Couches to be re upholstered In Newbury (Gulf) @ R180 pm\n2 x One Seater Couches to be re upholstered In Newbury (Gulf) @ R180 pm\n2 x Two Seater Couches to be re upholstered In Byron (Spruce) @ R220 pm\n2 x One Seater Couches to be re upholstered In Byron (Spruce) @ R220 pm",
+    "sourcePricingWarnings": [
+      "Source total 0.0 differs from priced lines 30860.0"
+    ],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\JUNE\\BB10062401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB21062402",
+    "date": "2024-06-21",
+    "customer": "Candice kleinwort",
+    "contact": "Candice kleinwort",
+    "expiry": "2024-07-21",
+    "items": [
+      {
+        "desc": "Bar Stools",
+        "qty": 4,
+        "price": 650
+      }
+    ],
+    "notes": "4 x Bar stools to be re upholstered In fabric (TBC), foam and support to be checked and advise once stripped.\nWood cleaning and oiling is included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O832802994",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Bar Stools",
+    "introduction": "4 x Bar stools to be re upholstered In fabric (TBC), foam and support to be checked and advise once stripped.\nWood cleaning and oiling is included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\JUNE\\BB21062402.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB26062402",
+    "date": "2024-06-26",
+    "customer": "Kari de Villiers",
+    "contact": "Kari de Villiers",
+    "expiry": "2024-07-21",
+    "items": [
+      {
+        "desc": "One Seater Couch",
+        "qty": 2,
+        "price": 1800
+      },
+      {
+        "desc": "Two Seater Couch",
+        "qty": 1,
+        "price": 3600
+      }
+    ],
+    "notes": "1 x One Seater Couches to be re upholstered In fabric (TBC), foam and support to be checked and advise once stripped.\n1 x Two Seater Couchs to be re upholstered In fabric (TBC), foam and support to be checked and advise once stripped.\n*Wood cleaning and oiling is included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "",
+    "email": "karidevilliers23@gmail.com",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "One & Two Seater Couch",
+    "introduction": "1 x One Seater Couches to be re upholstered In fabric (TBC), foam and support to be checked and advise once stripped.\n1 x Two Seater Couchs to be re upholstered In fabric (TBC), foam and support to be checked and advise once stripped.\n*Wood cleaning and oiling is included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\JUNE\\BB26062402.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG27032401",
+    "date": "2024-03-27",
+    "customer": "Diveshni Govender",
+    "contact": "Diveshni Govender",
+    "expiry": "2024-04-27",
+    "items": [
+      {
+        "desc": "Dining room chairs - re upholstered",
+        "qty": 6,
+        "price": 850
+      },
+      {
+        "desc": "Dining room chairs - sanding and varnish",
+        "qty": 6,
+        "price": 280
+      },
+      {
+        "desc": "Dining room table - sanding and varnish",
+        "qty": 1,
+        "price": 1200
+      }
+    ],
+    "notes": "6x Dining room chairs to be re upholstered in fabric (TBC). Webbing and foam support to be checked when received.\n6x Dining room chairs legs to be sanded and varnished.\n1x Dining room table to be sanded and varnished.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "",
+    "email": "diveshni09@gmail.com",
+    "preparedBy": "Michael Grusin",
+    "billingAddress": "Kempton Park",
+    "projectReference": "Dining Room and Wing Back Chairs",
+    "introduction": "6x Dining room chairs to be re upholstered in fabric (TBC). Webbing and foam support to be checked when received.\n6x Dining room chairs legs to be sanded and varnished.\n1x Dining room table to be sanded and varnished.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\MARCH\\MG27032401.pdf.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "MG27032402",
+    "date": "2024-03-27",
+    "customer": "Cube Workspace",
+    "contact": "Thobile Ndwandwe",
+    "expiry": "2024-04-30",
+    "items": [
+      {
+        "desc": "Office chairs - strip and repair",
+        "qty": 32,
+        "price": 140
+      },
+      {
+        "desc": "Office chairs - seating to be refoamed in high density",
+        "qty": 32,
+        "price": 240
+      },
+      {
+        "desc": "Office chairs - seating, head rests & backs to be Uphol",
+        "qty": 32,
+        "price": 470
+      }
+    ],
+    "notes": "32x Office chairs to be stripped, repaired, refoamed and re upholstered in black fabric (TBC).",
+    "status": "Draft",
+    "terms": true,
+    "phone": "010 141 0300",
+    "email": "thobile@cubeworkspace.co.za",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "Unit 9, The Straight Ave, Pine Slopes, Sandton",
+    "projectReference": "32 x Office Chairs",
+    "introduction": "32x Office chairs to be stripped, repaired, refoamed and re upholstered in black fabric (TBC).",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\MARCH\\MG27032402 (Updated).xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB16052402",
+    "date": "2024-05-16",
+    "customer": "DOK-ING Africa (Pty) Ltd",
+    "contact": "Gail Do-King",
+    "expiry": "2024-06-16",
+    "items": [
+      {
+        "desc": "Kitchen chairs reupholstered",
+        "qty": 6,
+        "price": 680
+      },
+      {
+        "desc": "Kitchen chairs refoaming and cleaning",
+        "qty": 6,
+        "price": 120
+      }
+    ],
+    "notes": "6x Kitchen Chairs to be reupholstered in kalahari fabric (Ivory)\n6x Kitchen Chairs to be refoamed and all wood to be cleaned and oiled",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O723875396",
+    "email": "gail@doking.co.za",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Kitchen chairs",
+    "introduction": "6x Kitchen Chairs to be reupholstered in kalahari fabric (Ivory)\n6x Kitchen Chairs to be refoamed and all wood to be cleaned and oiled",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\MAY\\BB16052402.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB24112403",
+    "date": "2024-11-24",
+    "customer": "Jenny Ross",
+    "contact": "Jenny Ross",
+    "expiry": "2024-11-24",
+    "items": [
+      {
+        "desc": "Two Seater Couch",
+        "qty": 1,
+        "price": 1430
+      },
+      {
+        "desc": "One Seater Couch",
+        "qty": 1,
+        "price": 410
+      },
+      {
+        "desc": "Ottoman",
+        "qty": 1,
+        "price": 280
+      }
+    ],
+    "notes": "2 x Two Seater Couch to be re-upholstered in Fabric (TBC) / Add foam/webbing/decron if necessary.\n1 x One Seater Couch to be re-upholstered in Fabric (TBC) / Add foam/webbing/decron if necessary.\n2 x Ottoman to be re-upholstered in Fabric (TBC) / Add foam/webbing/decron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O82 894 3516",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x Two Seater Couch to be re-upholstered in Fabric (TBC) / Add foam/webbing/decron if necessary.\n1 x One Seater Couch to be re-upholstered in Fabric (TBC) / Add foam/webbing/decron if necessary.\n2 x Ottoman to be re-upholstered in Fabric (TBC) / Add foam/webbing/decron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\NOVEMBER\\BB24112403.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB02102401",
+    "date": "2024-10-02",
+    "customer": "Yvette",
+    "contact": "Yvette",
+    "expiry": "2024-10-10",
+    "items": [
+      {
+        "desc": "Head board re-upholstered",
+        "qty": 1,
+        "price": 750
+      },
+      {
+        "desc": "L-shape lounge suite re-upholstered",
+        "qty": 1,
+        "price": 4250
+      }
+    ],
+    "notes": "1 x Head board to be re-upholstered in supplied fabric, button design to be reduced.\n1 x L-shape lounge suite to be re-upholstered in vinyl (8701-25), foam/decron to be added where necessary.\n*mechanismss to be checked/repaired/serviced.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O675447474",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Head board to be re-upholstered in supplied fabric, button design to be reduced.\n1 x L-shape lounge suite to be re-upholstered in vinyl (8701-25), foam/decron to be added where necessary.\n*mechanismss to be checked/repaired/serviced.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\OCTOBER\\BB02102401.pdf.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB05102401",
+    "date": "2024-10-05",
+    "customer": "Yvette",
+    "contact": "Yvette",
+    "expiry": "2024-10-05",
+    "items": [
+      {
+        "desc": "Head board re-upholstered",
+        "qty": 1,
+        "price": 750
+      },
+      {
+        "desc": "L-shape lounge suite re-upholstered",
+        "qty": 1,
+        "price": 4250
+      }
+    ],
+    "notes": "1 x Head board to be re-upholstered in supplied fabric, button design to be reduced.\n1 x L-shape lounge suite to be re-upholstered in vinyl (8701-25), foam/decron to be added where necessary.\n*mechanismss to be checked/repaired/serviced.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O675447474",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Head board to be re-upholstered in supplied fabric, button design to be reduced.\n1 x L-shape lounge suite to be re-upholstered in vinyl (8701-25), foam/decron to be added where necessary.\n*mechanismss to be checked/repaired/serviced.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\OCTOBER\\BB05102401.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB15102403",
+    "date": "2024-10-15",
+    "customer": "Clive",
+    "contact": "Clive",
+    "expiry": "2024-10-15",
+    "items": [
+      {
+        "desc": "Long Kneelers",
+        "qty": 2,
+        "price": 850
+      },
+      {
+        "desc": "Short Kneelers",
+        "qty": 4,
+        "price": 425
+      }
+    ],
+    "notes": "1 x Church kneelers to be re-upholstered in supplied, foam & decron to be added.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O724345995",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Church Kneelers",
+    "introduction": "1 x Church kneelers to be re-upholstered in supplied, foam & decron to be added.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\OCTOBER\\BB15102403.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB10092402",
+    "date": "2024-09-10",
+    "customer": "Yvette",
+    "contact": "Yvette",
+    "expiry": "2024-10-10",
+    "items": [
+      {
+        "desc": "Head board re-upholstered",
+        "qty": 1,
+        "price": 750
+      },
+      {
+        "desc": "L-shape lounge suite re-upholstered",
+        "qty": 1,
+        "price": 4250
+      }
+    ],
+    "notes": "1 x Head board to be re-upholstered in supplied fabric, button design to be reduced.\n1 x L-shape lounge suite to be re-upholstered in vinyl (8701-25), foam/decron to be added where necessary.\n*mechanismss to be checked/repaired/serviced.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O675447474",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Head board to be re-upholstered in supplied fabric, button design to be reduced.\n1 x L-shape lounge suite to be re-upholstered in vinyl (8701-25), foam/decron to be added where necessary.\n*mechanismss to be checked/repaired/serviced.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2024\\SEPTEMBER\\BB10092402.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB13022501",
+    "date": "2025-02-13",
+    "customer": "Detail Ease (Pty) Ltd",
+    "contact": "Jared",
+    "expiry": "2025-02-13",
+    "items": [
+      {
+        "desc": "Wing Back Chair - Custom Design",
+        "qty": 2,
+        "price": 2680
+      },
+      {
+        "desc": "Scatter Cushions - Custon Design",
+        "qty": 5,
+        "price": 349
+      }
+    ],
+    "notes": "2 x Wing back Chairs to be manufactured and upholstered as per design / Add foam/webbing/dacron as needed.\n5 x Scatter Cushions to be manufactured and upholstered as per design / Add foam/webbing/dacron as needed.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O825628224",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "14 Ranworth Crescent, Klipfontein 12-lr, Lethabong, 1645",
+    "projectReference": "Office Furniture",
+    "introduction": "2 x Wing back Chairs to be manufactured and upholstered as per design / Add foam/webbing/dacron as needed.\n5 x Scatter Cushions to be manufactured and upholstered as per design / Add foam/webbing/dacron as needed.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\BB13022501 Detail Ease.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "GM24022501",
+    "date": "2025-02-24",
+    "customer": "Beryl",
+    "contact": "Beryl",
+    "expiry": "2025-02-24",
+    "items": [
+      {
+        "desc": "Plastic Sheeting Covers for Dental Chair",
+        "qty": 2,
+        "price": 141
+      }
+    ],
+    "notes": "2 x Plastic Sheeting Covers for Dental Chair",
+    "status": "Draft",
+    "terms": true,
+    "phone": "832664635",
+    "email": "",
+    "preparedBy": "George Meintjies",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x Plastic Sheeting Covers for Dental Chair",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\GM24022501.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP03022501",
+    "date": "2025-02-03",
+    "customer": "Sheli",
+    "contact": "Sheli",
+    "expiry": "03/02/2025",
+    "items": [
+      {
+        "desc": "2 division sofas - Genuine Leather",
+        "qty": 2,
+        "price": 10300
+      },
+      {
+        "desc": "OR\n2 division sofas - Synthetic Leather",
+        "qty": 2,
+        "price": 3900
+      }
+    ],
+    "notes": "2 x 2 division sofas re-upholster in cream leather OR synthetic / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O764742721",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x 2 division sofas re-upholster in cream leather OR synthetic / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [
+      "Source lists alternative options; select the required option before issuing"
+    ],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP03022501 Sheli.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP03022503",
+    "date": "2025-02-03",
+    "customer": "JJ Smit",
+    "contact": "JJ Smit",
+    "expiry": "03/02/2025",
+    "items": [
+      {
+        "desc": "Drop in seat",
+        "qty": 1,
+        "price": 500
+      }
+    ],
+    "notes": "1 x NEW drop in seat - fimber frame, webbing, foam, vinyl",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O823849392",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x NEW drop in seat - fimber frame, webbing, foam, vinyl",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP03022503 JJ Smit.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP03022504",
+    "date": "2025-02-03",
+    "customer": "Adrian",
+    "contact": "Adrian",
+    "expiry": "03/02/2025",
+    "items": [
+      {
+        "desc": "Gear lever cover",
+        "qty": 1,
+        "price": 550
+      }
+    ],
+    "notes": "1 x Gear lever cover - stock black vinyl with red saddle stitching detail",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O764120187",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Gear lever cover - stock black vinyl with red saddle stitching detail",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP03022504 Adrian.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP31012502",
+    "date": "2025-01-31",
+    "customer": "Nicolo Giuricich",
+    "contact": "Nicolo Giuricich",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "2 piece L-shaped suite",
+        "qty": 1,
+        "price": 8500
+      }
+    ],
+    "notes": "1 x 2 piece L-shaped suite re-upholster in synthetic leather (colour to confirm)/ Add foam/webbing/dacron if necessary",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O832356003",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 2 piece L-shaped suite re-upholster in synthetic leather (colour to confirm)/ Add foam/webbing/dacron if necessary",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\FEBRUARY\\RP31012502 Nicolo Giuricich Synthetic Leather.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB11012501",
+    "date": "2025-01-11",
+    "customer": "Debbie Dyers",
+    "contact": "Debbie Dyers",
+    "expiry": "2024-01-11",
+    "items": [
+      {
+        "desc": "Arm Chairs",
+        "qty": 4,
+        "price": 2100
+      },
+      {
+        "desc": "Dining Couch",
+        "qty": 2,
+        "price": 1600
+      }
+    ],
+    "notes": "4 x Arm Chairs to be re-upholstered in Fabric (TBC) / Add foam/webbing/dacron if necessary.\n2 x Dining Chairs to be re-upholstered in Fabric (TBC) / Add foam/webbing/dacron if necessary.\n*Fabric budgeted on R140 pm",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O787286456",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "4 x Arm Chairs to be re-upholstered in Fabric (TBC) / Add foam/webbing/dacron if necessary.\n2 x Dining Chairs to be re-upholstered in Fabric (TBC) / Add foam/webbing/dacron if necessary.\n*Fabric budgeted on R140 pm",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\BB11012501.pdf.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB11012502",
+    "date": "2025-01-11",
+    "customer": "Sandrine Prinsloo",
+    "contact": "Sandrine Prinsloo",
+    "expiry": "2025-01-11",
+    "items": [
+      {
+        "desc": "Wingback Chair",
+        "qty": 1,
+        "price": 1195
+      }
+    ],
+    "notes": "1 x Wingback chair to be re-upholstered in supplied Hertex fabric / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O823352729",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Wingback chair to be re-upholstered in supplied Hertex fabric / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\BB11012502.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB11012503",
+    "date": "2025-01-11",
+    "customer": "Jennifer Calnan",
+    "contact": "Jennifer Calnan",
+    "expiry": "2025-01-11",
+    "items": [
+      {
+        "desc": "2 Seater Couch",
+        "qty": 1,
+        "price": 7695
+      },
+      {
+        "desc": "3 Seater Couch",
+        "qty": 1,
+        "price": 8960
+      },
+      {
+        "desc": "Large Ottoman",
+        "qty": 1,
+        "price": 0
+      },
+      {
+        "desc": "Small Ottoman",
+        "qty": 1,
+        "price": 0
+      }
+    ],
+    "notes": "1 x 2 Seater Couch to be re-upholstered in genuine leather (hazelwood taupe) / Add foam/webbing/dacron if necessary.\n1 x 3 Seater Couch to be re-upholstered in genuine leather (aztec beige) / Add foam/webbing/dacron if necessary.\n1 x Large Ottoman to be re-upholstered in genuine leather (hazelwood taupe) / Add foam/webbing/dacron if necessary.\n1 x Small Ottoman to be re-upholstered in genuine leather (aztec beige) / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O82 462 4598",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 2 Seater Couch to be re-upholstered in genuine leather (hazelwood taupe) / Add foam/webbing/dacron if necessary.\n1 x 3 Seater Couch to be re-upholstered in genuine leather (aztec beige) / Add foam/webbing/dacron if necessary.\n1 x Large Ottoman to be re-upholstered in genuine leather (hazelwood taupe) / Add foam/webbing/dacron if necessary.\n1 x Small Ottoman to be re-upholstered in genuine leather (aztec beige) / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\BB11012503.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP2101257",
+    "date": "2025-01-21",
+    "customer": "Michelle Collins",
+    "contact": "Michelle Collins",
+    "expiry": "21/01/2025",
+    "items": [
+      {
+        "desc": "L-Shaped suite",
+        "qty": 1,
+        "price": 7800
+      },
+      {
+        "desc": "L-Shaped suite loose covers",
+        "qty": 1,
+        "price": 3570
+      },
+      {
+        "desc": "Belly cushions ( 4 to L-shape, 1 to armchair)",
+        "qty": 5,
+        "price": 368
+      },
+      {
+        "desc": "Armchair - (to modify to fixed seat + new back cushion)",
+        "qty": 1,
+        "price": 2590
+      },
+      {
+        "desc": "Ottoman\nAll cushions and scatter cushions have zips",
+        "qty": 1,
+        "price": 1520
+      }
+    ],
+    "notes": "1 x L-shaped suite to be re-upholstered in Cullinan col Linen (beige)/ Add foam/webbing/dacron if necessary.\n1 x Loose covers for L-shaped suite - seat only (not cushions) in Cullinan col Linen (beige)\n1 x Ottoman to be re-upholstered in cullinan col Linen (beige) Add foam/webbing/dacron if necessary.\n1 x Armchair to be re-upholstered in cullinan col Linen (beige)/ Add foam/webbing/dacron if necessary.\nModification to chair. Fixed seat, New back cushion (feather) in Cullinan col Linen\nModification to chair. 1 x New belly cushion (feather) in Cullinan col Peat\n5 x Back cushions of L-suite, feather inners in Cullinan col Linen (beige) / Add foam/webbing/dacron if necessary.\n4 x New Belly cushions  - cover & feather inners in Cullinan col Peat (blackish)/ Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O823930248",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "16 Fairway Avenue, Dowerglen    ext 2",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x L-shaped suite to be re-upholstered in Cullinan col Linen (beige)/ Add foam/webbing/dacron if necessary.\n1 x Loose covers for L-shaped suite - seat only (not cushions) in Cullinan col Linen (beige)\n1 x Ottoman to be re-upholstered in cullinan col Linen (beige) Add foam/webbing/dacron if necessary.\n1 x Armchair to be re-upholstered in cullinan col Linen (beige)/ Add foam/webbing/dacron if necessary.\nModification to chair. Fixed seat, New back cushion (feather) in Cullinan col Linen\nModification to chair. 1 x New belly cushion (feather) in Cullinan col Peat\n5 x Back cushions of L-suite, feather inners in Cullinan col Linen (beige) / Add foam/webbing/dacron if necessary.\n4 x New Belly cushions  - cover & feather inners in Cullinan col Peat (blackish)/ Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP2101257 Michelle Collins Amended.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP2201252",
+    "date": "2025-01-22",
+    "customer": "Kyle & Rosa",
+    "contact": "Kyle & Rosa",
+    "expiry": "22/01/2025",
+    "items": [
+      {
+        "desc": "Recliner",
+        "qty": 1,
+        "price": 3980
+      },
+      {
+        "desc": "Ottoman",
+        "qty": 1,
+        "price": 1560
+      },
+      {
+        "desc": "Bar stools (seat and back)",
+        "qty": 2,
+        "price": 760
+      },
+      {
+        "desc": "Bar stools (seat only)",
+        "qty": 6,
+        "price": 320
+      }
+    ],
+    "notes": "1 x Recliner re-upholster - Fabric Frikie col Cream - Fix mechanism and foot rest / Add foam/webbing/dacron if necessary.\n1 x Ottoman re-upholster - Fabric Hemingway col Parchment - New foam and webbing\n2 x Bar stools (seat and back) re-upholster - Hemingway col Parchment /Add foam/webbing/dacron if necessary\n6 x Bar stools (seat only) re-upholster - Hemingway col Parchment /Add foam/webbing/dacron if necessary",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O836310790",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Recliner re-upholster - Fabric Frikie col Cream - Fix mechanism and foot rest / Add foam/webbing/dacron if necessary.\n1 x Ottoman re-upholster - Fabric Hemingway col Parchment - New foam and webbing\n2 x Bar stools (seat and back) re-upholster - Hemingway col Parchment /Add foam/webbing/dacron if necessary\n6 x Bar stools (seat only) re-upholster - Hemingway col Parchment /Add foam/webbing/dacron if necessary",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP2201252 Kyle & Rosa.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP2201254",
+    "date": "2025-01-22",
+    "customer": "TNC Logistics PTY Ltd",
+    "contact": "Eleanor",
+    "expiry": "22/01/2025",
+    "items": [
+      {
+        "desc": "Set of 9 seat and back cushions\nWhite Marine Vinyl",
+        "qty": 1,
+        "price": 8625
+      }
+    ],
+    "notes": "3 x Short back cushions - White marine vinyl\n2 x Long back cushions - White marine vinyl\n2 x Square seat cushions - White marine vinyl\n2 x Long seat cushions - White marine Vinyl",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O647586224 / 0110523724",
+    "email": "charles@tnclogistics.co.za",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "P.O. Box 82248, Southdale 2125  VAT: 4880271533                          REG: 2015/304035/07",
+    "projectReference": "Cushions",
+    "introduction": "3 x Short back cushions - White marine vinyl\n2 x Long back cushions - White marine vinyl\n2 x Square seat cushions - White marine vinyl\n2 x Long seat cushions - White marine Vinyl",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP2201254 Charles TNC Logistics.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP23012501",
+    "date": "2025-01-23",
+    "customer": "Seva Designs",
+    "contact": "Rhona",
+    "expiry": "23/01/2025",
+    "items": [
+      {
+        "desc": "Sofa repairs to bases",
+        "qty": 2,
+        "price": 585
+      }
+    ],
+    "notes": "2 x Sofas - Repairs to bases.  Strip base, take off old webbing and replace with new",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O824548924",
+    "email": "rhona@sevadesign.co.za",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "15 Twin Palms, 68 Second Ave     Ravenswood, Boksburg          Gate press 115 Option 1",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x Sofas - Repairs to bases.  Strip base, take off old webbing and replace with new",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012501 Seva Design.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP23012502",
+    "date": "2025-01-23",
+    "customer": "Aksa Thema",
+    "contact": "Aksa Thema",
+    "expiry": "23/01/2025",
+    "items": [
+      {
+        "desc": "Armchair",
+        "qty": 1,
+        "price": 2390
+      },
+      {
+        "desc": "2 division sofa",
+        "qty": 1,
+        "price": 3830
+      },
+      {
+        "desc": "3 division sofa",
+        "qty": 1,
+        "price": 4380
+      },
+      {
+        "desc": "Dining chairs",
+        "qty": 6,
+        "price": 385
+      },
+      {
+        "desc": "Collection & delivery - Springs",
+        "qty": 1,
+        "price": 160
+      }
+    ],
+    "notes": "1 x Armchair re-upholster in Byron fabric (colour to specify still) / Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.\n1 x 3 division sofa re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.\nAll scatter cushions for sofa and armchair to be covered in the same Byron fabric\n6 x Dining chair seats only re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O834891100",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Springs",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Armchair re-upholster in Byron fabric (colour to specify still) / Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.\n1 x 3 division sofa re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.\nAll scatter cushions for sofa and armchair to be covered in the same Byron fabric\n6 x Dining chair seats only re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012502 Aksa Themba (1).xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP23012503",
+    "date": "2025-01-23",
+    "customer": "Aksa Thema",
+    "contact": "Aksa Thema",
+    "expiry": "23/01/2025",
+    "items": [
+      {
+        "desc": "Armchair",
+        "qty": 1,
+        "price": 5720
+      },
+      {
+        "desc": "2 division sofa",
+        "qty": 1,
+        "price": 8585
+      },
+      {
+        "desc": "3 division sofa",
+        "qty": 1,
+        "price": 10960
+      },
+      {
+        "desc": "Dining chairs",
+        "qty": 6,
+        "price": 495
+      },
+      {
+        "desc": "Collection & delivery - Springs",
+        "qty": 1,
+        "price": 160
+      }
+    ],
+    "notes": "1 x Armchair re-upholster in Cream/beige leather (colour to specify still) / Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in Cream/beige leather (colour to specify still)/ Add foam/webbing/dacron if necessary.\n1 x 3 division sofa re-upholster in Cream.beige leather (colour to specify still) /Add foam/webbing/dacron if necessary\nAll scatter cushions for sofa and armchair to be covered in the same leather\n6 x Dining chair seats only re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O834891100",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Springs",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Armchair re-upholster in Cream/beige leather (colour to specify still) / Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in Cream/beige leather (colour to specify still)/ Add foam/webbing/dacron if necessary.\n1 x 3 division sofa re-upholster in Cream.beige leather (colour to specify still) /Add foam/webbing/dacron if necessary\nAll scatter cushions for sofa and armchair to be covered in the same leather\n6 x Dining chair seats only re-upholster in Byron fabric (colour to specify still)/ Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012503 Aksa Therma (leather).xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP23012504",
+    "date": "2025-01-23",
+    "customer": "Janice Botes",
+    "contact": "Janice Botes",
+    "expiry": "23/01/2025",
+    "items": [
+      {
+        "desc": "New seat cushions",
+        "qty": 2,
+        "price": 520
+      }
+    ],
+    "notes": "2 x New seat cushions. New Foam 120 high density in Exetor col Oceana",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O832786383",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x New seat cushions. New Foam 120 high density in Exetor col Oceana",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP23012504 Janice Botes.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP24012501",
+    "date": "2025-01-24",
+    "customer": "Humbulani",
+    "contact": "Humbulani",
+    "expiry": "24/01/2025",
+    "items": [
+      {
+        "desc": "3 Division sofa with 1 x arm\nIncluding velvet fabric",
+        "qty": 1,
+        "price": 3700
+      },
+      {
+        "desc": "Collection & Delivery - Gezina, PTA",
+        "qty": 1,
+        "price": 400
+      }
+    ],
+    "notes": "1 x 3 division sofa with 1 x armin Royal Velvet / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O794578301",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Gezina, Pretoria",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 3 division sofa with 1 x armin Royal Velvet / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP24012501 Humbulani.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP24012502",
+    "date": "2025-01-24",
+    "customer": "Fhumbulani",
+    "contact": "Fhumbulani",
+    "expiry": "24/01/2025",
+    "items": [
+      {
+        "desc": "3 Division sofa - including micro hide synthetic",
+        "qty": 1,
+        "price": 4660
+      },
+      {
+        "desc": "2 Division sofa - including Hemingway fabric (Colour?)",
+        "qty": 1,
+        "price": 3070
+      }
+    ],
+    "notes": "1 x 3 disivion sofa in Synthetic Micro Hide  / Add foam/webbing/dacron if necessary.\n1 x 2 disivion sofa in Hemingway (stain resistant fabric)  / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O768537277",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 3 disivion sofa in Synthetic Micro Hide  / Add foam/webbing/dacron if necessary.\n1 x 2 disivion sofa in Hemingway (stain resistant fabric)  / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP24012502 Fhumbulani.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP24012503",
+    "date": "2025-01-24",
+    "customer": "Ruby",
+    "contact": "Ruby",
+    "expiry": "24/01/2025",
+    "items": [
+      {
+        "desc": "2 Division sofa",
+        "qty": 2,
+        "price": 7925
+      },
+      {
+        "desc": "Armchair\nLeather colour still to confirm",
+        "qty": 1,
+        "price": 5500
+      }
+    ],
+    "notes": "2 x 2 division sofas re-upholster in leather / Add foam/webbing/dacron if necessary.\n1 x Armchair re-upholster in leather / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O825380559",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x 2 division sofas re-upholster in leather / Add foam/webbing/dacron if necessary.\n1 x Armchair re-upholster in leather / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP24012503 Ruby.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP250120",
+    "date": "2025-01-25",
+    "customer": "COD",
+    "contact": "Michelle Collins",
+    "expiry": "2025-01-27",
+    "items": [
+      {
+        "desc": "L-Shaped suite",
+        "qty": 1,
+        "price": 7800
+      },
+      {
+        "desc": "5 x Back cushions with feather inners for L-Shaped suite",
+        "qty": 5,
+        "price": 570
+      },
+      {
+        "desc": "4 x New feather belly cushions",
+        "qty": 4,
+        "price": 480
+      },
+      {
+        "desc": "Ottoman to match L-suite",
+        "qty": 1,
+        "price": 1520
+      },
+      {
+        "desc": "Armchair",
+        "qty": 1,
+        "price": 2100
+      },
+      {
+        "desc": "Collection & delivery",
+        "qty": 1,
+        "price": 0
+      }
+    ],
+    "notes": "1 x L-Shaped suite to be re-upholstered in Cullinan col Linen (beige) / Add foam/webbing/dacron if necessary\n1 x Ottoman to be re-upholstered in Cullinan col Linen (beige) / Add foam/webbing/dacron if necessary\n1 x Armchair to be re-uipholstered in Cullinan col Linen (beige) Add foam/add webbing/dacron if necessary\n5 x Back cushions of L-Suite new feather inners in Cullinan col Linen (beige)\n4 x New belly cushions for L-Suite - Cover and feather inners in Cullinan col Peat (blackish)",
+    "status": "Draft",
+    "terms": true,
+    "phone": "082-393-0248",
+    "email": "michelle@acollins.co.za",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "16 Fairway Avenue, Dowerglen   ext 2",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x L-Shaped suite to be re-upholstered in Cullinan col Linen (beige) / Add foam/webbing/dacron if necessary\n1 x Ottoman to be re-upholstered in Cullinan col Linen (beige) / Add foam/webbing/dacron if necessary\n1 x Armchair to be re-uipholstered in Cullinan col Linen (beige) Add foam/add webbing/dacron if necessary\n5 x Back cushions of L-Suite new feather inners in Cullinan col Linen (beige)\n4 x New belly cushions for L-Suite - Cover and feather inners in Cullinan col Peat (blackish)",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP250120-1 Michelle Collins.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012501",
+    "date": "2025-01-27",
+    "customer": "Jaco Niemand",
+    "contact": "Jaco Niemand",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "Sofa seat cushions",
+        "qty": 2,
+        "price": 420
+      },
+      {
+        "desc": "Sofa back cushion",
+        "qty": 1,
+        "price": 320
+      }
+    ],
+    "notes": "2 x Sofa seat cushions - New medium density foam with dacron wrapping\n1 x Sofa back cushion - extra comforelle filling with dacron wrapping",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O837693157",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x Sofa seat cushions - New medium density foam with dacron wrapping\n1 x Sofa back cushion - extra comforelle filling with dacron wrapping",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012501 Jaco Niemand.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012502",
+    "date": "2025-01-27",
+    "customer": "Paula",
+    "contact": "Paula",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "3 Division Sofa",
+        "qty": 1,
+        "price": 10300
+      },
+      {
+        "desc": "2 Division Sofa (incl repair back)",
+        "qty": 1,
+        "price": 8120
+      },
+      {
+        "desc": "Armchair",
+        "qty": 1,
+        "price": 5500
+      }
+    ],
+    "notes": "1 x 3 division sofa re-upholster in black leather. Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in black leather & repairs to back  frame./ Add foam/webbing/dacron if necessary.\n1 x Armchair re-upholster in black leather/ Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O833300095",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 3 division sofa re-upholster in black leather. Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in black leather & repairs to back  frame./ Add foam/webbing/dacron if necessary.\n1 x Armchair re-upholster in black leather/ Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012502 Paula.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012503",
+    "date": "2025-01-27",
+    "customer": "Grant van Zyl",
+    "contact": "Grant van Zyl",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "Bike Seat",
+        "qty": 1,
+        "price": 850
+      }
+    ],
+    "notes": "1 x Bike Seat - re-upholster in black vinyl - Add foam where necessary",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O795010932",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Bike Seat - re-upholster in black vinyl - Add foam where necessary",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012503 Grant van Zyl.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012504",
+    "date": "2025-01-27",
+    "customer": "Nicolo Giuricich",
+    "contact": "Nicolo Giuricich",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "Seat cushion covers",
+        "qty": 1,
+        "price": 2385
+      }
+    ],
+    "notes": "3 x seat cushions - recover with outside back of sofa + New synthetic leather to match existing",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O832356003",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "3 x seat cushions - recover with outside back of sofa + New synthetic leather to match existing",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012504 Nicolo Giuricich.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012505",
+    "date": "2025-01-27",
+    "customer": "Loamie van Zyl",
+    "contact": "Loamie van Zyl",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "2 piece corner suite",
+        "qty": 1,
+        "price": 7540
+      }
+    ],
+    "notes": "1 x 2 piece corner suite re-upholster in Hemingway col Shadow.  Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O613247744",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 2 piece corner suite re-upholster in Hemingway col Shadow.  Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012505 Loamie van Wyk.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012506",
+    "date": "2025-01-27",
+    "customer": "Rudy",
+    "contact": "Rudy",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "Seat cushions",
+        "qty": 4,
+        "price": 450
+      },
+      {
+        "desc": "Back scatter cushions",
+        "qty": 6,
+        "price": 228
+      },
+      {
+        "desc": "Throws for pets",
+        "qty": 3,
+        "price": 240
+      }
+    ],
+    "notes": "4 x Recover seat cushions in Dover col Slate / dacron - Including dacron wrapped\n6 x Recover scatter cushions in Dover col Slate\n3 x New throws for pets",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O651634958",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "4 x Recover seat cushions in Dover col Slate / dacron - Including dacron wrapped\n6 x Recover scatter cushions in Dover col Slate\n3 x New throws for pets",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012506 Rudy.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012507",
+    "date": "2025-01-27",
+    "customer": "Zeca Marques",
+    "contact": "Zeca Marques",
+    "expiry": "27 /01/2025",
+    "items": [
+      {
+        "desc": "Recliner",
+        "qty": 1,
+        "price": 3880
+      },
+      {
+        "desc": "Dining chairs - seat and back",
+        "qty": 6,
+        "price": 690
+      }
+    ],
+    "notes": "1 x Recliner re-upholster in Cullinan col Oxford Blue / Add foam/webbing/dacron if necessary.\n6 x Dining chairs re-upholster in Fikie col Coffee / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O828965563",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Recliner re-upholster in Cullinan col Oxford Blue / Add foam/webbing/dacron if necessary.\n6 x Dining chairs re-upholster in Fikie col Coffee / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012507 Zeca Marques.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012508",
+    "date": "2025-01-27",
+    "customer": "Thommie Burger",
+    "contact": "Thommie Burger",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "3 division sofas",
+        "qty": 2,
+        "price": 3600
+      }
+    ],
+    "notes": "2 x 3 division sofas re-upholster in Kingston col Sea - New seat foam. / Add foam/webbing/dacron if necessary.\nAdd filling to existing back cushions to make them firmer",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O822595397",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Kempton Park",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x 3 division sofas re-upholster in Kingston col Sea - New seat foam. / Add foam/webbing/dacron if necessary.\nAdd filling to existing back cushions to make them firmer",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012508 Thommie Burger.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012509",
+    "date": "2025-01-27",
+    "customer": "Navin",
+    "contact": "Navin",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "3 Division sofa",
+        "qty": 1,
+        "price": 4520
+      },
+      {
+        "desc": "2 Division sofa",
+        "qty": 1,
+        "price": 3540
+      },
+      {
+        "desc": "Armchair",
+        "qty": 1,
+        "price": 2560
+      },
+      {
+        "desc": "Dining room chairs",
+        "qty": 6,
+        "price": 810
+      }
+    ],
+    "notes": "1 x 3 division sofa re-upholster in Byron fabric  + Fix Frame/ Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in Byron fabric / Add foam/webbing/dacron if necessary.\n1 x Armchair re-upholster in Byron fabric / Add foam/webbing/dacron if necessary.\n6 x Dining chairs, seat and back. New seat foam. Re-upholster in Byron fabric",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O828207247",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Midrand",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 3 division sofa re-upholster in Byron fabric  + Fix Frame/ Add foam/webbing/dacron if necessary.\n1 x 2 division sofa re-upholster in Byron fabric / Add foam/webbing/dacron if necessary.\n1 x Armchair re-upholster in Byron fabric / Add foam/webbing/dacron if necessary.\n6 x Dining chairs, seat and back. New seat foam. Re-upholster in Byron fabric",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012509 Navin .xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP27012510",
+    "date": "2025-01-27",
+    "customer": "Perry Kum",
+    "contact": "Perry Kum",
+    "expiry": "27/01/2025",
+    "items": [
+      {
+        "desc": "Seat and back cushions\nTo re-use zips of back cushions",
+        "qty": 3,
+        "price": 860
+      }
+    ],
+    "notes": "3 x sets of recover seat anc back cushions in Nashville col 2 Trellis",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O769921537",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "3 x sets of recover seat anc back cushions in Nashville col 2 Trellis",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP27012510 Perry Kum.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP28012501",
+    "date": "2025-01-28",
+    "customer": "Jandri Ueckermann",
+    "contact": "Jandri Ueckermann",
+    "expiry": "28/01/2025",
+    "items": [
+      {
+        "desc": "Seat & Back cushion sets",
+        "qty": 4,
+        "price": 950
+      },
+      {
+        "desc": "Cane join repairs",
+        "qty": 1,
+        "price": 2400
+      },
+      {
+        "desc": "Collection & Delivery",
+        "qty": 1,
+        "price": 0
+      }
+    ],
+    "notes": "4 x Sets of new Seat/Back foam cushions in Hemingway col Shadow (grey)\nRepairs to joins on cane suite - 1 x 2 diision sofa and 2 x armchairs - Synthetic cane strips to match existing colour",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O769418598",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Edenvale",
+    "projectReference": "Pvt Residence",
+    "introduction": "4 x Sets of new Seat/Back foam cushions in Hemingway col Shadow (grey)\nRepairs to joins on cane suite - 1 x 2 diision sofa and 2 x armchairs - Synthetic cane strips to match existing colour",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP28012501 Jandri Ueckermann (1).xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP28012503",
+    "date": "2025-01-28",
+    "customer": "Clive Bales",
+    "contact": "Clive Bales",
+    "expiry": "28/01/2025",
+    "items": [
+      {
+        "desc": "Size 1800",
+        "qty": 6,
+        "price": 468
+      },
+      {
+        "desc": "Size 2100",
+        "qty": 2,
+        "price": 546
+      },
+      {
+        "desc": "Size 2400",
+        "qty": 1,
+        "price": 624
+      },
+      {
+        "desc": "Size 2500",
+        "qty": 1,
+        "price": 650
+      },
+      {
+        "desc": "Size 2550",
+        "qty": 1,
+        "price": 663
+      },
+      {
+        "desc": "Size 2600",
+        "qty": 2,
+        "price": 676
+      },
+      {
+        "desc": "Size 2640",
+        "qty": 1,
+        "price": 686
+      },
+      {
+        "desc": "Size 3000",
+        "qty": 2,
+        "price": 780
+      }
+    ],
+    "notes": "16 x various sizes Church Kneelers - Upholster with supplied vinyl - Foam to be added as per previous orders",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O724345995",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Catholic Church - Rivionia",
+    "introduction": "16 x various sizes Church Kneelers - Upholster with supplied vinyl - Foam to be added as per previous orders",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP28012503 Clive Bales Rivonia Church.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP30012501",
+    "date": "2025-01-30",
+    "customer": "Eben",
+    "contact": "Eben",
+    "expiry": "30/01/2025",
+    "items": [
+      {
+        "desc": "Dining Chairs",
+        "qty": 4,
+        "price": 240
+      },
+      {
+        "desc": "Wingback",
+        "qty": 1,
+        "price": 1200
+      },
+      {
+        "desc": "Collection & Delivery - Riviera, Pretoria",
+        "qty": 2,
+        "price": 136
+      }
+    ],
+    "notes": "4 x Dining chair seats only re-upholster in clients fabric/ Add foam/webbing/dacron if necessary.\n1 x Wingback re-upholster in clients fabric / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O719165066",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Riviera - Pretoria",
+    "projectReference": "Pvt Residence",
+    "introduction": "4 x Dining chair seats only re-upholster in clients fabric/ Add foam/webbing/dacron if necessary.\n1 x Wingback re-upholster in clients fabric / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP30012501 Eben.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP31012501",
+    "date": "2025-01-31",
+    "customer": "Naomi",
+    "contact": "Naomi",
+    "expiry": "31/01/2025",
+    "items": [
+      {
+        "desc": "Option 1 - Soil resistant fabric (black)",
+        "qty": 1,
+        "price": 19800
+      },
+      {
+        "desc": "OR\nOption 2 - Labour only - Synthetic to be supplied\nby Kaplan",
+        "qty": 1,
+        "price": 15000
+      }
+    ],
+    "notes": "1 x 3 division recliner sofa re-upholster in synthetic or fabric - 2 x options / Add foam/webbing/dacron if necessary.\n1 x 2 division recliner sofa re-upholster in synthetic or fabric - 2 x options / Add foam/webbing/dacron if necessary.\n1 x armchair recliner re-upholster in synthetic or fabric - 2 x options / Add foam/webbing/dacron if necessary.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O614619115",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Sandringham",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 3 division recliner sofa re-upholster in synthetic or fabric - 2 x options / Add foam/webbing/dacron if necessary.\n1 x 2 division recliner sofa re-upholster in synthetic or fabric - 2 x options / Add foam/webbing/dacron if necessary.\n1 x armchair recliner re-upholster in synthetic or fabric - 2 x options / Add foam/webbing/dacron if necessary.",
+    "sourcePricingWarnings": [
+      "Source lists alternative options; select the required option before issuing"
+    ],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP31012501 Naomi.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP31012503",
+    "date": "2025-01-31",
+    "customer": "Paul Jabour",
+    "contact": "Paul Jabour",
+    "expiry": "31/01/2025",
+    "items": [
+      {
+        "desc": "3 piece suite - New foam seat and back cushions",
+        "qty": 1,
+        "price": 5350
+      }
+    ],
+    "notes": "3 piece outdoor set (3.2.1) New seat and back cushions in outdoor fabric - Bahamas col blue\n3 seater - 1 x new seat cushion with 3 x back wedges cushions\n2 seater - 1 x new seat cushion with 2 x back wedge cushions\nArmchair - 1 x new seat cushion with 2 x back wedge cushions",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O836426833",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "Randburg",
+    "projectReference": "Pvt Residence",
+    "introduction": "3 piece outdoor set (3.2.1) New seat and back cushions in outdoor fabric - Bahamas col blue\n3 seater - 1 x new seat cushion with 3 x back wedges cushions\n2 seater - 1 x new seat cushion with 2 x back wedge cushions\nArmchair - 1 x new seat cushion with 2 x back wedge cushions",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP31012503 Paul Jabour.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "RP31012504",
+    "date": "2025-01-31",
+    "customer": "Lesley Deeley",
+    "contact": "Lesley Deeley",
+    "expiry": "31/01/2025",
+    "items": [
+      {
+        "desc": "Bench cushions",
+        "qty": 2,
+        "price": 1350
+      },
+      {
+        "desc": "44cm seat cushions",
+        "qty": 10,
+        "price": 300
+      }
+    ],
+    "notes": "2 x Long bench cushions - New HD foam 100mm thick with dacron wrap - client to supply own fabric\n2 x New seat foam cushions 44w x 44d x 75h HD foam with dacro wrap - Clients blue damask fabric\n8 x New seat foam cushions 44w x 44d x 75h HD foam with dacro wrap - Clients blue stripe fabric",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O823226125",
+    "email": "",
+    "preparedBy": "Ryanie Primrose",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x Long bench cushions - New HD foam 100mm thick with dacron wrap - client to supply own fabric\n2 x New seat foam cushions 44w x 44d x 75h HD foam with dacro wrap - Clients blue damask fabric\n8 x New seat foam cushions 44w x 44d x 75h HD foam with dacro wrap - Clients blue stripe fabric",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JANUARY\\RP31012504 Lesley Deeley.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB15072505",
+    "date": "2025-07-15",
+    "customer": "Dilshaad Pootawala Gani",
+    "contact": "Dilshaad Pootawala Gani",
+    "expiry": "2025-08-27",
+    "items": [
+      {
+        "desc": "Patio Set - Fabric",
+        "qty": 16,
+        "price": 100
+      },
+      {
+        "desc": "Patio Set - Labour",
+        "qty": 1,
+        "price": 1495
+      },
+      {
+        "desc": "Patio Set - Foam, decron, consumables",
+        "qty": 1,
+        "price": 1185
+      },
+      {
+        "desc": "Ottoman - Leather",
+        "qty": 1,
+        "price": 1700
+      },
+      {
+        "desc": "Ottoman - Labour",
+        "qty": 2,
+        "price": 685
+      },
+      {
+        "desc": "Ottoman - Foam, decron, consumables",
+        "qty": 2,
+        "price": 495
+      },
+      {
+        "desc": "3,2,1 Lounge - Leather",
+        "qty": 5,
+        "price": 1700
+      },
+      {
+        "desc": "3,2,1 Lounge - Fabric",
+        "qty": 16,
+        "price": 195.5
+      },
+      {
+        "desc": "3,2,1 Lounge - Labour",
+        "qty": 1,
+        "price": 4650
+      },
+      {
+        "desc": "3,2,1 Lounge - Foam, decron, consumables",
+        "qty": 1,
+        "price": 2655
+      }
+    ],
+    "notes": "1 x 6 Seater L Shape Patio Set to be re-upholstered in outdoor fabric (Budgeted R100 pm), new foam/decron if required.\n1 x 3,2,1 Lounge Suite to be re-upholstered in Genuine Leather Uppers (98349) & Micro Hide (Grey/TBC) sides and backs.\n2 x Ottoman (Medium) to be re-upholstered in Genuine Leather (98349), new foam/decron to be added.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O71 255 5802",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 6 Seater L Shape Patio Set to be re-upholstered in outdoor fabric (Budgeted R100 pm), new foam/decron if required.\n1 x 3,2,1 Lounge Suite to be re-upholstered in Genuine Leather Uppers (98349) & Micro Hide (Grey/TBC) sides and backs.\n2 x Ottoman (Medium) to be re-upholstered in Genuine Leather (98349), new foam/decron to be added.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JULY\\BB15072505.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB10062501",
+    "date": "2025-06-10",
+    "customer": "Carol",
+    "contact": "Carol",
+    "expiry": "2025-07-10",
+    "items": [
+      {
+        "desc": "2 Seater Couch",
+        "qty": 2,
+        "price": 2600
+      },
+      {
+        "desc": "Scatter cushions",
+        "qty": 4,
+        "price": 220
+      },
+      {
+        "desc": "Occasional Chair",
+        "qty": 2,
+        "price": 920
+      },
+      {
+        "desc": "Ottoman",
+        "qty": 1,
+        "price": 550
+      }
+    ],
+    "notes": "2 x 2 Seaters to be re-upholstered in supplied fabric, foam/decron/webbing to be added.\n4 x Scatter Cushions (60 x 60) piped with supplied fabric, Inners with zips to be added.\n2 x Occasional chairs to be re-upholstered in supplied fabric, foam/decron/webbing to be added.\n1 x Ottoman to be re-upholstered in supplied fabric, foam/decron to be added.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O824453897",
+    "email": "",
+    "preparedBy": "Brian",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x 2 Seaters to be re-upholstered in supplied fabric, foam/decron/webbing to be added.\n4 x Scatter Cushions (60 x 60) piped with supplied fabric, Inners with zips to be added.\n2 x Occasional chairs to be re-upholstered in supplied fabric, foam/decron/webbing to be added.\n1 x Ottoman to be re-upholstered in supplied fabric, foam/decron to be added.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\JUNE\\BB10062501.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB1505202502",
+    "date": "2025-05-15",
+    "customer": "Angela",
+    "contact": "Angela",
+    "expiry": "2025-06-15",
+    "items": [
+      {
+        "desc": "2 Seater Couch",
+        "qty": 3,
+        "price": 3450
+      }
+    ],
+    "notes": "3 x 2 Seater to be re-upholstered in Genuine Leather uppers and Synthetic backs and sides all in Stone Color",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O824951002",
+    "email": "",
+    "preparedBy": "Brian",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "3 x 2 Seater to be re-upholstered in Genuine Leather uppers and Synthetic backs and sides all in Stone Color",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\MAY\\BB1505202502.pdf.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB15052506",
+    "date": "2025-05-15",
+    "customer": "CRISSY",
+    "contact": "CRISSY",
+    "expiry": "2025-06-15",
+    "items": [
+      {
+        "desc": "Leather & Synthetic leather - Material",
+        "qty": 1,
+        "price": 1895
+      },
+      {
+        "desc": "Consumables - Foam, Decron, Webbing, etc.",
+        "qty": 1,
+        "price": 255
+      },
+      {
+        "desc": "Labour - 2 days",
+        "qty": 2,
+        "price": 500
+      }
+    ],
+    "notes": "1 x 1 Seater to be re-upholstered in Genuine Leather uppers and Synthetic backs and sides all in Stone Color",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O826018814",
+    "email": "",
+    "preparedBy": "Brian",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 1 Seater to be re-upholstered in Genuine Leather uppers and Synthetic backs and sides all in Stone Color",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\MAY\\BB15052506.pdf.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB29102502",
+    "date": "2025-10-29",
+    "customer": "Brett Mc Alister",
+    "contact": "Brett Mc Alister",
+    "expiry": "2025-10-29",
+    "items": [
+      {
+        "desc": "Three seater couch - Polyprop",
+        "qty": 6,
+        "price": 3.8
+      },
+      {
+        "desc": "Three seater couch - Foam",
+        "qty": 1,
+        "price": 1100
+      },
+      {
+        "desc": "Three seater couch - Labour",
+        "qty": 2,
+        "price": 650
+      },
+      {
+        "desc": "Three seater couch - Consumables",
+        "qty": 2,
+        "price": 180
+      }
+    ],
+    "notes": "Repair of two three seater couches - New polyprop, webbing, 4\" foam (high density), etc.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O84 522 5544",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "Repair of two three seater couches - New polyprop, webbing, 4\" foam (high density), etc.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\OCT\\BB29102502.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB11092501",
+    "date": "2025-09-11",
+    "customer": "Dilshaad Pootawala Gani",
+    "contact": "Dilshaad Pootawala Gani",
+    "expiry": "2025-09-11",
+    "items": [
+      {
+        "desc": "Patio Set - Fabric",
+        "qty": 7,
+        "price": 126.5
+      },
+      {
+        "desc": "Patio Set - Labour (13 cushions) + (3 scatters)",
+        "qty": 16,
+        "price": 140
+      },
+      {
+        "desc": "Patio Set - Foam, decron, consumables",
+        "qty": 16,
+        "price": 120
+      },
+      {
+        "desc": "Ottoman - Leather & fabric",
+        "qty": 0,
+        "price": 0
+      },
+      {
+        "desc": "Ottoman - Labour",
+        "qty": 2,
+        "price": 140
+      },
+      {
+        "desc": "Ottoman - Foam, decron, consumables",
+        "qty": 2,
+        "price": 120
+      },
+      {
+        "desc": "3,2,1 Lounge - Leather (5 Hides)",
+        "qty": 21.75,
+        "price": 510
+      },
+      {
+        "desc": "3,2,1 Lounge - Fabric",
+        "qty": 10,
+        "price": 126.5
+      },
+      {
+        "desc": "3,2,1 Lounge - Labour",
+        "qty": 1,
+        "price": 4650
+      },
+      {
+        "desc": "3,2,1 Lounge - Foam, decron, consumables",
+        "qty": 1,
+        "price": 2655
+      },
+      {
+        "desc": "Kids 1 - Leather",
+        "qty": 0,
+        "price": 0
+      },
+      {
+        "desc": "Kids 1 - Labour",
+        "qty": 1,
+        "price": 140
+      },
+      {
+        "desc": "Kids 1 - Foam, decron, consumables",
+        "qty": 1,
+        "price": 130
+      },
+      {
+        "desc": "Scatter Cushions - Fabric",
+        "qty": 0,
+        "price": 0
+      },
+      {
+        "desc": "Scatter Cushions - Labour",
+        "qty": 2,
+        "price": 120
+      },
+      {
+        "desc": "Scatter Cushions - Foam, decron, zips, consumables",
+        "qty": 2,
+        "price": 80
+      }
+    ],
+    "notes": "1 x 6 Seater L Shape Patio Set to be re-upholstered in All Weather fabric - Grey (R126.50 pm), new foam/decron to be added.\n1 x 3,2,1 Lounge Suite to be re-upholstered in Genuine Leather Uppers (98349) & Young Buck (Grey) sides and backs,new foam,etc.\n2 x Ottoman (Medium) to be re-upholstered in Genuine Leather Uppers (98349) & Young Buck (Grey) sides and backs, new foam,etc.\n1 x Kids 1 Seater to be re-upholstered in Genuine Leather (98349), new foam,etc.\n2 x Scatter Cushions (45 x 45) to be made in Genuine Leather Uppers (98349) & Young Buck (Grey), Inners and zips.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O71 255 5802",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x 6 Seater L Shape Patio Set to be re-upholstered in All Weather fabric - Grey (R126.50 pm), new foam/decron to be added.\n1 x 3,2,1 Lounge Suite to be re-upholstered in Genuine Leather Uppers (98349) & Young Buck (Grey) sides and backs,new foam,etc.\n2 x Ottoman (Medium) to be re-upholstered in Genuine Leather Uppers (98349) & Young Buck (Grey) sides and backs, new foam,etc.\n1 x Kids 1 Seater to be re-upholstered in Genuine Leather (98349), new foam,etc.\n2 x Scatter Cushions (45 x 45) to be made in Genuine Leather Uppers (98349) & Young Buck (Grey), Inners and zips.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2025\\QUOTES\\2025\\2025\\SEPT\\BB11092501.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB02042601",
+    "date": "2026-04-02",
+    "customer": "Mieke Haasbroek",
+    "contact": "Mieke Haasbroek",
+    "expiry": "2026-05-02",
+    "items": [
+      {
+        "desc": "Wingback, etc. - Fabric",
+        "qty": 10,
+        "price": 405
+      },
+      {
+        "desc": "Wingback, etc. - Foam",
+        "qty": 1,
+        "price": 320
+      },
+      {
+        "desc": "Wingback, etc. - Labour",
+        "qty": 1,
+        "price": 1800
+      },
+      {
+        "desc": "Wingback, etc. - Consumables",
+        "qty": 1,
+        "price": 140
+      }
+    ],
+    "notes": "1 x Wing back chair + Ottoman + Cushion to be reupholstered in 8m - Hertex Atlas (Jade) fabric. New foam, decron, etc. included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O790864073",
+    "email": "",
+    "preparedBy": "Brian Bate",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Wing back chair + Ottoman + Cushion to be reupholstered in 8m - Hertex Atlas (Jade) fabric. New foam, decron, etc. included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\APR\\BB02042601.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB07042601",
+    "date": "2026-04-07",
+    "customer": "Jolene De Abreu",
+    "contact": "Jolene De Abreu",
+    "expiry": "2026-04-08",
+    "items": [
+      {
+        "desc": "Head Board - Fabric",
+        "qty": 2.5,
+        "price": 110
+      },
+      {
+        "desc": "Head Board - Foam",
+        "qty": 1,
+        "price": 340
+      },
+      {
+        "desc": "Head Board - Labour",
+        "qty": 1,
+        "price": 680
+      },
+      {
+        "desc": "Head Board - Consumables",
+        "qty": 1,
+        "price": 80
+      }
+    ],
+    "notes": "1 x Flat Panel Head Board to be reupholstered in 2.5m Sakubona fabric (Ash). New foam, etc. all included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O7 82 339 9842",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Flat Panel Head Board to be reupholstered in 2.5m Sakubona fabric (Ash). New foam, etc. all included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\APR\\BB07042601.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB12042602",
+    "date": "2026-04-12",
+    "customer": "Deon Govender",
+    "contact": "Deon Govender",
+    "expiry": "2026-04-23",
+    "items": [
+      {
+        "desc": "Three Seater - Leather",
+        "qty": 2,
+        "price": 1600
+      },
+      {
+        "desc": "Three Seater - Foam/comferel/decron",
+        "qty": 1,
+        "price": 365
+      },
+      {
+        "desc": "Three Seater - Labour",
+        "qty": 1,
+        "price": ""
+      },
+      {
+        "desc": "Three Seater - Consumables",
+        "qty": 1,
+        "price": 280
+      }
+    ],
+    "notes": "1 x Three seater couch seating to be reupholstered in 2 Hides - Genuine Leather (Brown).",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O82 818 1474",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "PVT Residence",
+    "introduction": "1 x Three seater couch seating to be reupholstered in 2 Hides - Genuine Leather (Brown).",
+    "sourcePricingWarnings": [
+      "Source has no unit price: Three Seater - Labour"
+    ],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\APR\\BB12042602.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB25082602",
+    "date": "2026-08-25",
+    "customer": "Bill Moseley",
+    "contact": "Bill Moseley",
+    "expiry": "2026-09-25",
+    "items": [
+      {
+        "desc": "Lounge Cushions - Fabric",
+        "qty": 28,
+        "price": 210
+      },
+      {
+        "desc": "Lounge Cushions - Foam/Spunbond/Decron/Comferel",
+        "qty": 1,
+        "price": 1950
+      },
+      {
+        "desc": "Lounge Cushions - Labour",
+        "qty": 1,
+        "price": 9500
+      },
+      {
+        "desc": "Lounge Cushions - Consumables",
+        "qty": 1,
+        "price": 250
+      }
+    ],
+    "notes": "1 x 3,2,1 Lounge Suite to be reupholstered with Exeter - (Stone) Fabric, New High density foam, spunbond, etc. included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O824910318",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "PVT Residence",
+    "introduction": "1 x 3,2,1 Lounge Suite to be reupholstered with Exeter - (Stone) Fabric, New High density foam, spunbond, etc. included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\AUG\\BB25082602.pdf.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB24072601",
+    "date": "2026-07-24",
+    "customer": "Houghton Golf Course",
+    "contact": "Stu Ross",
+    "expiry": "2026-08-24",
+    "items": [
+      {
+        "desc": "Tractor - Fabric",
+        "qty": 2,
+        "price": 165
+      },
+      {
+        "desc": "Tractor - Foam",
+        "qty": 1,
+        "price": 620
+      },
+      {
+        "desc": "Tractor - Labour",
+        "qty": 2,
+        "price": 650
+      },
+      {
+        "desc": "Tractor - Consumables",
+        "qty": 2,
+        "price": 25
+      },
+      {
+        "desc": "Lawnmower - Fabric",
+        "qty": 19,
+        "price": 165
+      },
+      {
+        "desc": "Lawnmower - Foam",
+        "qty": 1,
+        "price": 850
+      },
+      {
+        "desc": "Lawnmower - Labour",
+        "qty": 15,
+        "price": 650
+      },
+      {
+        "desc": "Lawnmower - Consumables",
+        "qty": 15,
+        "price": 25
+      },
+      {
+        "desc": "Golf Cart - Fabric",
+        "qty": 2,
+        "price": 165
+      },
+      {
+        "desc": "Golf Cart - Foam",
+        "qty": 1,
+        "price": 620
+      },
+      {
+        "desc": "Golf Cart - Labour",
+        "qty": 2,
+        "price": 650
+      },
+      {
+        "desc": "Golf Cart - Consumables",
+        "qty": 2,
+        "price": 25
+      }
+    ],
+    "notes": "2 x Tractor Seats to be reupholstered in 2m of All weather fabric. New 2\" & 1/2\" Foam, etc. all included.\n14 x Lawnmower Seats to be reupholstered in 17m of All weather fabric. New 1\" & 1/2\" Foam, etc. all included.\n1 x Golf Cart Bakkie Seats to be reupholstered in 2m of All weather fabric. New 2\" & 1/2\" Foam, etc. all included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O76 992 5053",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Tractor, Lawnmower & Golf Cart Seats",
+    "introduction": "2 x Tractor Seats to be reupholstered in 2m of All weather fabric. New 2\" & 1/2\" Foam, etc. all included.\n14 x Lawnmower Seats to be reupholstered in 17m of All weather fabric. New 1\" & 1/2\" Foam, etc. all included.\n1 x Golf Cart Bakkie Seats to be reupholstered in 2m of All weather fabric. New 2\" & 1/2\" Foam, etc. all included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\JULY\\BB24072601.pdf.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB01032603",
+    "date": "2026-03-01",
+    "customer": "David Santana",
+    "contact": "David Santana",
+    "expiry": "2026-04-01",
+    "items": [
+      {
+        "desc": "Front Seats - Fabric",
+        "qty": 0.5,
+        "price": 110
+      },
+      {
+        "desc": "Front Seats - Foam",
+        "qty": 0,
+        "price": 0
+      },
+      {
+        "desc": "Front Seats - Labour",
+        "qty": 2,
+        "price": 380
+      },
+      {
+        "desc": "Front Seats - Consumables",
+        "qty": 2,
+        "price": 65
+      },
+      {
+        "desc": "Rear Seats - Fabric",
+        "qty": 0.5,
+        "price": 110
+      },
+      {
+        "desc": "Rear Seats - Foam",
+        "qty": 0,
+        "price": 0
+      },
+      {
+        "desc": "Rear Seats - Labour",
+        "qty": 2,
+        "price": 380
+      },
+      {
+        "desc": "Rear Seats - Consumables",
+        "qty": 2,
+        "price": 65
+      },
+      {
+        "desc": "Rear Panels - Fabric",
+        "qty": 1,
+        "price": 110
+      },
+      {
+        "desc": "Rear Panels - Foam",
+        "qty": 1,
+        "price": 210
+      },
+      {
+        "desc": "Rear Panels - Labour",
+        "qty": 2,
+        "price": 380
+      },
+      {
+        "desc": "Rear Panels - Consumables",
+        "qty": 2,
+        "price": 65
+      }
+    ],
+    "notes": "2 x Front Seats base to be repaired/reupholstered in 0.5m Supreme Vinyl - Black fabric.\n2 x Rear Seats base to be repaired/reupholstered in 0.5m Supreme Vinyl - Black fabric.\n2 x Rear Panels to be repaired/reupholstered in 1m Supreme Vinyl - Black fabric. New 1/4\" Grey Foam.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O82 537 8660",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Motor Vehicle",
+    "introduction": "2 x Front Seats base to be repaired/reupholstered in 0.5m Supreme Vinyl - Black fabric.\n2 x Rear Seats base to be repaired/reupholstered in 0.5m Supreme Vinyl - Black fabric.\n2 x Rear Panels to be repaired/reupholstered in 1m Supreme Vinyl - Black fabric. New 1/4\" Grey Foam.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\MAR\\BB01032603.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB02032602",
+    "date": "2026-03-02",
+    "customer": "Marcelle Mcdonald",
+    "contact": "Marcelle Mcdonald",
+    "expiry": "2026-04-01",
+    "items": [
+      {
+        "desc": "Wingback - Fabric",
+        "qty": 11,
+        "price": 0
+      },
+      {
+        "desc": "Wingback - Foam",
+        "qty": 2,
+        "price": 480
+      },
+      {
+        "desc": "Wingback - Labour",
+        "qty": 2,
+        "price": 1200
+      },
+      {
+        "desc": "Wingback - Consumables",
+        "qty": 2,
+        "price": 280
+      },
+      {
+        "desc": "Two seater couch - Fabric",
+        "qty": 12,
+        "price": 0
+      },
+      {
+        "desc": "Two seater couch - Fabric",
+        "qty": 12,
+        "price": 0
+      },
+      {
+        "desc": "Two seater couch - Foam",
+        "qty": 2,
+        "price": 690
+      },
+      {
+        "desc": "Two seater couch - Labour",
+        "qty": 2,
+        "price": 2600
+      },
+      {
+        "desc": "Two seater couch - Consumables",
+        "qty": 1,
+        "price": 320
+      },
+      {
+        "desc": "Scatter cushions - Fabric",
+        "qty": 2,
+        "price": 225
+      },
+      {
+        "desc": "Scatter cushions - Inners",
+        "qty": 3,
+        "price": 85
+      },
+      {
+        "desc": "Scatter cushions - Labour",
+        "qty": 3,
+        "price": 110
+      },
+      {
+        "desc": "Scatter cushions - Consumables",
+        "qty": 3,
+        "price": 35
+      }
+    ],
+    "notes": "2 x Wingback chairs to be reupholstered in 11m Hertex - Lion fabric. New Foam, decron, wood clean, etc. all included.\n1 x Two seater couch to be reupholstered in 12m Gingham - Panther fabric. New Foam, decron, wood clean, etc. all included.\n1 x Two seater couch to be reupholstered in 12m Linen - Domino #11 fabric. New Foam, decron, wood clean, etc. all included.\n3 x Scatter cushions (50x50) to be made in 2m Micro Hide - Pacific Blue/Tobacco fabric. New inners, zips, lining, etc. all included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O829759633",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x Wingback chairs to be reupholstered in 11m Hertex - Lion fabric. New Foam, decron, wood clean, etc. all included.\n1 x Two seater couch to be reupholstered in 12m Gingham - Panther fabric. New Foam, decron, wood clean, etc. all included.\n1 x Two seater couch to be reupholstered in 12m Linen - Domino #11 fabric. New Foam, decron, wood clean, etc. all included.\n3 x Scatter cushions (50x50) to be made in 2m Micro Hide - Pacific Blue/Tobacco fabric. New inners, zips, lining, etc. all included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\MAR\\BB02032602.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB05032603",
+    "date": "2026-03-05",
+    "customer": "Shivonne Del Pozo",
+    "contact": "Shivonne Del Pozo",
+    "expiry": "2026-04-05",
+    "items": [
+      {
+        "desc": "Wingback - Fabric (Hertex)",
+        "qty": 11,
+        "price": 380
+      },
+      {
+        "desc": "Wingback - Foam",
+        "qty": 2,
+        "price": 420
+      },
+      {
+        "desc": "Wingback - Labour",
+        "qty": 2,
+        "price": 1090
+      },
+      {
+        "desc": "Wingback - Consumables",
+        "qty": 2,
+        "price": 120
+      },
+      {
+        "desc": "Queen Anne - Fabric (C&C))",
+        "qty": 4,
+        "price": 2080
+      },
+      {
+        "desc": "Queen Anne - Foam",
+        "qty": 2,
+        "price": 380
+      },
+      {
+        "desc": "Queen Anne - Labour",
+        "qty": 2,
+        "price": 980
+      },
+      {
+        "desc": "Queen Anne - Consumables",
+        "qty": 2,
+        "price": 120
+      },
+      {
+        "desc": "Occasional chair - Fabric (C&C)",
+        "qty": 5.5,
+        "price": 2080
+      },
+      {
+        "desc": "Occasional chair - Foam",
+        "qty": 1,
+        "price": 380
+      },
+      {
+        "desc": "Occasional chair - Labour",
+        "qty": 1,
+        "price": 1090
+      },
+      {
+        "desc": "Occasional chair - Consumables",
+        "qty": 1,
+        "price": 120
+      }
+    ],
+    "notes": "2 x Wingback chairs to be reupholstered in 11m Hertex Bergen - Foam fabric.   New Foam, decron, wood clean, etc. all included.\n2 x Queen Ann chairs to be reupholstered in 4m C & C Wilmott - Mulberry fabric.   New Foam, decron, wood clean, etc. all included.\n1 x Occasional chair to be reupholstered in 5.5m C & C Bowfell - Blush fabric.   New Foam, decron, wood clean, etc. all included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O726497076",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "2 x Wingback chairs to be reupholstered in 11m Hertex Bergen - Foam fabric.   New Foam, decron, wood clean, etc. all included.\n2 x Queen Ann chairs to be reupholstered in 4m C & C Wilmott - Mulberry fabric.   New Foam, decron, wood clean, etc. all included.\n1 x Occasional chair to be reupholstered in 5.5m C & C Bowfell - Blush fabric.   New Foam, decron, wood clean, etc. all included.",
+    "sourcePricingWarnings": [],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\MAR\\BB05032603.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  },
+  {
+    "id": "BB30032601",
+    "date": "2026-03-30",
+    "customer": "Siya Ngobese",
+    "contact": "Siya Ngobese",
+    "expiry": "2026-05-27",
+    "items": [
+      {
+        "desc": "Two Seater L Shape  - Fabric 1 - Fikie",
+        "qty": 20,
+        "price": 185
+      },
+      {
+        "desc": "Two Seater L Shape  - Fabric 2 - Hemingway",
+        "qty": 20,
+        "price": 210
+      },
+      {
+        "desc": "Two Seater L Shape - Foam/Comferel/Decron",
+        "qty": 1,
+        "price": 1390
+      },
+      {
+        "desc": "Two Seater L Shape - Labour",
+        "qty": 1,
+        "price": 3800
+      },
+      {
+        "desc": "Two Seater L Shape - Consumables",
+        "qty": 1,
+        "price": 190
+      }
+    ],
+    "notes": "1 x Two seater L Shape couch to be reupholstered in 20m x Fabric (TBC) - New Foam, decron, zips, etc. all included.",
+    "status": "Draft",
+    "terms": true,
+    "phone": "O799987499",
+    "email": "",
+    "preparedBy": "Brian Raymond",
+    "billingAddress": "",
+    "projectReference": "Pvt Residence",
+    "introduction": "1 x Two seater L Shape couch to be reupholstered in 20m x Fabric (TBC) - New Foam, decron, zips, etc. all included.",
+    "sourcePricingWarnings": [
+      "Source total is blank; priced lines are shown"
+    ],
+    "sourceWorkbook": "D:\\UW\\2026\\QUOTES\\MAR\\BB30032601.xlsx",
+    "sourceContentVersion": "2026-10-07"
+  }
+]
 };

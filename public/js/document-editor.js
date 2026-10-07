@@ -1,8 +1,9 @@
 function newInvoice(mode='invoice'){
   window.invoiceFormMode=mode;
   const initialDate=today(), initialPrefix='BB';
-  const prefixField=mode==='quote'?'':'<div class="fld"><label>Invoice initials</label><select id="f-prefix" onchange="document.getElementById(\'f-no\').value=nextInvoiceNo(document.getElementById(\'f-date\').value,this.value)"><option value="BB">BB</option><option value="EE">EE</option></select></div>';
-  const dateHandler=mode==='quote'?'document.getElementById(\'f-no\').value=nextQuoteNo(this.value)':'document.getElementById(\'f-no\').value=nextInvoiceNo(this.value,document.getElementById(\'f-prefix\').value)';
+  const numberFunction=mode==='quote'?'nextQuoteNo':'nextInvoiceNo';
+  const prefixField=`<div class="fld"><label>${mode==='quote'?'Quote':'Invoice'} initials</label><select id="f-prefix" onchange="document.getElementById('f-no').value=${numberFunction}(document.getElementById('f-date').value,this.value)"><option value="BB">BB</option><option value="SS">SS</option></select></div>`;
+  const dateHandler=`document.getElementById('f-no').value=${numberFunction}(this.value,document.getElementById('f-prefix').value)`;
   modal(`<h3>New Invoice</h3>
   <div class="frm">
     <div class="fld"><label>${mode==='quote'?'Quote No':'Invoice No'}</label><input id="f-no" value="${mode==='quote'?nextQuoteNo(initialDate):nextInvoiceNo(initialDate,initialPrefix)}" ${mode==='quote'?'readonly':''}></div>
@@ -38,11 +39,12 @@ function saveInvoice(){
   const collection=window.invoiceFormMode==='quote'?DB.quotes:DB.invoices;
   if(collection.some(doc=>doc.id===common.id)){toast('This document number already exists');return;}
   if(window.invoiceFormMode==='quote'){
+    if(!validQuoteNo(common.id,common.date)){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
     const expiry=fa('f-expiry');if(!validQuoteExpiry(common.date,expiry)){toast('Quote expiry must be on or after its date');return;}
     DB.quotes.unshift(initializeQuoteHistory({...common,expiry,preparedBy:fa('f-prepared-by'),projectReference:document.getElementById('f-project').value,workType:document.getElementById('f-work-type')?.value||'Reupholster',colour:document.getElementById('f-colour')?.value||'',introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false}));
     save();closeModal();toast('Quote '+common.id+' created');go('quotes');
   }else{
-    if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
+    if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
     const inv={...common,dueDate:fa('f-due'),orderNo:fa('f-order-no'),vatNo:fa('f-vat-no'),project:document.getElementById('f-project').value,deposit:0,paid:0,status:'Pending',fy:DB.meta.fy};
     DB.invoices.unshift(inv);save();closeModal();toast('Invoice '+inv.id+' created');render();
   }
@@ -64,7 +66,7 @@ function saveEditedInvoice(id){
   const items=collectDocumentItems('ef-items','ei');if(!items)return;
   const nextId=fa('ef-no').trim();
   if(!nextId||!fa('ef-date')||!fa('ef-cust')||!items.length){toast('Complete invoice number, date, customer and line items');return;}
-  if(!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or EE + YYYY/MM/DD + two-digit sequence, for example BB2026/09/0901');return;}
+  if(nextId!==id&&!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
   if(DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
   Object.assign(invoice,{id:nextId,date:fa('ef-date'),dueDate:fa('ef-due'),orderNo:fa('ef-order-no'),vatNo:fa('ef-vat-no'),customer:fa('ef-cust'),contact:fa('ef-contact'),phone:fa('ef-phone'),billingAddress:fa('ef-billing-address'),email:fa('ef-email'),project:fa('ef-project'),items});
   if(nextId!==id){
