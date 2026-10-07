@@ -45,6 +45,7 @@ function saveInvoice(){
     save();closeModal();toast('Quote '+common.id+' created');go('quotes');
   }else{
     if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
+    if(!validQuoteExpiry(common.date,fa('f-due'))){toast('Invoice payment due date must be on or after its date');return;}
     const inv={...common,dueDate:fa('f-due'),orderNo:fa('f-order-no'),vatNo:fa('f-vat-no'),project:document.getElementById('f-project').value,deposit:0,paid:0,status:'Pending',fy:DB.meta.fy};
     DB.invoices.unshift(inv);save();closeModal();toast('Invoice '+inv.id+' created');render();
   }
@@ -54,8 +55,8 @@ function editInvoice(id){
     modal(`<h3>Edit Invoice ${i.id}</h3><div class="frm">
       <div class="fld"><label>Invoice No</label><input id="ef-no" value="${i.id}"></div><div class="fld"><label>Date</label><input id="ef-date" type="date" value="${i.date}"></div>
       <div class="fld"><label>Payment due date (optional)</label><input id="ef-due" type="date" value="${i.dueDate||''}"></div>
-      <div class="fld"><label>Order number</label><input id="ef-order-no" value="${escapeHtml(i.orderNo||'')}"></div><div class="fld"><label>Client VAT number</label><input id="ef-vat-no" value="${escapeHtml(i.vatNo||'')}"></div><div class="fld"><label>Customer</label><input id="ef-cust" value="${i.customer||''}"></div><div class="fld"><label>Contact name</label><input id="ef-contact" value="${i.contact||''}"></div>
-      <div class="fld"><label>Telephone</label><input id="ef-phone" value="${escapeHtml(i.phone||'')}"></div><div class="fld"><label>Billing address</label><textarea id="ef-billing-address">${escapeHtml(i.billingAddress||'')}</textarea></div><div class="fld"><label>Email</label><input id="ef-email" value="${i.email||''}"></div><div class="fld"><label>Project</label><input id="ef-project" value="${i.project||''}"></div>
+      <div class="fld"><label>Order number</label><input id="ef-order-no" value="${escapeHtml(i.orderNo||'')}"></div><div class="fld"><label>Client VAT number</label><input id="ef-vat-no" value="${escapeHtml(i.vatNo||'')}"></div><div class="fld"><label>Customer</label><input id="ef-cust" value="${escapeHtml(i.customer||'')}"></div><div class="fld"><label>Contact name</label><input id="ef-contact" value="${escapeHtml(i.contact||'')}"></div>
+      <div class="fld"><label>Telephone</label><input id="ef-phone" value="${escapeHtml(i.phone||'')}"></div><div class="fld"><label>Billing address</label><textarea id="ef-billing-address">${escapeHtml(i.billingAddress||'')}</textarea></div><div class="fld"><label>Email</label><input id="ef-email" value="${escapeHtml(i.email||'')}"></div><div class="fld"><label>Project</label><input id="ef-project" value="${escapeHtml(i.project||'')}"></div>
     </div><div class="fld"><label>Line Items</label></div><table id="ef-items"><tr><th>Code</th><th>Description</th><th>Supplier fabric / price basis</th><th>Qty</th><th>Selling / unit · internal cost</th><th></th></tr></table>
     <button class="btn sm" onclick="addEditItemRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedInvoice('${id}')">Save Changes</button></div>`);
     (i.items||[]).forEach(addEditItemRow); if(!(i.items||[]).length)addEditItemRow();
@@ -66,8 +67,9 @@ function saveEditedInvoice(id){
   const items=collectDocumentItems('ef-items','ei');if(!items)return;
   const nextId=fa('ef-no').trim();
   if(!nextId||!fa('ef-date')||!fa('ef-cust')||!items.length){toast('Complete invoice number, date, customer and line items');return;}
-  if(nextId!==id&&!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
-  if(DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
+  if((nextId!==id||validInvoiceNo(id,invoice.date))&&!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
+  if((fa('ef-date')!==invoice.date||fa('ef-due')!==(invoice.dueDate||''))&&!validQuoteExpiry(fa('ef-date'),fa('ef-due'))){toast('Invoice payment due date must be on or after its date');return;}
+  if(nextId!==id&&DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
   Object.assign(invoice,{id:nextId,date:fa('ef-date'),dueDate:fa('ef-due'),orderNo:fa('ef-order-no'),vatNo:fa('ef-vat-no'),customer:fa('ef-cust'),contact:fa('ef-contact'),phone:fa('ef-phone'),billingAddress:fa('ef-billing-address'),email:fa('ef-email'),project:fa('ef-project'),items});
   if(nextId!==id){
     for(const row of [...(DB.receipts||[]),...(DB.jobs||[]),...(DB.quotes||[])])if(row.invoiceId===id)row.invoiceId=nextId;

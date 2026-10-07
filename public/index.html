@@ -11,7 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=46">
+<link rel="stylesheet" href="css/pricing.css?v=47">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -269,7 +269,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=46">
+<link rel="stylesheet" href="css/documents.css?v=47">
 </head>
 <body>
 
@@ -338,30 +338,30 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=46"></script>
-<script src="income-2026.js?v=46"></script>
-<script src="operations-data.js?v=46"></script>
-<script src="scanned-data.js?v=46"></script>
-<script src="bank-statements.js?v=46"></script>
-<script src="js/pricing-core.js?v=46"></script>
-<script src="js/fabrics.js?v=46"></script>
-<script src="item-presets.js?v=46"></script>
-<script src="js/item-presets.js?v=46"></script>
-<script src="js/document-lines.js?v=46"></script>
-<script src="js/fabric-picker.js?v=46"></script>
-<script src="js/pricing.js?v=46"></script>
-<script src="js/quote-history.js?v=46"></script>
-<script src="js/document-numbers.js?v=46"></script>
-<script src="js/imported-quotes.js?v=46"></script>
-<script src="js/document-editor.js?v=46"></script>
-<script src="js/document-format.js?v=46"></script>
-<script src="js/document-views.js?v=46"></script>
-<script src="js/quotes.js?v=46"></script>
-<script src="js/dashboard.js?v=46"></script>
-<script src="js/suppliers.js?v=46"></script>
-<script src="js/app-version.js?v=46"></script>
-<script src="js/shared-sync.js?v=46"></script>
-<script src="js/local-recovery.js?v=46"></script>
+<script src="imported-data.js?v=47"></script>
+<script src="income-2026.js?v=47"></script>
+<script src="operations-data.js?v=47"></script>
+<script src="scanned-data.js?v=47"></script>
+<script src="bank-statements.js?v=47"></script>
+<script src="js/pricing-core.js?v=47"></script>
+<script src="js/fabrics.js?v=47"></script>
+<script src="item-presets.js?v=47"></script>
+<script src="js/item-presets.js?v=47"></script>
+<script src="js/document-lines.js?v=47"></script>
+<script src="js/fabric-picker.js?v=47"></script>
+<script src="js/pricing.js?v=47"></script>
+<script src="js/quote-history.js?v=47"></script>
+<script src="js/document-numbers.js?v=47"></script>
+<script src="js/imported-quotes.js?v=47"></script>
+<script src="js/document-editor.js?v=47"></script>
+<script src="js/document-format.js?v=47"></script>
+<script src="js/document-views.js?v=47"></script>
+<script src="js/quotes.js?v=47"></script>
+<script src="js/dashboard.js?v=47"></script>
+<script src="js/suppliers.js?v=47"></script>
+<script src="js/app-version.js?v=47"></script>
+<script src="js/shared-sync.js?v=47"></script>
+<script src="js/local-recovery.js?v=47"></script>
 
 <script>
 /* ============================================================
@@ -371,7 +371,10 @@ const DB_KEY = 'UW_DB_V1';
 const LEGACY_BULK_SCAN_NAMES = new Set(['scanned_20260924-1055.pdf','scanned_20260924-1227.pdf']);
 function isLegacyBulkScan(document){return LEGACY_BULK_SCAN_NAMES.has(String(document?.name||'').trim().toLowerCase());}
 const DATA_SOURCE_PATH = 'D:\\UW';
-const today = () => new Date().toISOString().slice(0,10);
+function localCalendarDate(date=new Date()){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+const today = () => localCalendarDate();
 
 const nativeFetch=window.fetch.bind(window);
 window.fetch=(input,options={})=>{
@@ -907,12 +910,14 @@ async function syncServerState(force=false,silent=false){
         serverSyncError=null;
         const exportErrors=payload.documentExports?.errors;
         if(Array.isArray(exportErrors)&&exportErrors.length){
+          sharedSyncStatus('Workspace saved · document export needs attention');
           console.error('Invoice/quote PDFs could not be saved:',exportErrors);
           if(!silent)toast('Accounting data was saved, but an invoice or quote PDF could not be saved to its folder');
         }
         const cloudSync=payload.supabaseSync||{configured:false,status:'not_configured'};
         return {
           serverSaved:true,
+          documentExportErrors:Array.isArray(exportErrors)?exportErrors:[],
           supabaseConfigured:Boolean(cloudSync.configured),
           cloudSynced:Boolean(cloudSync.configured&&cloudSync.status==='synced'),
         };
@@ -1286,7 +1291,8 @@ async function globalSave(){
     }
     if(serverSyncAvailable&&serverRevision!==null){
       const synced=await syncServerState(true,true);
-      if(synced?.serverSaved&&localServerOnly)toast('Saved to D:\\UW FOREVER — shared workspace updated');
+      if(synced?.documentExportErrors?.length)toast('Accounting data saved — an invoice or quote PDF could not be saved. Check the document folder and save again.');
+      else if(synced?.serverSaved&&localServerOnly)toast('Saved to D:\\UW FOREVER — shared workspace updated');
       else if(synced?.cloudSynced)toast('Global save complete — local and database copies updated');
       else if(synced?.serverSaved&&synced.supabaseConfigured)toast('Saved locally and on this computer — database sync is queued and will retry');
       else if(synced?.serverSaved)toast('Saved locally and on this computer — Supabase is not configured');
@@ -1308,7 +1314,7 @@ async function globalSave(){
 function persistLocalSnapshot(){
   const result=writeLocalSnapshot(JSON.stringify(DB));
   if(result.ok&&DB.meta?.syncPending)queueServerStateSave();
-  else console.error('Periodic local save failed:',result.error);
+  else if(!result.ok)console.error('Periodic local save failed:',result.error);
 }
 function startPeriodicSync(){
   clearInterval(periodicSyncTimer);
@@ -1569,7 +1575,7 @@ function fyData(arr){return arr.filter(x=>x.fy===DB.meta.fy);}
 function statusBadge(s){return `<span class="tag ${s.toLowerCase()}">${s}</span>`;}
 function monthFilterHtml(id){
   const start=new Date(2024,0,1); const end=new Date(); end.setDate(1);
-  const months=[]; for(let d=new Date(end);d>=start;d.setMonth(d.getMonth()-1)) months.push(d.toISOString().slice(0,7));
+  const months=[]; for(let d=new Date(end);d>=start;d.setMonth(d.getMonth()-1)) months.push(localCalendarDate(d).slice(0,7));
   return `<select class="search" id="${id}" aria-label="Date range" onchange="state.mfilter=this.value;render()"><option value="">All dates (2024–present)</option>${months.map(m=>`<option value="${m}" ${state.mfilter===m?'selected':''}>${m}</option>`).join('')}</select>`;
 }
 let state={mfilter:'',docFilters:{}};
@@ -1701,7 +1707,7 @@ function render(){
    finally{if(button){button.disabled=false;button.innerHTML=button.dataset.originalLabel||whatsappIcon;}}
  }
 function vInvoices(c){
-  const rows=sortDocumentsByDate(DB.invoices.filter(i=>docMatches(i,'invoices','Sales invoice',i.status)),'invoices');
+  const rows=sortDocumentsByDate(uniqueInvoices().filter(i=>docMatches(i,'invoices','Sales invoice',i.status)),'invoices');
   const years=[];for(let y=2024;y<=new Date().getFullYear();y++)years.push(y);
   c.innerHTML=`
   <div class="toolbar">
@@ -1800,7 +1806,7 @@ function del(coll,id){if(!confirm('Delete this record?'))return;DB[coll]=DB[coll
 /* ---------- RECEIPTS ---------- */
 function vReceipts(c){
   const rows=sortDocumentsByDate(DB.receipts.filter(r=>docMatches(r,'receipts','Client receipt',r.method)),'receipts');
-  const invoices=sortDocumentsByDate(DB.invoices.filter(i=>docMatches(i,'income', 'Sales invoice', i.status)),'receipts');
+  const invoices=sortDocumentsByDate(uniqueInvoices().filter(i=>docMatches(i,'income', 'Sales invoice', i.status)),'receipts');
   const paid=invoices.filter(i=>invBalance(i)<=0.005), unpaid=invoices.filter(i=>invBalance(i)>0.005);
   c.innerHTML=`<div class="toolbar">${docFilterHtml('receipts',['Client receipt'],['EFT','Cash','Card'])}<button class="btn gold" onclick="newReceipt()">+ Issue Receipt</button></div>
   <div class="cards"><div class="card"><div class="lbl">Collected income</div><div class="val green">${R(invoices.reduce((s,i)=>s+(i.paid||0)+(i.deposit||0),0))}</div><div class="sub">${paid.length} paid invoice(s)</div></div><div class="card"><div class="lbl">Outstanding income</div><div class="val amber">${R(unpaid.reduce((s,i)=>s+invBalance(i),0))}</div><div class="sub">${unpaid.length} invoice(s) still due</div></div><div class="card"><div class="lbl">Receipts issued</div><div class="val gold">${rows.length}</div><div class="sub">BB / SS numbered receipts</div></div></div>
@@ -2451,7 +2457,7 @@ function vBank(c){
 function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=sortDocumentsByDate(all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date')),'documents');const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved','FNB reviewed'])+'<label class="btn gold">＋ Upload source documents<input type="file" multiple style="display:none" onchange="uploadSourceDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
 function vAssistant(c){
   const uniqueExpenseRows=uniqueExpenses(DB.expenses);
-  const inc=DB.invoices.reduce((s,i)=>s+(i.paid||0),0), exp=uniqueExpenseRows.reduce((s,e)=>s+(e.amount||0),0)+employeeWagesTotal(), outstanding=DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
+  const inc=uniqueInvoices().reduce((s,i)=>s+invoiceCollectedAmount(i),0), exp=uniqueExpenseRows.reduce((s,e)=>s+(e.amount||0),0)+employeeWagesTotal(), outstanding=uniqueInvoices().reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=uniqueInvoices().filter(i=>invBalance(i)>0.005);
   const category={};uniqueExpenseRows.forEach(e=>category[canonicalExpenseCategory(e.category)]=(category[canonicalExpenseCategory(e.category)]||0)+e.amount);const top=Object.entries(category).sort((a,b)=>b[1]-a[1])[0];
   const insights=[`Collected income is ${R(inc)} against ${R(exp)} total expenses including the payroll ledger, a calculated net of ${R(inc-exp)}.`,`There are ${unpaid.length} unpaid invoices with ${R(outstanding)} outstanding.`,`The largest recorded expense category is ${top?top[0]:'not available'} at ${R(top?top[1]:0)}.`,`There are ${(DB.jobs||[]).filter(j=>j.stage!=='Closed').length} active production jobs and ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length} supplier documents awaiting review.`];
   const sourceGaps=(DB.payables||[]).filter(p=>!p.amount||p.amount===0).length+(DB.stock||[]).filter(s=>!s.quantity).length;const audit=DB.filesystemAudit||{};
@@ -2483,8 +2489,8 @@ function vAssistant(c){
   </div>
   <div class="panel"><h3>Suggested next actions</h3><div class="kv"><span>Review unpaid invoices and allocate receipts</span><b>${unpaid.length}</b></div><div class="kv"><span>Review imported supplier documents</span><b>${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}</b></div><div class="kv"><span>Update stock quantities and reorder levels</span><b>${(DB.stock||[]).length}</b></div></div>`;
 }function buildAiPrompt(task='custom'){
-  const outstanding=DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0);
-  const unpaid=(DB.invoices||[]).filter(i=>invBalance(i)>0.005);
+  const outstanding=uniqueInvoices().reduce((s,i)=>s+Math.max(0,invBalance(i)),0);
+  const unpaid=uniqueInvoices().filter(i=>invBalance(i)>0.005);
   const payablesUnreviewed=(DB.payables||[]).filter(p=>p.status==='Unreviewed').length;
   const jobsOpen=(DB.jobs||[]).filter(j=>j.stage!=='Closed').length;
   const scannedNeedsReview=(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length;
@@ -2568,13 +2574,13 @@ async function runGemini(){
   const provider=providerEl ? providerEl.value : 'auto';
   try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider,context:buildAiContext()})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=(payload.text||'No response returned.')+(payload.truncated?'\n\n[The response reached the model limit. Ask “continue from where you stopped” to retrieve the remaining details.]':'')}catch(error){result.textContent=error.message;toast('AI request failed')}
 }
-function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(DB.invoices.reduce((s,i)=>s+(i.paid||0),0))}`,`Expenses: ${R(uniqueExpenses(DB.expenses).reduce((s,e)=>s+e.amount,0))}`,`Employee wages / Salary: ${R(consolidatedEmployeeWagesTotal())}`,`Outstanding: ${R(DB.invoices.reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
+function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(uniqueInvoices().reduce((s,i)=>s+invoiceCollectedAmount(i),0))}`,`Expenses: ${R(uniqueExpenses(DB.expenses).reduce((s,e)=>s+e.amount,0))}`,`Employee wages / Salary: ${R(consolidatedEmployeeWagesTotal())}`,`Outstanding: ${R(uniqueInvoices().reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
 
 /* ---------- REPORTS ---------- */
 function vReports(c){
   const invoices=uniqueInvoices();
   const start=new Date(2024,0,1), end=new Date(); end.setDate(1); const months=[];
-  for(let d=new Date(start);d<=end;d.setMonth(d.getMonth()+1)) months.push(d.toISOString().slice(0,7));
+  for(let d=new Date(start);d<=end;d.setMonth(d.getMonth()+1)) months.push(localCalendarDate(d).slice(0,7));
   const rows=months.map(m=>{
     const inc=invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invoiceCollectedAmount(i),0);
     const qtot=invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
@@ -2603,9 +2609,9 @@ function vReports(c){
 }
 function exportMonthSummary(){
   let csv='Month,Invoiced,Collected,Expenses,Net\n';
-  [...new Set(DB.invoices.map(i=>monthOf(i.date)).concat(uniqueExpenses(DB.expenses).map(e=>monthOf(e.date))))].sort().forEach(m=>{
-    const inc=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+(i.paid||0),0);
-    const q=DB.invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
+  [...new Set(uniqueInvoices().map(i=>monthOf(i.date)).concat(uniqueExpenses(DB.expenses).map(e=>monthOf(e.date))))].sort().forEach(m=>{
+    const inc=uniqueInvoices().filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invoiceCollectedAmount(i),0);
+    const q=uniqueInvoices().filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
     const exp=uniqueExpenses(DB.expenses).filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
     csv+=`${m},${q},${inc},${exp},${inc-exp}\n`;});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='UW_MONTH_END_'+today()+'.csv';a.click();toast('Summary exported');

@@ -282,6 +282,7 @@ const writeInvoiceQuotePdf = async (kind, record, meta) => {
     fs.rmSync(temporary, { force: true });
   }
 };
+const pendingDocumentExports = new Set();
 const persistInvoiceQuoteDocuments = async (previousData, nextData) => {
   const exports = { invoices: 0, quotes: 0, errors: [] };
   const meta = nextData.meta || {};
@@ -290,11 +291,16 @@ const persistInvoiceQuoteDocuments = async (previousData, nextData) => {
       .map(record => [String(record?.id || ''), JSON.stringify(record)]));
     const records = Array.isArray(nextData[collection]) ? nextData[collection] : [];
     for (const record of records) {
-      if (!record || !record.id || previousById.get(String(record.id)) === JSON.stringify(record)) continue;
+      if (!record || !record.id) continue;
+      const exportKey = `${kind}:${record.id}`;
+      const destination = path.join(kind === 'invoice' ? invoiceOutputDir : quoteOutputDir, `${kind}-${safeExportId(record.id)}.pdf`);
+      if (previousById.get(String(record.id)) === JSON.stringify(record) && !pendingDocumentExports.has(exportKey) && fs.existsSync(destination)) continue;
       try {
         await writeInvoiceQuotePdf(kind, record, meta);
+        pendingDocumentExports.delete(exportKey);
         exports[collection] += 1;
       } catch (error) {
+        pendingDocumentExports.add(exportKey);
         exports.errors.push(`${kind} ${safeExportId(record.id)}: ${error.message}`);
       }
     }

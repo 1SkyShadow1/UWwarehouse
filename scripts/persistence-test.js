@@ -133,7 +133,27 @@ const run = async () => {
     assert.equal(restored.revision, 2);
     assert.deepEqual(restored.data.invoices, [updatedInvoice]);
     assert.deepEqual(restored.data.quotes, [quote]);
+    // A failed PDF export must preserve the ledger and retry even if an older PDF exists.
+    const displacedRoot = `${invoicesRoot}-temporarily-unavailable`;
+    fs.renameSync(invoicesRoot, displacedRoot);
+    fs.writeFileSync(invoicesRoot, 'Simulated unavailable export directory');
+    const finalInvoice = { ...updatedInvoice, project: 'Retry after folder recovery' };
+    const put = async revision => {
+      const response = await request('/api/state', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ revision, data: { invoices: [finalInvoice], quotes: [quote] } }) });
+      assert.equal(response.status, 200, 'PDF errors must not lose the accounting save.');
+      return response.json();
+    };
+    const failedExport = await put(2);
+    assert.equal(failedExport.documentExports.errors.length, 1);
+    fs.unlinkSync(invoicesRoot);
+    fs.renameSync(displacedRoot, invoicesRoot);
+    const retried = await put(3);
+    assert.deepEqual(retried.documentExports, { invoices: 1, quotes: 0, errors: [] });
+    fs.unlinkSync(path.join(quotesRoot, 'quote-QU2026-09-2801.pdf'));
+    const recreated = await put(4);
+    assert.deepEqual(recreated.documentExports, { invoices: 0, quotes: 1, errors: [] });
     console.log('State survives a server restart; updated invoice PDFs overwrite safely and quotes save separately.');
+    console.log('Failed and missing document exports retry without losing the saved ledger.');
   } finally {
     await stopServer();
     fs.rmSync(dataRoot, { recursive: true, force: true });

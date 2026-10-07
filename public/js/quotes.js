@@ -35,7 +35,7 @@ function saveEditedQuote(id){
   const items=collectDocumentItems('eq-items','eq');if(!items)return;
   const nextId=fa('eq-no').trim();
   if(!nextId||!fa('eq-date')||!fa('eq-cust')||!items.length){toast('Complete quote number, date, customer and line items');return;}
-  if(nextId!==id&&!validQuoteNo(nextId,fa('eq-date'))){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example SS26100701');return;}
+  if((nextId!==id||validQuoteNo(id,quote.date))&&!validQuoteNo(nextId,fa('eq-date'))){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example SS26100701');return;}
   if(DB.quotes.some(other=>other!==quote&&other.id===nextId)){toast('This quote number already exists');return;}
   if(!validQuoteExpiry(fa('eq-date'),fa('eq-expiry'))){toast('Quote expiry must be on or after its date');return;}
   reviseQuote(quote,{...(document.getElementById('eq-source-reviewed')?.checked?{sourcePricingWarnings:[]}:{}),id:nextId,date:fa('eq-date'),customer:fa('eq-cust'),contact:fa('eq-contact'),phone:fa('eq-phone'),email:fa('eq-email'),billingAddress:fa('eq-billing-address'),expiry:fa('eq-expiry'),preparedBy:fa('eq-prepared-by'),projectReference:fa('eq-project'),workType:fa('eq-work-type'),colour:fa('eq-colour'),introduction:fa('eq-introduction'),notes:fa('eq-introduction'),items});
