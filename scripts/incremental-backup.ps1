@@ -50,7 +50,10 @@ function Assert-IncrementalBackupValid([string]$Path,$Manifest) {
 
 function Add-BackupObject([string]$Source,[string]$Hash,[long]$Length,[string]$StoreRoot,$Verified,$Stats) {
   $destination = Get-BackupObjectPath $StoreRoot $Hash
-  if ($Verified.ContainsKey($Hash)) { return }
+  if ($Verified.ContainsKey($Hash)) {
+    if ([long]$Verified[$Hash] -ne $Length) { throw 'Source length changed after hashing; snapshot was not published.' }
+    return
+  }
   if (Test-Path -LiteralPath $destination -PathType Leaf) {
     if ((Get-Item -LiteralPath $destination).Length -ne $Length -or (Get-FileHash -LiteralPath $destination).Hash.ToLowerInvariant() -cne $Hash) {
       throw "Existing backup object is corrupt; previous snapshots are retained: $Hash"
@@ -60,15 +63,19 @@ function Add-BackupObject([string]$Source,[string]$Hash,[long]$Length,[string]$S
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
     $temporaryObject = "$destination.$PID.$([guid]::NewGuid().ToString('N')).tmp"
     try {
-      Copy-Item -LiteralPath $Source -Destination $temporaryObject
+      $inputStream = [IO.File]::Open($Source,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+      try {
+        $outputStream = [IO.File]::Open($temporaryObject,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        try { $inputStream.CopyTo($outputStream); $outputStream.Flush($true) } finally { $outputStream.Dispose() }
+      } finally { $inputStream.Dispose() }
       if ((Get-Item -LiteralPath $temporaryObject).Length -ne $Length -or (Get-FileHash -LiteralPath $temporaryObject).Hash.ToLowerInvariant() -cne $Hash) {
         throw "Source changed while copying or backup verification failed: $Source. Run the backup again."
       }
-      Move-Item -LiteralPath $temporaryObject -Destination $destination
+      [IO.File]::Move($temporaryObject,$destination)
       $Stats.newObjects++; $Stats.newBytes += $Length
     } finally { if (Test-Path -LiteralPath $temporaryObject) { Remove-Item -LiteralPath $temporaryObject -Force } }
   }
-  $Verified[$Hash] = $true
+  $Verified[$Hash] = $Length
 }
 
 function New-IncrementalBackup($CopySets,[string]$Temporary,[string]$Destination,[string]$Root,[string]$EnvironmentPath) {
@@ -127,7 +134,7 @@ function New-IncrementalBackup($CopySets,[string]$Temporary,[string]$Destination
     # Objects were individually verified before publication; the ledger must also parse.
     $state = $entries | Where-Object path -eq 'Application Data/uw-state.json'
     Assert-ValidAccountingSnapshot (Get-BackupObjectPath $storeRoot $state.sha256)
-    Move-Item -LiteralPath $Temporary -Destination $Destination
+    [IO.Directory]::Move($Temporary,$Destination)
     Write-Host "Incremental backup created and verified: $Destination ($($entries.Count) files referenced; $($stats.newObjects) new objects / $($stats.newBytes) new bytes)."
   } finally { $lock.Dispose() }
 }
@@ -156,7 +163,7 @@ function Restore-BackupSnapshot([string]$Snapshot,[string]$Destination,$Manifest
       if ($null -ne $entry.attributes) { (Get-Item -LiteralPath $target).Attributes = [IO.FileAttributes]$entry.attributes }
     }
     Assert-ValidAccountingSnapshot (Join-Path $staging 'Application Data\uw-state.json')
-    Move-Item -LiteralPath $staging -Destination $destinationPath
+    [IO.Directory]::Move($staging,$destinationPath)
     Write-Host "Backup restored and verified into $destinationPath. Encrypted configuration remains encrypted."
   } finally {
     if (Test-Path -LiteralPath $staging) {

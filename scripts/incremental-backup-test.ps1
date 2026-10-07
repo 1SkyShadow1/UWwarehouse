@@ -18,7 +18,9 @@ try {
   Set-Content -LiteralPath (Join-Path $invoices 'invoice.pdf') -Value 'same document bytes' -Encoding UTF8
   Copy-Item -LiteralPath (Join-Path $invoices 'invoice.pdf') -Destination (Join-Path $quotes 'quote.pdf')
   Set-Content -LiteralPath (Join-Path $source 'old.txt') -Value 'old source content' -Encoding UTF8
-  $first=Run-Backup;$m1=Manifest $first
+  $openSource=[IO.File]::Open((Join-Path $source 'old.txt'),[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+  try {$first=Run-Backup} finally {$openSource.Dispose()}
+  $m1=Manifest $first
   Assert ($m1.schemaVersion -eq 3 -and $m1.newObjects -eq 5) 'Identical documents were not deduplicated.'
   Assert ($m1.fileCount -eq 6) 'Logical file inventory is incomplete.'
   $second=Run-Backup;$m2=Manifest $second
