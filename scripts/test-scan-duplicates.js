@@ -23,3 +23,12 @@ test('cleanup keeps an original and protects approved scans even across overlapp
   assert(candidates.every(candidate=>candidate.keepId==='b'));
   assert.equal(cleanupCandidates([{...original,id:'a'},{...original,id:'b',merchant:'Other',invoiceNumber:''}]).length,0);
 });
+test('three copies of the same receipt keep one original; reused receipt numbers and contradictory AI groups do not remove different transactions',()=>{
+  const copies=['original','photo','rescan'].map(id=>({...original,id,name:id+'.jpg'}));
+  const candidates=cleanupCandidates(copies);
+  assert.equal(candidates.length,2);assert(candidates.every(row=>row.keepId==='original'));
+  const different={...original,id:'different',scanDate:'2026-10-08',amount:200};
+  assert.equal(matches(different,[original]).length,0);
+  assert.equal(cleanupCandidates([original,different],[{ids:['original','different'],reason:'AI suggestion'}]).length,0);
+  assert.equal(matches({...original,id:'another-purchase',invoiceNumber:'INV-002'},[original]).length,0,'Distinct receipt numbers at the same shop/date/amount are separate purchases');
+});

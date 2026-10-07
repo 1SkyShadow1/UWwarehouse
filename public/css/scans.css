@@ -1,0 +1,7 @@
+.scan-running{display:inline-flex;align-items:center;gap:10px;color:var(--gold2);font-weight:600}
+.scan-running-spinner{display:inline-block;flex:0 0 auto;width:20px;height:20px;border:3px solid rgba(212,175,55,.25);border-top-color:var(--gold);border-radius:50%;animation:scan-running-spin .8s linear infinite}
+#scan-running-status{position:fixed;bottom:18px;right:18px;z-index:10000;max-width:min(520px,calc(100vw - 36px));padding:14px 18px;border:1px solid var(--gold);border-radius:10px;background:var(--panel,#191919);box-shadow:0 4px 18px #0005;font-size:13px}
+#scan-running-status[hidden]{display:none}
+@keyframes scan-running-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.scan-running-spinner{animation:none}}
+@media print{#scan-running-status{display:none!important}}

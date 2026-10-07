@@ -24,6 +24,7 @@ assert.notEqual(aiApplyEnd, -1, 'Gemini review save action end was not found.');
 
 const context = {
   DB: { fnbStatements: [], scannedDocuments: [] },
+  scanOperations:new Map(),beginScanOperation:()=>true,endScanOperation:()=>{},setTimeout,
   Date,
   Math,
   Number,
@@ -81,7 +82,7 @@ const run = async () => {
 
   const savedReceipt = { ...aiOnlyReceipt, path: '/receipt-1.png' };
   context.DB.scannedDocuments = [savedReceipt];
-  context.review(savedReceipt.path);
+  await context.review(savedReceipt.path);
   assert.equal(savedReceipt.fnbReview.transaction.id, 'debit-1', 'The Review FNB action must save its comparison result onto the scan.');
   assert.equal(context.saveCount, 1);
   context.approve(savedReceipt.path);
