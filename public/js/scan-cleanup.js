@@ -17,6 +17,7 @@ async function startAiDuplicateCleanup(){
   const scans=(DB.scannedDocuments||[]).filter(doc=>!isLegacyBulkScan(doc)&&doc.canonical&&!doc.existingMatch);
   if(scans.length<2){toast('At least two scans are needed for a duplicate check');return;}
   if(scans.length>1000){toast('Select a smaller scan library for review; no records were removed');return;}
+  if(scanCleanupReview){showDuplicateCleanupReview();return;}
   scanCleanupRunning=true;
   beginScanOperation('duplicate-check',`Running Gemini duplicate check · ${scans.length} scans`);
   modal('<h3>Gemini duplicate check</h3><p role="status">'+scanRunningMarkup('Running · comparing receipt numbers, merchants, dates and totals…')+'</p><p>No documents will be removed until you select and confirm the candidates.</p><button class="btn" onclick="closeModal()">Close</button>');
@@ -30,7 +31,7 @@ async function startAiDuplicateCleanup(){
     // Do not reopen a dialog the operator deliberately closed.
     if(document.querySelector('#modal-root h3')?.textContent==='Gemini duplicate check')showDuplicateCleanupReview();
     else toast('Duplicate check complete. Click Delete duplicates to review the results.');
-  }catch(error){toast(error.name==='AbortError'?'Gemini duplicate check timed out; nothing was removed':error.message);if(document.querySelector('#modal-root h3')?.textContent==='Gemini duplicate check')closeModal();}
+  }catch(error){const message=error.name==='AbortError'?'Gemini duplicate check timed out; nothing was removed':error.message;toast(message);if(document.querySelector('#modal-root h3')?.textContent==='Gemini duplicate check')modal('<h3>Duplicate check needs another attempt</h3><p>'+escapeHtml(message)+'</p><p>Every original receipt is retained. No documents were removed.</p><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="startAiDuplicateCleanup()">Retry check</button>');}
   finally{clearTimeout(timeout);scanCleanupRunning=false;endScanOperation('duplicate-check');}
 }
 function showDuplicateCleanupReview(){

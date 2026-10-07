@@ -43,3 +43,10 @@ test('month-end export counts each invoice once and includes deposits in collect
   vm.runInContext(html.slice(html.indexOf('function exportMonthSummary(){'),html.indexOf('/* ---------- GALLERY ---------- */')),c);
   c.exportMonthSummary();assert.equal(output,'Month,Invoiced,Collected,Expenses,Net\n2026-10,200,50,10,40\n');assert.equal(c.DB.invoices.length,2,'Read-only reporting must preserve source records');
 });
+
+test('startup migrations never write a whole ledger to quota-limited localStorage',()=>{
+  const startup=html.slice(html.indexOf('function load(){'),html.indexOf('let cloudSyncTimer,'));
+  assert(!startup.includes('localStorage.setItem(DB_KEY'));
+  const wages=html.slice(html.indexOf('const normalizeWageLedger ='),html.indexOf('normalizeWageLedger(DB);'));
+  assert(!wages.includes('localStorage.setItem(DB_KEY'));
+});

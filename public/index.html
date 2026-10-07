@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=52">
-<link rel="stylesheet" href="css/scans.css?v=52">
+<link rel="stylesheet" href="css/pricing.css?v=53">
+<link rel="stylesheet" href="css/scans.css?v=53">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=52">
+<link rel="stylesheet" href="css/documents.css?v=53">
 </head>
 <body>
 
@@ -327,44 +327,44 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <div id="topbar">
     <button class="tb-btn" onclick="toggleSidebar()">☰</button>
     <h2 id="page-title">Dashboard</h2>
-    <button class="tb-btn gold global-save-btn" id="global-save-btn" onclick="globalSave()" title="Save the complete workspace locally and to the database">✓ Global Save</button>
+    <button class="tb-btn gold global-save-btn" id="global-save-btn" onclick="globalSave()" title="Save the shared workspace to D:">✓ Global Save</button>
     <button class="tb-btn" onclick="refreshBundledData()">↻ Refresh D:\UW Data</button>
     <button class="tb-btn" id="installBtn" hidden onclick="installApp()">⇩ Install App</button>
     <button class="tb-btn" id="themeBtn" onclick="toggleTheme()" title="Switch light/dark mode">☀ Light</button>
     <button class="tb-btn gold" onclick="go('invoices');setTimeout(newInvoice,100)">+ New Invoice</button>
   </div>
   <div id="content"></div>
-  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span><span id="workspace-sync-label"></span> · <span id="app-build-label"></span> · <span id="storage-location-label">Data stored locally on this device</span> · FNB Gold Business 63173509557 · Branch 250655</span></div>
+  <div class="footer-note"><span>Upholstery Warehouse · 4, 5th Avenue, Edenvale</span><span><span id="workspace-sync-label"></span> · <span id="app-build-label"></span> · <span id="storage-location-label">Shared local ledger on D:</span> · FNB Gold Business 63173509557 · Branch 250655</span></div>
 </div>
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=52"></script>
-<script src="income-2026.js?v=52"></script>
-<script src="operations-data.js?v=52"></script>
-<script src="scanned-data.js?v=52"></script>
-<script src="bank-statements.js?v=52"></script>
-<script src="js/pricing-core.js?v=52"></script>
-<script src="js/fabrics.js?v=52"></script>
-<script src="item-presets.js?v=52"></script>
-<script src="js/item-presets.js?v=52"></script>
-<script src="js/document-lines.js?v=52"></script>
-<script src="js/fabric-picker.js?v=52"></script>
-<script src="js/pricing.js?v=52"></script>
-<script src="js/quote-history.js?v=52"></script>
-<script src="js/document-numbers.js?v=52"></script>
-<script src="js/imported-quotes.js?v=52"></script>
-<script src="js/scan-duplicates.js?v=52"></script>
-<script src="js/scan-cleanup.js?v=52"></script>
-<script src="js/document-editor.js?v=52"></script>
-<script src="js/document-format.js?v=52"></script>
-<script src="js/document-views.js?v=52"></script>
-<script src="js/quotes.js?v=52"></script>
-<script src="js/dashboard.js?v=52"></script>
-<script src="js/suppliers.js?v=52"></script>
-<script src="js/app-version.js?v=52"></script>
-<script src="js/shared-sync.js?v=52"></script>
-<script src="js/local-recovery.js?v=52"></script>
+<script src="imported-data.js?v=53"></script>
+<script src="income-2026.js?v=53"></script>
+<script src="operations-data.js?v=53"></script>
+<script src="scanned-data.js?v=53"></script>
+<script src="bank-statements.js?v=53"></script>
+<script src="js/pricing-core.js?v=53"></script>
+<script src="js/fabrics.js?v=53"></script>
+<script src="item-presets.js?v=53"></script>
+<script src="js/item-presets.js?v=53"></script>
+<script src="js/document-lines.js?v=53"></script>
+<script src="js/fabric-picker.js?v=53"></script>
+<script src="js/pricing.js?v=53"></script>
+<script src="js/quote-history.js?v=53"></script>
+<script src="js/document-numbers.js?v=53"></script>
+<script src="js/imported-quotes.js?v=53"></script>
+<script src="js/scan-duplicates.js?v=53"></script>
+<script src="js/scan-cleanup.js?v=53"></script>
+<script src="js/document-editor.js?v=53"></script>
+<script src="js/document-format.js?v=53"></script>
+<script src="js/document-views.js?v=53"></script>
+<script src="js/quotes.js?v=53"></script>
+<script src="js/dashboard.js?v=53"></script>
+<script src="js/suppliers.js?v=53"></script>
+<script src="js/app-version.js?v=53"></script>
+<script src="js/shared-sync.js?v=53"></script>
+<script src="js/local-recovery.js?v=53"></script>
 
 <script>
 /* ============================================================
@@ -475,7 +475,7 @@ const normalizeWageLedger = db => {
     advances: Number(wage.advances) || 0,
   }));
   db.staff = (Array.isArray(db.staff) ? db.staff : []).map(member => member.name === 'UW' ? {...member, name: 'Evans'} : member);
-  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch (error) { console.warn('Wage ledger migration could not be cached locally:', error); }
+
   return db;
 };
 normalizeWageLedger(DB);
@@ -734,7 +734,7 @@ deduplicateExpenseLedger(DB);
 normalizePayables(DB);
 syncExpenseEvidence(DB);
 deduplicateExpenseLedger(DB);
-try{localStorage.setItem(DB_KEY,JSON.stringify(DB));}catch(error){console.warn('Expense ledger audit could not be cached locally:',error);}
+
 let serverRevision = null;
 let serverSyncTimer;
 let serverRetryTimer;
@@ -1218,7 +1218,7 @@ function load(){
         merged.priceBook=imported.priceBook||merged.priceBook;
         merged.fabrics=imported.fabrics||merged.fabrics;
         merged.meta.importVersion=(imported.meta||{}).importVersion;
-        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+
       }
       const incomeNeedsRefresh=merged.meta.income2026Version!==(income2026.version||'');
       if(incomeNeedsRefresh&&income2026.invoices?.length){
@@ -1226,7 +1226,7 @@ function load(){
         merged.invoices=[...retained,...income2026.invoices];
         merged.receipts=[...(merged.receipts||[]).filter(x=>!String(x.sourceWorkbook||'').includes('INCOME 2026 O.xlsx')),...(income2026.receipts||[])];
         merged.meta.income2026Version=income2026.version||'';
-        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+
       }
       const operationsNeedRefresh=merged.meta.sourceVersion!==(operations.meta||{}).sourceVersion
         || (merged.documents||[]).length<(operations.documents||[]).length
@@ -1235,23 +1235,23 @@ function load(){
       if(operationsNeedRefresh){
         ['suppliers','stock','documents','filesystemFiles','filesystemAudit','payables','bankStatements','jobs','aiNotes','wages','wageOperationalCosts'].forEach(k=>{if(operations[k])merged[k]=operations[k];});
         merged.meta.sourceVersion=(operations.meta||{}).sourceVersion;
-        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+
       }
       if(merged.meta.scannedVersion!==(scanned.version||'')||(merged.scannedDocuments||[]).length<(scanned.documents||[]).length){
         merged.scannedDocuments=mergeScannedDocumentState(merged.scannedDocuments,scanned.documents);
         merged.meta.scannedVersion=scanned.version||'';
-        localStorage.setItem(DB_KEY,JSON.stringify(merged));
+
       }
       mergeBundledFnbState(merged);
       normalizeQuoteFields(merged);
-      localStorage.setItem(DB_KEY,JSON.stringify(merged));
+
       return merged;
     }
   }catch(e){console.warn('Local database could not be loaded',e);}
   const initial={...base,meta:{...base.meta,cloud:{url:'',key:'',table:'uw_accounting_data',workspace:'default'}}};
   normalizeQuoteFields(initial);
   normalizeFnbAllocations(initial);
-  localStorage.setItem(DB_KEY,JSON.stringify(initial)); return initial;
+  return initial;
 }
 let cloudSyncTimer,driveSyncTimer,periodicSyncTimer;
 function refreshBundledData(){
@@ -1349,7 +1349,7 @@ async function cloudSync(direction){
       if(!response.ok) throw new Error(payload.error||'Cloud load failed');
       if(!payload.data){toast('No cloud backup found');return;}
       if(!confirm('Replace local data with the cloud backup?')) return;
-      DB=payload.data; serverRevision=Number(payload.revision||0); localStorage.setItem(DB_KEY,JSON.stringify(DB)); render(); toast('Supabase-backed cloud state restored');
+      DB=payload.data; serverRevision=Number(payload.revision||0); writeLocalSnapshot(JSON.stringify(DB)); render(); toast('Supabase-backed cloud state restored');
     }
   }catch(err){console.error(err);toast(err.message||'Cloud sync failed');}
 }
@@ -1415,7 +1415,7 @@ async function googleDriveSync(direction,silent=false){
       const boundary='uw_boundary_'+Date.now(),content=JSON.stringify(DB),multipart='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n--'+boundary+'--';
       const endpoint=fileId?'https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=multipart':'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
       const r=await fetch(endpoint,{method:fileId?'PATCH':'POST',headers:{...headers,'Content-Type':'multipart/related; boundary='+boundary},body:multipart});if(!r.ok)throw new Error('Google Drive upload failed ('+r.status+')');
-      const savedFile=await r.json();DB.meta.googleDrive={...cfg,fileId:savedFile.id||fileId,lastSync:new Date().toISOString()};localStorage.setItem(DB_KEY,JSON.stringify(DB));if(!silent)toast('Google Drive backup saved');
+      const savedFile=await r.json();DB.meta.googleDrive={...cfg,fileId:savedFile.id||fileId,lastSync:new Date().toISOString()};writeLocalSnapshot(JSON.stringify(DB));if(!silent)toast('Google Drive backup saved');
     }else{
       const query="name='"+(cfg.fileName||'UW_ACCOUNTING_BACKUP.json').replace(/'/g,"\\'")+"' and trashed=false"+(cfg.folderId?" and '"+cfg.folderId+"' in parents":"");
       const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(query)+'&fields=files(id,name,modifiedTime)&orderBy=modifiedTime%20desc&pageSize=1',{headers});if(!r.ok)throw new Error('Google Drive lookup failed ('+r.status+')');const found=(await r.json()).files||[];if(!found.length){toast('No Google Drive backup found');return}const d=await fetch('https://www.googleapis.com/drive/v3/files/'+found[0].id+'?alt=media',{headers});if(!d.ok)throw new Error('Google Drive download failed ('+d.status+')');if(!confirm('Replace local data with the Google Drive backup?'))return;DB=await d.json();DB.meta={...(DB.meta||{}),googleDrive:{...cfg,fileId:found[0].id,lastSync:new Date().toISOString()}};save();render();toast('Google Drive backup restored');
