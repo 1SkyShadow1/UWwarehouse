@@ -56,7 +56,7 @@ const startServer = async mode => {
             confidence: 0.99,
             notes: ''
           })
-        : 'Gemini fallback succeeded.';
+        : prompt.includes('possible duplicate documents') ? JSON.stringify({groups:[{ids:['existing-receipt','second-receipt','invented-id'],reason:'Same merchant and receipt number'}]}) : 'Gemini fallback succeeded.';
       return new Response(JSON.stringify({
         candidates: [{ content: { parts: [{ text }] } }]
       }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -193,6 +193,11 @@ const runDocumentReviewFallbackTest = async () => {
     ]);
     assert.ok(requests.every(item => item.hasInlineData), 'Receipt-review requests must retain the source image when switching models.');
     assert.ok(requests.every(item=>item.prompt.includes('existing-receipt')),'Gemini reviews existing receipt metadata for duplicate evidence');
+    const duplicateResponse=await server.request('/api/ai/duplicate-scans',{scans:[{id:'existing-receipt',name:'original.jpg',merchant:'Test Merchant',amount:123.45},{id:'second-receipt',name:'rescan.jpg',merchant:'Test Merchant',amount:123.45}]});
+    assert.equal(duplicateResponse.status,200);
+    const duplicates=await duplicateResponse.json();
+    assert.deepEqual(duplicates.groups[0].ids,['existing-receipt','second-receipt']);
+    assert.equal((await server.request('/api/ai/duplicate-scans',{scans:[null]})).status,400);
     console.log('Gemini receipt review falls back on quota exhaustion and retains the document bytes.');
   } finally {
     await stopServer(server);

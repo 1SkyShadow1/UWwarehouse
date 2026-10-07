@@ -27,3 +27,11 @@ Gemini now compares each scan with up to 400 existing reviewed scans using compa
 Potential duplicates are listed by filename and reason in the confirmation screen and scan register. They are retained for source comparison. Approval asks the operator to confirm that the receipt represents a separate transaction; nothing is automatically deleted or posted. Existing reviewed receipts have a **Check duplicates** action. Upload skipping now requires a real matching content hash, rather than assuming that equal filenames and sizes mean identical receipts.
 
 Validation: 47 Node tests and all integration checks passed. Provider fixtures verify that Gemini receives candidate metadata and cannot invent match IDs. Browser checks verify rescan warnings, retained source records and cancellation of duplicate approval, alongside the existing pricing and document workflows.
+
+## AI-assisted Delete duplicates — v50
+
+The **Delete duplicates** button now asks Gemini to compare the active scan library's receipt metadata. It combines validated AI groups with deterministic receipt/content matches, then displays unchecked candidates, the original to retain, evidence and View actions. The operator selects confirmed duplicates and chooses **Remove selected duplicates**. Approved/included scans are protected and candidate changes are checked again before removal.
+
+Removal archives the scan in the existing shared ledger by excluding it from active scans. The record and original source bytes remain intact; **Undo cleanup** restores each cleanup batch, including earlier batches in sequence. The obsolete destructive endpoint is no longer called by this feature. This also eliminates the previous local-first deletion on failed server requests. Normal shared-state conflict handling and incremental backups continue to protect pending work.
+
+Provider failures/timeouts do not remove records. Gemini comparisons use existing extracted metadata; unreadable receipts still need individual document review before their contents can provide useful duplicate evidence. API fixtures check candidate-ID validation, while browser tests cover explicit selection, cleanup, Undo and provider failure without removing scans.

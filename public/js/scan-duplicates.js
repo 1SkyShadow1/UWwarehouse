@@ -19,5 +19,21 @@
       return reason?[{id:String(other.id),name:String(other.name||other.id),reason}]:[];
     });
   }
-  const api={matches};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.UWScanDuplicates=api;
+  function cleanupCandidates(documents,groups=[]){
+    const ordered=[...(documents||[])].sort((a,b)=>Number(Boolean(b.includedInTotals||b.reviewStatus==='Approved'))-Number(Boolean(a.includedInTotals||a.reviewStatus==='Approved')));
+    const removed=new Set(),candidates=[];
+    for(let i=0;i<ordered.length;i++){
+      const document=ordered[i];
+      if(document.includedInTotals||document.reviewStatus==='Approved')continue;
+      const earlier=ordered.slice(0,i).filter(doc=>!removed.has(String(doc.id)));
+      const local=matches(document,earlier)[0];
+      const aiGroup=groups.find(group=>group.ids.includes(String(document.id))&&earlier.some(doc=>group.ids.includes(String(doc.id))));
+      const keeper=local?earlier.find(doc=>String(doc.id)===local.id):aiGroup?earlier.find(doc=>aiGroup.ids.includes(String(doc.id))):null;
+      if(!keeper)continue;
+      candidates.push({id:String(document.id),name:document.name,keepId:String(keeper.id),keepName:keeper.name,reason:local?.reason||aiGroup.reason||'Gemini identified a possible duplicate'});
+      removed.add(String(document.id));
+    }
+    return candidates;
+  }
+  const api={matches,cleanupCandidates};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.UWScanDuplicates=api;
 })(typeof window!=='undefined'?window:globalThis);

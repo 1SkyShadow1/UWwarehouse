@@ -441,6 +441,20 @@ async function run() {
       return DB.scannedDocuments.find(doc=>doc.id==='receipt-rescan').reviewStatus;
     });
     assert.equal(approval,'AI reviewed','Declining the duplicate warning must preserve the unapproved record');
+    await context.route('**/api/ai/duplicate-scans',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({groups:[{ids:[scanId,'receipt-rescan'],reason:'Gemini matched the receipt'}],provider:'gemini',model:'fixture',checked:2})}));
+    await page.getByRole('button',{name:'Delete duplicates',exact:true}).click();
+    await page.getByRole('heading',{name:'Review Gemini duplicate candidates',exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Remove receipt-rescan.jpg',{exact:true}).evaluate(el=>el.checked),false,'AI candidates require explicit selection');
+    await page.getByLabel('Remove receipt-rescan.jpg',{exact:true}).check();
+    await page.getByRole('button',{name:'Remove selected duplicates',exact:true}).click();
+    assert.equal(await page.evaluate(()=>DB.scannedDocuments.length),2,'Cleanup retains original records for recovery');
+    assert.equal(await page.evaluate(()=>DB.scannedDocuments.find(doc=>doc.id==='receipt-rescan').canonical),false);
+    await page.getByRole('button',{name:'Undo cleanup',exact:true}).click();
+    assert.equal(await page.evaluate(()=>DB.scannedDocuments.find(doc=>doc.id==='receipt-rescan').canonical),true);
+    assert.equal(await page.evaluate(()=>DB.scannedDocuments.some(doc=>doc.duplicateArchive)),false);
+    await context.route('**/api/ai/duplicate-scans',route=>route.fulfill({status:503,contentType:'application/json',body:'{"error":"Gemini unavailable"}'}));
+    await page.evaluate(()=>deleteDuplicateScans());
+    assert.equal(await page.evaluate(()=>DB.scannedDocuments.filter(doc=>doc.canonical).length),2,'Provider failure must not remove any scans');
     assert.deepEqual(errors, []);
     if (process.env.UW_TEST_SCREENSHOT){
       await page.evaluate(()=>{closeModal();newQuote();});

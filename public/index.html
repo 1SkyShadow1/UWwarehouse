@@ -11,7 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=49">
+<link rel="stylesheet" href="css/pricing.css?v=50">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -269,7 +269,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=49">
+<link rel="stylesheet" href="css/documents.css?v=50">
 </head>
 <body>
 
@@ -338,31 +338,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=49"></script>
-<script src="income-2026.js?v=49"></script>
-<script src="operations-data.js?v=49"></script>
-<script src="scanned-data.js?v=49"></script>
-<script src="bank-statements.js?v=49"></script>
-<script src="js/pricing-core.js?v=49"></script>
-<script src="js/fabrics.js?v=49"></script>
-<script src="item-presets.js?v=49"></script>
-<script src="js/item-presets.js?v=49"></script>
-<script src="js/document-lines.js?v=49"></script>
-<script src="js/fabric-picker.js?v=49"></script>
-<script src="js/pricing.js?v=49"></script>
-<script src="js/quote-history.js?v=49"></script>
-<script src="js/document-numbers.js?v=49"></script>
-<script src="js/imported-quotes.js?v=49"></script>
-<script src="js/scan-duplicates.js?v=49"></script>
-<script src="js/document-editor.js?v=49"></script>
-<script src="js/document-format.js?v=49"></script>
-<script src="js/document-views.js?v=49"></script>
-<script src="js/quotes.js?v=49"></script>
-<script src="js/dashboard.js?v=49"></script>
-<script src="js/suppliers.js?v=49"></script>
-<script src="js/app-version.js?v=49"></script>
-<script src="js/shared-sync.js?v=49"></script>
-<script src="js/local-recovery.js?v=49"></script>
+<script src="imported-data.js?v=50"></script>
+<script src="income-2026.js?v=50"></script>
+<script src="operations-data.js?v=50"></script>
+<script src="scanned-data.js?v=50"></script>
+<script src="bank-statements.js?v=50"></script>
+<script src="js/pricing-core.js?v=50"></script>
+<script src="js/fabrics.js?v=50"></script>
+<script src="item-presets.js?v=50"></script>
+<script src="js/item-presets.js?v=50"></script>
+<script src="js/document-lines.js?v=50"></script>
+<script src="js/fabric-picker.js?v=50"></script>
+<script src="js/pricing.js?v=50"></script>
+<script src="js/quote-history.js?v=50"></script>
+<script src="js/document-numbers.js?v=50"></script>
+<script src="js/imported-quotes.js?v=50"></script>
+<script src="js/scan-duplicates.js?v=50"></script>
+<script src="js/scan-cleanup.js?v=50"></script>
+<script src="js/document-editor.js?v=50"></script>
+<script src="js/document-format.js?v=50"></script>
+<script src="js/document-views.js?v=50"></script>
+<script src="js/quotes.js?v=50"></script>
+<script src="js/dashboard.js?v=50"></script>
+<script src="js/suppliers.js?v=50"></script>
+<script src="js/app-version.js?v=50"></script>
+<script src="js/shared-sync.js?v=50"></script>
+<script src="js/local-recovery.js?v=50"></script>
 
 <script>
 /* ============================================================
@@ -1173,12 +1174,14 @@ function mergeScannedDocumentState(previousDocuments,bundledDocuments){
       reviewedAt:old.reviewedAt||document.reviewedAt||'',
       aiReview:old.aiReview||document.aiReview,
       fnbReview:old.fnbReview||document.fnbReview,
+      ...(old.duplicateArchive?{canonical:false,duplicateArchive:old.duplicateArchive}:{}),
       ...(reviewed?{
         scanDate:old.scanDate??document.scanDate,
         category:old.category??document.category,
         merchant:old.merchant??document.merchant,
         vendor:old.vendor??document.vendor,
         amount:old.amount??document.amount,
+        invoiceNumber:old.invoiceNumber??document.invoiceNumber,
         currency:old.currency??document.currency,
         documentType:old.documentType??document.documentType,
         notes:old.notes??document.notes
@@ -2095,19 +2098,7 @@ function scanDuplicateGroups(){
   });
   return [...groups.values()].filter(group=>group.length>1);
 }
-async function deleteDuplicateScans(){
-  const groups=scanDuplicateGroups(), duplicates=groups.flatMap(group=>group.slice(1));
-  if(!duplicates.length){toast('No duplicate scans found');return;}
-  if(!confirm(`Delete ${duplicates.length} duplicate scan${duplicates.length===1?'':'s'} and keep one canonical copy from each group?`))return;
-  const ids=duplicates.map(document=>String(document.id));
-  DB.scannedDocuments=(DB.scannedDocuments||[]).filter(document=>!ids.includes(String(document.id)));
-  save();
-  try{
-    const response=await fetch('/api/documents/delete-duplicates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
-    if(!response.ok)throw new Error('Managed duplicate cleanup failed');
-  }catch(error){console.warn('Managed duplicate cleanup failed; local duplicate records were removed.',error);}
-  render();toast(`Deleted ${duplicates.length} duplicate scan${duplicates.length===1?'':'s'}`);
-}
+async function deleteDuplicateScans(){if(scanCleanupReview){showDuplicateCleanupReview();return;}await startAiDuplicateCleanup();}
 async function fileContentHash(file){
   const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
   return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -2437,7 +2428,7 @@ function vScanned(c){
   const batchRunning=Boolean(scannedReviewBatch?.running);
   const batchButton=batchRunning
     ? `<button class="btn gold" type="button" onclick="cancelScannedReviewBatch()">Stop after current</button><span id="scanned-review-progress" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></span>`
-    : `<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">${DB.meta?.fnbReviewBatchCompletedAt?'Review FNB matches again':'Review FNB matches'}</button><button class="btn" type="button" onclick="deleteDuplicateScans()">Delete duplicates</button>`;
+    : `<button class="btn gold" type="button" onclick="reviewAllScannedDocuments()">✦ Run Gemini on all unreviewed</button><button class="btn" type="button" onclick="reviewAllFnbDocuments()">${DB.meta?.fnbReviewBatchCompletedAt?'Review FNB matches again':'Review FNB matches'}</button><button class="btn" type="button" onclick="deleteDuplicateScans()">Delete duplicates</button>${DB.meta?.lastDuplicateCleanup?'<button class="btn" onclick="undoDuplicateCleanup()">Undo cleanup</button>':''}`;
   c.innerHTML=`<div class="toolbar">${docFilterHtml('scanned',['Receipt scan','Invoice scan','Unclassified scan','Other'],['Needs review','AI reviewed','FNB reviewed','Approved'])}${batchButton}<label class="btn gold" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload scans<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><label class="btn" role="button"${batchRunning?' aria-disabled="true"':''}>＋ Upload folder<input type="file" webkitdirectory directory multiple style="display:none"${batchRunning?' disabled':''} onchange="uploadScannedDocuments(event)"></label><span style="color:var(--muted);font-size:12px">${rows.length} shown · ${meta.uniqueFiles||0} unique hashes · ${meta.duplicateFiles||0} duplicate copies excluded</span></div><div class="scan-dropzone" ondragover="allowScannedDrop(event)" ondragleave="leaveScannedDrop(event)" ondrop="handleScannedDrop(event)"><strong>Drop receipt or invoice files/folders here</strong><span>JPG, PNG, WEBP, GIF, and PDF · folders are scanned recursively</span></div><div class="panel"><h3>Scanned Receipts & Invoices</h3><p style="font-size:11px;color:var(--muted)">FNB review compares each receipt's date and amount against debits in the imported statement rows. Run Gemini first when the date or amount is missing; ambiguous and already-linked transactions are flagged instead of auto-confirmed.</p><table><tr><th>File</th><th>Category</th><th>Amount</th><th>Merchant / shop</th><th>Document date</th><th>Review</th><th>FNB statement / source</th><th></th></tr>${body}</table></div>`;
   if(batchRunning)updateScannedReviewProgress();
 }

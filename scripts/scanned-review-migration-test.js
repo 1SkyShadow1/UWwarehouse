@@ -57,6 +57,10 @@ const run = () => {
     [{ id: 'legacy-1', name: 'one.pdf' }, { id: 'legacy-2', name: 'two.pdf' }],
   );
   assert.equal(noHash.length, 2, 'Legacy records without hashes must not collide during migration.');
+  const archived=context.merge([{id:'archived',hash:'archive-hash',canonical:false,duplicateArchive:{batch:'cleanup-1'},invoiceNumber:'RECEIPT-1',aiReview:{successful:true}}],[{id:'archived',hash:'archive-hash',canonical:true}]);
+  assert.equal(archived[0].canonical,false,'Catalog refresh must not resurrect archived duplicates');
+  assert.equal(archived[0].duplicateArchive.batch,'cleanup-1');
+  assert.equal(archived[0].invoiceNumber,'RECEIPT-1');
   console.log('Scanned-data version changes preserve AI review results and locally uploaded scans.');
 };
 
