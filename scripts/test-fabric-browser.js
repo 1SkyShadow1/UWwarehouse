@@ -397,6 +397,35 @@ async function run() {
     await page.emulateMedia({media:'print'});
     await page.pdf({path:path.join(__dirname,'..','tmp','receipt-browser-print-proof.pdf'),printBackground:true,preferCSSPageSize:true});
     await page.emulateMedia({media:'screen'});
+    // Receipt upload, Gemini extraction, source preview and duplicate handling
+    // run against an isolated in-memory workspace, never the live ledger.
+    const scanId='a'.repeat(32);
+    const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
+    let uploads=0,reviews=0;
+    await context.route('**/api/documents',route=>{
+      uploads++;return route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({id:scanId,name:'receipt-test.png',url:'/api/documents/'+scanId})});
+    });
+    await context.route('**/api/documents/'+scanId,route=>route.fulfill({contentType:'image/png',body:png}));
+    await context.route('**/api/ai/review-document',route=>{
+      reviews++;return route.fulfill({contentType:'application/json',body:JSON.stringify({provider:'gemini',model:'fixture',documentDate:'2026-10-07',merchant:'Receipt test shop',amountPaid:123.45,currency:'ZAR',documentType:'receipt',confidence:0.99})});
+    });
+    await page.evaluate(async bytes=>{
+      closeModal();DB.scannedDocuments=[];syncServerState=async()=>({serverSaved:true});
+      const scan=new File([new Uint8Array(bytes)],'receipt-test.png',{type:'image/png'});
+      await storeUploadedScan(scan);go('scanned');
+    },Array.from(png));
+    const uploaded=await page.evaluate(()=>DB.scannedDocuments[0]);
+    assert.equal(uploaded.amount,123.45);assert.equal(uploaded.merchant,'Receipt test shop');
+    assert.equal(uploaded.aiReview.provider,'gemini');assert.equal(uploaded.includedInTotals,false);
+    assert.equal(uploads,1);assert.equal(reviews,1);
+    await page.evaluate(()=>viewDocument(DB.scannedDocuments[0]));
+    await page.locator('#document-image').waitFor({state:'visible'});
+    await page.locator('#document-image').evaluate(img=>img.decode());
+    await page.evaluate(async bytes=>{
+      closeModal();await storeUploadedScan(new File([new Uint8Array(bytes)],'receipt-test.png',{type:'image/png'}));
+    },Array.from(png));
+    assert.equal(uploads,1);assert.equal(reviews,1);
+    assert.equal(await page.evaluate(()=>DB.scannedDocuments.length),1);
     assert.deepEqual(errors, []);
     if (process.env.UW_TEST_SCREENSHOT){
       await page.evaluate(()=>{closeModal();newQuote();});
@@ -411,7 +440,7 @@ async function run() {
       await page.evaluate(()=>{closeModal();go('fabrics');setDocFilter('fabrics','q','');setDocFilter('fabrics','category','The Mill');applyDocFilter('fabrics');});
       await page.screenshot({path:process.env.UW_TEST_SCREENSHOT.replace(/\.png$/,'.catalog.png'),fullPage:true});
     }
-    console.log('PASS: supplier pricing, searchable picker, markup/margin, manual overrides, accepted revisions, expiry enforcement, daily actions, catalog restore and calculator reconciliation; no browser exceptions.');
+    console.log('PASS: pricing, quote/invoice workflows, receipt upload/Gemini extraction/preview/duplicates, and calculator reconciliation; no browser exceptions.');
   } finally {
     await browser.close();
   }

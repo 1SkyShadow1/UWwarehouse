@@ -15,7 +15,9 @@ if (fs.existsSync(localStorageConfigPath)) {
   }
 }
 const localOnly = process.env.UW_LOCAL_ONLY === '1';
-if (localOnly) for (const key of ['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','GEMINI_API_KEY','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET']) process.env[key] = '';
+// Local mode controls storage integrations. Receipt review still uses the
+// explicitly configured Gemini key; it never changes the local datastore.
+if (localOnly) for (const key of ['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET']) process.env[key] = '';
 const { google } = require('googleapis');
 const multer = require('multer');
 const PDFDocument = require('pdfkit');
@@ -1333,6 +1335,7 @@ app.get('/api/documents/:id', requireApiKey, async (req, res) => {
 });
 
 app.post('/api/ai/review-document', requireApiKey, async (req, res) => {
+  if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'Gemini document review is not configured. Your scan is saved; configure the existing server integration before retrying.', code: 'AI_NOT_CONFIGURED', retryable: false });
   if (!allowAiRequest(req)) return res.status(429).json({ error: 'AI request limit reached. Please try again later.' });
   const id = String(req.body?.id || '').trim();
   const name = String(req.body?.name || '').trim();
@@ -1364,7 +1367,8 @@ app.post('/api/ai/review-document', requireApiKey, async (req, res) => {
     const result = await callGeminiDocumentReview({ buffer: filePath ? fs.readFileSync(filePath) : remoteDocument.buffer, mimeType, name: fileName || path.basename(filePath || remoteDocument.name) });
     return res.json({ ...result, sourceName: path.basename(filePath || remoteDocument.name) });
   } catch (error) {
-    return res.status(error.statusCode || 502).json({ error: error.message || 'Gemini document review failed.' });
+    const status = error.statusCode || 502;
+    return res.status(status).json({ error: error.message || 'Gemini document review failed.', retryable: status === 408 || status === 429 || status >= 500 });
   }
 });
 
@@ -1623,7 +1627,7 @@ const callGeminiDocumentReview = async ({ buffer, mimeType, name }) => {
       return {
         documentDate: /^\d{4}-\d{2}-\d{2}$/.test(String(extraction.documentDate || '')) ? extraction.documentDate : null,
         merchant: extraction.merchant ? String(extraction.merchant).trim().slice(0, 200) : null,
-        amountPaid: Number.isFinite(Number(extraction.amountPaid)) ? Number(extraction.amountPaid) : null,
+        amountPaid: extraction.amountPaid !== null && extraction.amountPaid !== undefined && String(extraction.amountPaid).trim() !== '' && Number.isFinite(Number(extraction.amountPaid)) && Number(extraction.amountPaid) >= 0 ? Number(extraction.amountPaid) : null,
         currency: extraction.currency ? String(extraction.currency).trim().slice(0, 12) : null,
         documentType: ['receipt', 'invoice', 'other'].includes(extraction.documentType) ? extraction.documentType : 'other',
         invoiceNumber: extraction.invoiceNumber ? String(extraction.invoiceNumber).trim().slice(0, 100) : null,

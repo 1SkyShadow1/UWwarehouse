@@ -48,7 +48,7 @@ const startServer = async mode => {
         ? JSON.stringify({
             documentDate: '2026-09-28',
             merchant: 'Test Merchant',
-            amountPaid: 123.45,
+            amountPaid: process.env.GEMINI_TEST_MODE === 'missing-amount' ? null : 123.45,
             currency: 'ZAR',
             documentType: 'receipt',
             invoiceNumber: 'TEST-1',
@@ -78,6 +78,9 @@ const startServer = async mode => {
       GEMINI_API_KEY: 'test-key-not-a-real-credential',
       GEMINI_MODEL: 'gemini-3.6-flash',
       GEMINI_TEST_MODEL_LOG: requestLogPath,
+      GEMINI_TEST_MODE: mode,
+      UW_LOCAL_ONLY: ['local-document-review', 'missing-key'].includes(mode) ? '1' : '0',
+      ...(mode === 'missing-key' ? { GEMINI_API_KEY: '' } : {}),
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -155,7 +158,7 @@ const runChatFallbackTest = async () => {
 };
 
 const runDocumentReviewFallbackTest = async () => {
-  const server = await startServer('document-review');
+  const server = await startServer('local-document-review');
   try {
     const body = { name: 'receipt.png', path: server.sourcePath };
     const firstResponse = await server.request('/api/ai/review-document', body);
@@ -164,6 +167,11 @@ const runDocumentReviewFallbackTest = async () => {
     assert.equal(first.model, 'gemini-flash-latest');
     assert.equal(first.merchant, 'Test Merchant');
     assert.equal(first.amountPaid, 123.45);
+    const config = await (await fetch(server.base + '/api/ai/config')).json();
+    assert.equal(config.configured, true, 'Local storage must retain the configured Gemini review integration');
+    const health = await (await fetch(server.base + '/api/health')).json();
+    assert.equal(health.localOnly, true);
+    assert.equal(health.supabaseConfigured, false);
 
     const secondResponse = await server.request('/api/ai/review-document', body);
     assert.equal(secondResponse.status, 200);
@@ -183,8 +191,29 @@ const runDocumentReviewFallbackTest = async () => {
   }
 };
 
+const runReviewErrorTests = async () => {
+  for (const mode of ['missing-key', 'missing-amount']) {
+    const server = await startServer(mode);
+    try {
+      const response = await server.request('/api/ai/review-document', {name:'receipt.png',path:server.sourcePath});
+      const result = await response.json();
+      if (mode === 'missing-key') {
+        assert.equal(response.status, 503);
+        assert.equal(result.code, 'AI_NOT_CONFIGURED');
+        assert.equal(result.retryable, false);
+        assert.equal(fs.existsSync(server.requestLogPath), false, 'No provider request without a key');
+      } else {
+        assert.equal(response.status, 200);
+        assert.equal(result.amountPaid, null, 'An unreadable total must not become a zero amount');
+      }
+    } finally { await stopServer(server); }
+  }
+  console.log('Unconfigured review fails once; unreadable receipt amounts remain blank.');
+};
+
 runChatFallbackTest()
   .then(runDocumentReviewFallbackTest)
+  .then(runReviewErrorTests)
   .catch(error => {
     console.error(error);
     process.exitCode = 1;

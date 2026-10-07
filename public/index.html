@@ -11,7 +11,7 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=47">
+<link rel="stylesheet" href="css/pricing.css?v=48">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -269,7 +269,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=47">
+<link rel="stylesheet" href="css/documents.css?v=48">
 </head>
 <body>
 
@@ -338,30 +338,30 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=47"></script>
-<script src="income-2026.js?v=47"></script>
-<script src="operations-data.js?v=47"></script>
-<script src="scanned-data.js?v=47"></script>
-<script src="bank-statements.js?v=47"></script>
-<script src="js/pricing-core.js?v=47"></script>
-<script src="js/fabrics.js?v=47"></script>
-<script src="item-presets.js?v=47"></script>
-<script src="js/item-presets.js?v=47"></script>
-<script src="js/document-lines.js?v=47"></script>
-<script src="js/fabric-picker.js?v=47"></script>
-<script src="js/pricing.js?v=47"></script>
-<script src="js/quote-history.js?v=47"></script>
-<script src="js/document-numbers.js?v=47"></script>
-<script src="js/imported-quotes.js?v=47"></script>
-<script src="js/document-editor.js?v=47"></script>
-<script src="js/document-format.js?v=47"></script>
-<script src="js/document-views.js?v=47"></script>
-<script src="js/quotes.js?v=47"></script>
-<script src="js/dashboard.js?v=47"></script>
-<script src="js/suppliers.js?v=47"></script>
-<script src="js/app-version.js?v=47"></script>
-<script src="js/shared-sync.js?v=47"></script>
-<script src="js/local-recovery.js?v=47"></script>
+<script src="imported-data.js?v=48"></script>
+<script src="income-2026.js?v=48"></script>
+<script src="operations-data.js?v=48"></script>
+<script src="scanned-data.js?v=48"></script>
+<script src="bank-statements.js?v=48"></script>
+<script src="js/pricing-core.js?v=48"></script>
+<script src="js/fabrics.js?v=48"></script>
+<script src="item-presets.js?v=48"></script>
+<script src="js/item-presets.js?v=48"></script>
+<script src="js/document-lines.js?v=48"></script>
+<script src="js/fabric-picker.js?v=48"></script>
+<script src="js/pricing.js?v=48"></script>
+<script src="js/quote-history.js?v=48"></script>
+<script src="js/document-numbers.js?v=48"></script>
+<script src="js/imported-quotes.js?v=48"></script>
+<script src="js/document-editor.js?v=48"></script>
+<script src="js/document-format.js?v=48"></script>
+<script src="js/document-views.js?v=48"></script>
+<script src="js/quotes.js?v=48"></script>
+<script src="js/dashboard.js?v=48"></script>
+<script src="js/suppliers.js?v=48"></script>
+<script src="js/app-version.js?v=48"></script>
+<script src="js/shared-sync.js?v=48"></script>
+<script src="js/local-recovery.js?v=48"></script>
 
 <script>
 /* ============================================================
@@ -2253,6 +2253,7 @@ async function requestGeminiReview(doc){
   if(!response.ok){
     const error=new Error(result.error||`Gemini review failed (${response.status})`);
     error.status=response.status;
+    error.retryable=result.retryable;
     error.retryAfter=Number(response.headers.get('Retry-After')||0);
     throw error;
   }
@@ -2265,7 +2266,7 @@ async function requestGeminiReviewWithRetry(doc,maxAttempts=3){
     catch(error){
       lastError=error;
       const status=Number(error.status||0);
-      const retryable=status===408||status===425||status===429||status>=500||/timed out|network|gateway|temporarily|fetch/i.test(error.message);
+      const retryable=error.retryable!==false&&(status===408||status===425||status===429||status>=500||/timed out|network|gateway|temporarily|fetch/i.test(error.message));
       if(!retryable||attempt===maxAttempts-1)throw error;
       const serverDelay=Number(error.retryAfter)>0?Number(error.retryAfter)*1000:0;
       await new Promise(resolve=>setTimeout(resolve,Math.max(serverDelay,Math.min(1500*2**attempt,10000))));
