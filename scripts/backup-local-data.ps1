@@ -322,6 +322,11 @@ try {
   $verifiedManifest = Assert-BackupValid $destination
   $backups = @(Get-ChildItem -LiteralPath $BackupRoot -Directory |
     Where-Object { $_.Name -match '^UWAccounting-\d{8}-\d{6}-\d{3}$' } |
+    Where-Object {
+      # Explicit full-backup retention must never remove incremental history.
+      try { (Get-Content -LiteralPath (Join-Path $_.FullName $manifestName) -Raw -Encoding UTF8 | ConvertFrom-Json).schemaVersion -eq 2 }
+      catch { $false }
+    } |
     Sort-Object Name -Descending)
   foreach ($oldBackup in $backups | Select-Object -Skip $RetentionCount) {
     if (-not (Test-PathWithin $oldBackup.FullName $BackupRoot)) { throw 'Backup cleanup escaped the backup directory.' }

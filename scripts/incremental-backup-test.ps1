@@ -50,6 +50,8 @@ try {
   Assert (Test-Path -LiteralPath (Join-Path $restoreFourth 'Source Library/UW/empty-folder') -PathType Container) 'Empty source folder was lost.'
   Assert (-not ((Get-Content -LiteralPath (Join-Path $restoreFourth 'local-environment.dpapi') -Raw) -match 'fixture-private')) 'Restored configuration is plaintext.'
   Throws {& $script -RestorePath $first -RestoreDestination $restoreFourth} 'Restore overwrote an existing destination.'
+  & $script -AppRoot $app -DataRoot $data -BackupRoot $backups -InvoicesRoot $invoices -QuotesRoot $quotes -SourceRoots @($source) -EnvironmentFile (Join-Path $app '.env') -FullBackup -RetentionCount 1
+  foreach($snapshot in @($first,$second,$third,$fourth)){Assert (Test-Path -LiteralPath $snapshot) 'Legacy retention removed incremental history.'}
   $before=(Get-ChildItem -LiteralPath $backups -Directory | Where-Object Name -like 'UWAccounting-*').Count
   Set-Content -LiteralPath (Join-Path $data 'uw-state.json') -Value 'invalid ledger'
   Throws {Run-Backup|Out-Null} 'Invalid ledger was backed up as a valid snapshot.'
