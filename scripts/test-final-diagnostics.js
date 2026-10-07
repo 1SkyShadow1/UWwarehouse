@@ -5,7 +5,9 @@ test('local document dates and report months do not shift to the previous UTC da
   const c=vm.createContext({Date:class {getFullYear(){return 2026;}getMonth(){return 9;}getDate(){return 1;}toISOString(){return '2026-09-30T22:30:00.000Z';}}});
   const start=html.indexOf('function localCalendarDate('),end=html.indexOf('const today =',start);
   vm.runInContext(html.slice(start,end)+"globalThis.currentDay=localCalendarDate();",c);assert.equal(c.currentDay,'2026-10-01');
-  assert.equal((html.match(/months.push\(localCalendarDate\(d\).slice\(0,7\)\)/g)||[]).length,2);
+  c.Date=class extends Date {constructor(...args){super(...(args.length?args:[2026,9,7,12]));}};c.state={mfilter:''};
+  vm.runInContext(html.slice(html.indexOf('function monthFilterHtml('),html.indexOf('let state={mfilter:')),c);
+  const filter=c.monthFilterHtml('fixture');assert.match(filter,/value="2026-10"/);assert.match(filter,/value="2024-01"/);assert(!filter.includes('value="2023-12"'));
 });
 test('periodic cache saves log only actual failures and queue pending changes',()=>{
   let errors=0,queued=0,result={ok:true};
