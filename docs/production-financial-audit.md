@@ -25,11 +25,13 @@ AI derived financial summaries now share the unique-invoice reporting rules and 
 
 Dashboard/report costs and net figures now identify their undated payroll estimate and invoice-date basis instead of certifying accounting profit. Provisional evidence warnings appear in both views. All-data report totals include all records independently of the displayed month window.
 
+Live Brian dashboard totals agree with the captured snapshot. That check exposed repeated bank merchant parsing; transaction dates/amounts are now prepared once, merchant comparison runs only on amount/date candidates, and summary matches are reused. Receipt cross-reference counts also follow the selected financial month.
+
 ## Validation
 
 The full automated suite, including financial regression tests, passes. Isolated browser checks cover all 19 screens against the read-only audit snapshot plus quote/invoice pricing, receipt upload, Gemini extraction responses, document preview and duplicate handling. Provider responses are fixtures; this does not certify a successful live Gemini bulk request.
 
-`npm audit` still reports one high and four moderate dependency advisories. Dependencies, security settings, storage paths and deployment configuration were not altered. Local server health confirms durable local storage on D:. The current user browser was signed out, so signed-in production screen verification remains pending.
+`npm audit` still reports one high and four moderate dependency advisories. Dependencies, security settings, storage paths and deployment configuration were not altered. Local server health confirms durable local storage on D:. The browser was signed out at the initial audit; Brian subsequently signed in and his dashboard was checked.
 
 ## Reproduce
 

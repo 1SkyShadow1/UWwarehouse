@@ -40,3 +40,16 @@ test('ambiguous imported job IDs cannot edit the first matching job silently',()
  vm.runInContext(section('function updateJobStage(','function newJob('),c);
  c.updateJobStage('BB','Delivered');c.linkJobInvoice('BB','I');assert.equal(saves,0);assert.equal(db.jobs[0].stage,'Closed');assert.equal(db.jobs[1].stage,'Quoted');
 });
+test('bank matching parses transactions once and skips merchant work for unrelated dates',()=>{
+ const db={expenses:Array.from({length:100},()=>({date:'2026-10-08',amount:100,vendor:'Acme'})),transactions:Array.from({length:250},(_,i)=>({id:String(i),date:'2025-01-01',amount:-100,description:'Acme'}))};
+ const c=context(db);let amountCalls=0,merchantCalls=0;const tokens=c.fnbMerchantTokens;
+ c.fnbTransactionAmount=t=>{amountCalls++;return t.amount;};c.fnbMerchantTokens=value=>{merchantCalls++;return tokens(value);};
+ vm.runInContext(section('function fnbExpenseMatches(','function fnbExpenseOverlapCount('),c);
+ assert.equal(c.fnbExpenseMatches().length,0);assert.equal(amountCalls,250);assert.equal(merchantCalls,100);
+});
+test('receipt cross-reference follows the financial month and matches each receipt once',()=>{
+ const scans=[{date:'2026-09-01',amount:10,id:'S'},{date:'2026-10-01',amount:20,id:'O'}];let calls=0,expenseCalls=0;
+ const c=context({invoices:[],expenses:[]});Object.assign(c,{scannedExpenseEvidence:()=>scans,geminiReviewComplete:()=>true,extractedDocumentDate:s=>s.date,extractedDocumentAmount:s=>s.amount,scanFnbMatch:s=>{calls++;return {transaction:{id:s.id}};},fnbReconciliationSummary:()=>({}),fnbExpenseMatches:()=>{expenseCalls++;return [];}});
+ vm.runInContext(section('function crossReferenceSummary(','function syncExpenseEvidence('),c);
+ const result=c.crossReferenceSummary('2026-10');assert.equal(result.reviewedScanCount,1);assert.equal(result.matchedScanAmount,20);assert.equal(calls,1);assert.equal(expenseCalls,1);
+});

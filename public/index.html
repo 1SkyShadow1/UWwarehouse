@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=57">
-<link rel="stylesheet" href="css/scans.css?v=57">
+<link rel="stylesheet" href="css/pricing.css?v=58">
+<link rel="stylesheet" href="css/scans.css?v=58">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=57">
+<link rel="stylesheet" href="css/documents.css?v=58">
 </head>
 <body>
 
@@ -339,32 +339,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=57"></script>
-<script src="income-2026.js?v=57"></script>
-<script src="operations-data.js?v=57"></script>
-<script src="scanned-data.js?v=57"></script>
-<script src="bank-statements.js?v=57"></script>
-<script src="js/pricing-core.js?v=57"></script>
-<script src="js/fabrics.js?v=57"></script>
-<script src="item-presets.js?v=57"></script>
-<script src="js/item-presets.js?v=57"></script>
-<script src="js/document-lines.js?v=57"></script>
-<script src="js/fabric-picker.js?v=57"></script>
-<script src="js/pricing.js?v=57"></script>
-<script src="js/quote-history.js?v=57"></script>
-<script src="js/document-numbers.js?v=57"></script>
-<script src="js/imported-quotes.js?v=57"></script>
-<script src="js/scan-duplicates.js?v=57"></script>
-<script src="js/scan-cleanup.js?v=57"></script>
-<script src="js/document-editor.js?v=57"></script>
-<script src="js/document-format.js?v=57"></script>
-<script src="js/document-views.js?v=57"></script>
-<script src="js/quotes.js?v=57"></script>
-<script src="js/dashboard.js?v=57"></script>
-<script src="js/suppliers.js?v=57"></script>
-<script src="js/app-version.js?v=57"></script>
-<script src="js/shared-sync.js?v=57"></script>
-<script src="js/local-recovery.js?v=57"></script>
+<script src="imported-data.js?v=58"></script>
+<script src="income-2026.js?v=58"></script>
+<script src="operations-data.js?v=58"></script>
+<script src="scanned-data.js?v=58"></script>
+<script src="bank-statements.js?v=58"></script>
+<script src="js/pricing-core.js?v=58"></script>
+<script src="js/fabrics.js?v=58"></script>
+<script src="item-presets.js?v=58"></script>
+<script src="js/item-presets.js?v=58"></script>
+<script src="js/document-lines.js?v=58"></script>
+<script src="js/fabric-picker.js?v=58"></script>
+<script src="js/pricing.js?v=58"></script>
+<script src="js/quote-history.js?v=58"></script>
+<script src="js/document-numbers.js?v=58"></script>
+<script src="js/imported-quotes.js?v=58"></script>
+<script src="js/scan-duplicates.js?v=58"></script>
+<script src="js/scan-cleanup.js?v=58"></script>
+<script src="js/document-editor.js?v=58"></script>
+<script src="js/document-format.js?v=58"></script>
+<script src="js/document-views.js?v=58"></script>
+<script src="js/quotes.js?v=58"></script>
+<script src="js/dashboard.js?v=58"></script>
+<script src="js/suppliers.js?v=58"></script>
+<script src="js/app-version.js?v=58"></script>
+<script src="js/shared-sync.js?v=58"></script>
+<script src="js/local-recovery.js?v=58"></script>
 
 <script>
 /* ============================================================
@@ -604,25 +604,26 @@ function scanFnbMatch(document, transactions=fnbSourceTransactions()){
   return result.accountConfirmed===true?{transaction:result.transaction}:null;
 }
 function crossReferenceSummary(month=''){
-  const scans=scannedExpenseEvidence().filter(document=>geminiReviewComplete(document));
+  const scans=scannedExpenseEvidence().filter(document=>geminiReviewComplete(document)&&(!month||monthOf(extractedDocumentDate(document))===month));
   const reviewedScans=scans.filter(document=>extractedDocumentAmount(document)>0&&extractedDocumentDate(document));
   const matchedTransactionIds=new Set();
-  const matchedScans=reviewedScans.map(document=>({document,match:scanFnbMatch(document)})).filter(row=>{
+  const reviewedMatches=reviewedScans.map(document=>({document,match:scanFnbMatch(document)}));
+  const matchedScans=reviewedMatches.filter(row=>{
     const transactionId=String(row.match?.transaction?.id||'');
     if(!transactionId||matchedTransactionIds.has(transactionId))return false;
     matchedTransactionIds.add(transactionId);
     return true;
   });
-  const fnb=fnbReconciliationSummary(month);
+  const fnb=fnbReconciliationSummary(month),expenseMatches=fnbExpenseMatches(month);
   return {
     scanCount:scans.length,
     reviewedScanCount:reviewedScans.length,
     matchedScanCount:matchedScans.length,
     matchedScanAmount:matchedScans.reduce((sum,row)=>sum+extractedDocumentAmount(row.document),0),
-    unmatchedScanAmount:reviewedScans.filter(document=>!scanFnbMatch(document)).reduce((sum,document)=>sum+extractedDocumentAmount(document),0),
+    unmatchedScanAmount:reviewedMatches.filter(row=>!row.match).reduce((sum,row)=>sum+extractedDocumentAmount(row.document),0),
     fnb,
-    fnbExpenseMatchCount:fnbExpenseOverlapCount(month),
-    fnbExpenseMatchAmount:fnbExpenseOverlapAmount(month)
+    fnbExpenseMatchCount:expenseMatches.length,
+    fnbExpenseMatchAmount:expenseMatches.reduce((sum,match)=>sum+Math.abs(Number(match.expense.amount)||0),0)
   };
 }
 function syncExpenseEvidence(db){
@@ -679,21 +680,18 @@ function deduplicateExpenseLedger(db){
 }
 function fnbExpenseMatches(month=''){
   const expenses=uniqueExpenses(DB.expenses).filter(expense=>!month||monthOf(expense.date)===month);
-  const transactions=fnbSourceTransactions();
+  const transactions=fnbSourceTransactions().map(transaction=>({transaction,amount:fnbTransactionAmount(transaction),date:Date.parse(transaction.date||'')})).filter(row=>row.amount<0&&Number.isFinite(row.date));
   const candidates=[];
   expenses.forEach((expense,expenseIndex)=>{
     const expenseAmount=Math.abs(Number(expense.amount)||0),expenseDate=Date.parse(expense.date||'');
     if(!expenseAmount||!Number.isFinite(expenseDate))return;
-    transactions.forEach(transaction=>{
-      const signedAmount=fnbTransactionAmount(transaction);
-      if(!(signedAmount<0))return;
-      const amount=Math.abs(signedAmount),txDate=Date.parse(transaction.date||'');
-      if(!amount||!Number.isFinite(txDate))return;
-      if(expense.sourceType==='fnb'&&String(expense.sourceId)!==String(transaction.id))return;
-      const vendorTokens=fnbMerchantTokens(expense.vendor),bankTokens=fnbMerchantTokens(fnbTransactionMerchant(transaction));
-      if(vendorTokens.length&&!vendorTokens.some(token=>bankTokens.some(candidate=>candidate===token||(token.length>=6&&candidate.includes(token))||(candidate.length>=6&&token.includes(candidate)))))return;
-      const amountDelta=Math.abs(amount-expenseAmount),dateDelta=Math.abs(txDate-expenseDate);
+    const vendorTokens=fnbMerchantTokens(expense.vendor);
+    transactions.forEach(({transaction,amount,date})=>{
+      const amountDelta=Math.abs(Math.abs(amount)-expenseAmount),dateDelta=Math.abs(date-expenseDate);
       if(amountDelta<0.02&&dateDelta<=3*86400000){
+        if(expense.sourceType==='fnb'&&String(expense.sourceId)!==String(transaction.id))return;
+        const bankTokens=fnbMerchantTokens(fnbTransactionMerchant(transaction));
+        if(vendorTokens.length&&!vendorTokens.some(token=>bankTokens.some(candidate=>candidate===token||(token.length>=6&&candidate.includes(token))||(candidate.length>=6&&token.includes(candidate)))))return;
         candidates.push({expense,transaction,expenseIndex,amountDelta,dateDelta});
       }
     });
@@ -2149,16 +2147,14 @@ function crossReferenceFnbPurchase(document,transactionOverride){
     .filter(item=>item!==document&&(document.id?String(item.id||'')!==String(document.id):String(item.path||'')!==String(document.path||''))&&item.fnbReview?.accountConfirmed===true)
     .map(item=>String(item.fnbReview?.transaction?.id||'')));
   const candidates=transactions.filter(transaction=>{
+    const signedAmount=fnbTransactionAmount(transaction);
+    if(!(signedAmount<0)||Math.abs(amount-Math.abs(signedAmount))>0.02)return false;
     const transactionDate=fnbDateValue(fnbTransactionDate(transaction));
-    const transactionAmount=Math.abs(fnbTransactionAmount(transaction));
+    if(!Number.isFinite(transactionDate)||Math.abs(date-transactionDate)>3*86400000)return false;
+    if(!merchantTokens.length)return true;
     const transactionTokens=fnbMerchantTokens(fnbTransactionMerchant(transaction));
     const merchantOverlap=merchantTokens.filter(token=>transactionTokens.some(candidate=>candidate===token||(token.length>=6&&candidate.includes(token))||(candidate.length>=6&&token.includes(candidate)))).length;
-    return fnbTransactionAmount(transaction)<0
-      &&Number.isFinite(transactionDate)
-      &&Math.abs(date-transactionDate)<=3*86400000
-      &&Number.isFinite(transactionAmount)
-      &&Math.abs(amount-transactionAmount)<=0.02
-      &&(!merchantTokens.length||merchantOverlap>0);
+    return merchantOverlap>0;
   });
   const available=candidates.filter(transaction=>!previouslyMatched.has(String(transaction.id)));
   if(candidates.length&&!available.length){
