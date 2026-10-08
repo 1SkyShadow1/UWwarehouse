@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=53">
-<link rel="stylesheet" href="css/scans.css?v=53">
+<link rel="stylesheet" href="css/pricing.css?v=54">
+<link rel="stylesheet" href="css/scans.css?v=54">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=53">
+<link rel="stylesheet" href="css/documents.css?v=54">
 </head>
 <body>
 
@@ -339,32 +339,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=53"></script>
-<script src="income-2026.js?v=53"></script>
-<script src="operations-data.js?v=53"></script>
-<script src="scanned-data.js?v=53"></script>
-<script src="bank-statements.js?v=53"></script>
-<script src="js/pricing-core.js?v=53"></script>
-<script src="js/fabrics.js?v=53"></script>
-<script src="item-presets.js?v=53"></script>
-<script src="js/item-presets.js?v=53"></script>
-<script src="js/document-lines.js?v=53"></script>
-<script src="js/fabric-picker.js?v=53"></script>
-<script src="js/pricing.js?v=53"></script>
-<script src="js/quote-history.js?v=53"></script>
-<script src="js/document-numbers.js?v=53"></script>
-<script src="js/imported-quotes.js?v=53"></script>
-<script src="js/scan-duplicates.js?v=53"></script>
-<script src="js/scan-cleanup.js?v=53"></script>
-<script src="js/document-editor.js?v=53"></script>
-<script src="js/document-format.js?v=53"></script>
-<script src="js/document-views.js?v=53"></script>
-<script src="js/quotes.js?v=53"></script>
-<script src="js/dashboard.js?v=53"></script>
-<script src="js/suppliers.js?v=53"></script>
-<script src="js/app-version.js?v=53"></script>
-<script src="js/shared-sync.js?v=53"></script>
-<script src="js/local-recovery.js?v=53"></script>
+<script src="imported-data.js?v=54"></script>
+<script src="income-2026.js?v=54"></script>
+<script src="operations-data.js?v=54"></script>
+<script src="scanned-data.js?v=54"></script>
+<script src="bank-statements.js?v=54"></script>
+<script src="js/pricing-core.js?v=54"></script>
+<script src="js/fabrics.js?v=54"></script>
+<script src="item-presets.js?v=54"></script>
+<script src="js/item-presets.js?v=54"></script>
+<script src="js/document-lines.js?v=54"></script>
+<script src="js/fabric-picker.js?v=54"></script>
+<script src="js/pricing.js?v=54"></script>
+<script src="js/quote-history.js?v=54"></script>
+<script src="js/document-numbers.js?v=54"></script>
+<script src="js/imported-quotes.js?v=54"></script>
+<script src="js/scan-duplicates.js?v=54"></script>
+<script src="js/scan-cleanup.js?v=54"></script>
+<script src="js/document-editor.js?v=54"></script>
+<script src="js/document-format.js?v=54"></script>
+<script src="js/document-views.js?v=54"></script>
+<script src="js/quotes.js?v=54"></script>
+<script src="js/dashboard.js?v=54"></script>
+<script src="js/suppliers.js?v=54"></script>
+<script src="js/app-version.js?v=54"></script>
+<script src="js/shared-sync.js?v=54"></script>
+<script src="js/local-recovery.js?v=54"></script>
 
 <script>
 /* ============================================================
@@ -1977,6 +1977,13 @@ function newStaff(){
 }
 
 /* ---------- JOBS / OPERATIONS ---------- */
+function populateJobInvoiceOptions(select){
+  if(select.dataset.populated)return;
+  const current=select.value,ids=[...new Set((DB.invoices||[]).map(invoice=>String(invoice.id)))];
+  if(current&&!ids.includes(current))ids.unshift(current);
+  select.replaceChildren(new Option('Not linked',''),...ids.map(id=>new Option(id,id,false,id===current)));
+  select.value=current;select.dataset.populated='true';
+}
 function vJobs(c){
   const stages=['All','Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'];
   const filter=state.jobStage||'All';
@@ -1986,7 +1993,7 @@ function vJobs(c){
   const jobs=(DB.jobs||[]).map(j=>{const inv=j.invoiceId?DB.invoices.find(i=>i.id===j.invoiceId):null;return {...j,stage:normalizedStage(j.stage),liveBalance:inv?Math.max(0,invBalance(inv)):Number(j.balance||0),invoiceTotal:inv?invTotal(inv):Number(j.invoiceTotal||0),invoiceId:inv?inv.id:j.invoiceId};}).concat(quoteJobs).filter(j=>filter==='All'||j.stage===filter);
   c.innerHTML=`<div class="toolbar"><select class="search" onchange="state.jobStage=this.value;render()">${stages.map(s=>`<option ${filter===s?'selected':''}>${s}</option>`).join('')}</select><button class="btn gold" onclick="newJob()">+ New Job</button></div>
   <div class="cards">${stages.slice(1).map(s=>`<div class="card"><div class="lbl">${s}</div><div class="val">${jobs.filter(j=>j.stage===s).length}</div></div>`).join('')}</div>
-  <div class="panel"><h3>Production Job Cards</h3><p style="font-size:11px;color:var(--muted)">Balances and invoice totals are read live from linked invoices. Update the invoice or record a payment and this page reflects it immediately.</p><table><tr><th>Job</th><th>Customer</th><th>Project</th><th>Invoice</th><th>Stage</th><th>Start</th><th class="num">Invoice total</th><th class="num">Balance</th><th></th></tr>${jobs.map((j,i)=>`<tr><td style="color:var(--gold2)">${j.id}</td><td>${j.customer}</td><td>${j.project||''}</td><td><select class="search" onchange="linkJobInvoice('${j.id}',this.value)"><option value="">Not linked</option>${DB.invoices.map(inv=>`<option value="${inv.id}" ${j.invoiceId===inv.id?'selected':''}>${inv.id}</option>`).join('')}</select></td><td><select class="search" style="min-width:145px" onchange="updateJobStage('${j.id}',this.value)">${stages.slice(1).map(s=>`<option ${j.stage===s?'selected':''}>${s}</option>`).join('')}</select></td><td>${j.startDate||''}</td><td class="num">${R(j.invoiceTotal)}</td><td class="num">${R(j.liveBalance)}</td><td><button class="btn sm" onclick="viewJob('${j.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No jobs</td></tr>'}</table></div>`;
+  <div class="panel"><h3>Production Job Cards</h3><p style="font-size:11px;color:var(--muted)">Balances and invoice totals are read live from linked invoices. Update the invoice or record a payment and this page reflects it immediately.</p><table><tr><th>Job</th><th>Customer</th><th>Project</th><th>Invoice</th><th>Stage</th><th>Start</th><th class="num">Invoice total</th><th class="num">Balance</th><th></th></tr>${jobs.map((j,i)=>`<tr><td style="color:var(--gold2)">${j.id}</td><td>${j.customer}</td><td>${j.project||''}</td><td><select class="search" onfocus="populateJobInvoiceOptions(this)" onmousedown="populateJobInvoiceOptions(this)" onchange="linkJobInvoice('${j.id}',this.value)"><option value="">Not linked</option>${j.invoiceId?`<option value="${escapeHtml(j.invoiceId)}" selected>${escapeHtml(j.invoiceId)}</option>`:''}</select></td><td><select class="search" style="min-width:145px" onchange="updateJobStage('${j.id}',this.value)">${stages.slice(1).map(s=>`<option ${j.stage===s?'selected':''}>${s}</option>`).join('')}</select></td><td>${j.startDate||''}</td><td class="num">${R(j.invoiceTotal)}</td><td class="num">${R(j.liveBalance)}</td><td><button class="btn sm" onclick="viewJob('${j.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No jobs</td></tr>'}</table></div>`;
 }
 function updateJobStage(id,stage){const job=DB.jobs.find(item=>String(item.id)===String(id));if(!job){toast('This live quote job must be saved as a job before changing its stage');return;}job.stage=stage;save();render();}
 function linkJobInvoice(id,invoiceId){

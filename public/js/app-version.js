@@ -1,5 +1,5 @@
 // Code version only; no accounting state or credentials are read here.
-const UW_RELEASE='2026-10-07-shared-local-v53';
+const UW_RELEASE='2026-10-08-shared-local-v54';
 window.addEventListener('DOMContentLoaded',async()=>{
   const label=document.getElementById('app-build-label');if(!label)return;
   label.textContent='Documents update · '+UW_RELEASE;

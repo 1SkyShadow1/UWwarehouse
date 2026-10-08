@@ -50,3 +50,19 @@ test('startup migrations never write a whole ledger to quota-limited localStorag
   const wages=html.slice(html.indexOf('const normalizeWageLedger ='),html.indexOf('normalizeWageLedger(DB);'));
   assert(!wages.includes('localStorage.setItem(DB_KEY'));
 });
+
+test('large job lists load invoice choices on demand and retain linked invoice IDs',()=>{
+  const invoices=Array.from({length:512},(_,index)=>({id:'INV-'+(index%384)}));
+  const jobs=Array.from({length:100},(_,index)=>({id:'JOB-'+index,invoiceId:'INV-'+index,stage:'Quoted'}));
+  const c=vm.createContext({DB:{invoices,jobs,quotes:[]},state:{},R:String,escapeHtml:String,invBalance:()=>0,invTotal:()=>10,
+    Option:class{constructor(text,value,defaultSelected,selected){Object.assign(this,{text,value,selected});}}});
+  vm.runInContext(html.slice(html.indexOf('function populateJobInvoiceOptions('),html.indexOf('function updateJobStage(')),c);
+  const target={};c.vJobs(target);
+  assert((target.innerHTML.match(/<option/g)||[]).length<2000,'Initial rendering must not build an invoice catalogue for every job');
+  const select={dataset:{},value:'INV-47',replaceChildren(...options){this.options=options;}};
+  c.populateJobInvoiceOptions(select);
+  assert.equal(select.options.length,385);assert.equal(select.value,'INV-47');
+  assert.equal(select.options.filter(option=>option.selected).length,1);
+  const original=select.options;c.populateJobInvoiceOptions(select);assert.equal(select.options,original);
+  assert.equal(invoices.length,512,'Source invoice rows must be retained');
+});
