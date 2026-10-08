@@ -66,3 +66,17 @@ test('large job lists load invoice choices on demand and retain linked invoice I
   const original=select.options;c.populateJobInvoiceOptions(select);assert.equal(select.options,original);
   assert.equal(invoices.length,512,'Source invoice rows must be retained');
 });
+
+test('document register renders managed scans without source paths and approves the selected ID only',()=>{
+  const scans=[{id:'scan-a',name:'first.pdf',managedDocumentId:'managed-a',canonical:true},{id:'scan-b',name:'second.pdf',managedDocumentId:'managed-b',canonical:true}];
+  let saves=0;
+  const c=vm.createContext({DB:{documents:[{id:'source',name:'upload.pdf',url:'/api/documents/source'}],filesystemFiles:[],scannedDocuments:scans},scannedRows:()=>scans,scannedCategory:()=> 'Receipt scan',sortDocumentsByDate:x=>x,docMatches:()=>true,docFilterHtml:()=>'',escapeHtml:String,save:()=>saves++,toast:()=>{},render:()=>{},confirm:()=>true});
+  vm.runInContext(html.slice(html.indexOf('function vDocuments('),html.indexOf('function vAssistant(')),c);
+  const target={};c.vDocuments(target);
+  assert.match(target.innerHTML,/first\.pdf/);assert.match(target.innerHTML,/second\.pdf/);assert.match(target.innerHTML,/Managed document storage/);
+  assert(!target.innerHTML.includes('undefined'));assert.match(target.innerHTML,/Unclassified/);
+  assert.match(target.innerHTML,/approveDocument\("","scan-b"\)/);
+  vm.runInContext(html.slice(html.indexOf('function approveDocument('),html.indexOf('function scannedRows(')),c);
+  c.approveDocument('', 'scan-b');assert.equal(scans[1].reviewStatus,'Approved');assert.equal(scans[0].reviewStatus,undefined);assert.equal(saves,1);
+  c.approveDocument('');assert.equal(saves,1,'Missing identifiers must never match another pathless record');
+});

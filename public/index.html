@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=54">
-<link rel="stylesheet" href="css/scans.css?v=54">
+<link rel="stylesheet" href="css/pricing.css?v=55">
+<link rel="stylesheet" href="css/scans.css?v=55">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=54">
+<link rel="stylesheet" href="css/documents.css?v=55">
 </head>
 <body>
 
@@ -339,32 +339,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=54"></script>
-<script src="income-2026.js?v=54"></script>
-<script src="operations-data.js?v=54"></script>
-<script src="scanned-data.js?v=54"></script>
-<script src="bank-statements.js?v=54"></script>
-<script src="js/pricing-core.js?v=54"></script>
-<script src="js/fabrics.js?v=54"></script>
-<script src="item-presets.js?v=54"></script>
-<script src="js/item-presets.js?v=54"></script>
-<script src="js/document-lines.js?v=54"></script>
-<script src="js/fabric-picker.js?v=54"></script>
-<script src="js/pricing.js?v=54"></script>
-<script src="js/quote-history.js?v=54"></script>
-<script src="js/document-numbers.js?v=54"></script>
-<script src="js/imported-quotes.js?v=54"></script>
-<script src="js/scan-duplicates.js?v=54"></script>
-<script src="js/scan-cleanup.js?v=54"></script>
-<script src="js/document-editor.js?v=54"></script>
-<script src="js/document-format.js?v=54"></script>
-<script src="js/document-views.js?v=54"></script>
-<script src="js/quotes.js?v=54"></script>
-<script src="js/dashboard.js?v=54"></script>
-<script src="js/suppliers.js?v=54"></script>
-<script src="js/app-version.js?v=54"></script>
-<script src="js/shared-sync.js?v=54"></script>
-<script src="js/local-recovery.js?v=54"></script>
+<script src="imported-data.js?v=55"></script>
+<script src="income-2026.js?v=55"></script>
+<script src="operations-data.js?v=55"></script>
+<script src="scanned-data.js?v=55"></script>
+<script src="bank-statements.js?v=55"></script>
+<script src="js/pricing-core.js?v=55"></script>
+<script src="js/fabrics.js?v=55"></script>
+<script src="item-presets.js?v=55"></script>
+<script src="js/item-presets.js?v=55"></script>
+<script src="js/document-lines.js?v=55"></script>
+<script src="js/fabric-picker.js?v=55"></script>
+<script src="js/pricing.js?v=55"></script>
+<script src="js/quote-history.js?v=55"></script>
+<script src="js/document-numbers.js?v=55"></script>
+<script src="js/imported-quotes.js?v=55"></script>
+<script src="js/scan-duplicates.js?v=55"></script>
+<script src="js/scan-cleanup.js?v=55"></script>
+<script src="js/document-editor.js?v=55"></script>
+<script src="js/document-format.js?v=55"></script>
+<script src="js/document-views.js?v=55"></script>
+<script src="js/quotes.js?v=55"></script>
+<script src="js/dashboard.js?v=55"></script>
+<script src="js/suppliers.js?v=55"></script>
+<script src="js/app-version.js?v=55"></script>
+<script src="js/shared-sync.js?v=55"></script>
+<script src="js/local-recovery.js?v=55"></script>
 
 <script>
 /* ============================================================
@@ -2092,7 +2092,7 @@ function viewDocument(d){
   if(url&&['png','jpg','jpeg','gif','webp','avif'].includes(ext))loadDocumentViewerAsset(url,'image');
   if(url&&ext==='pdf')loadDocumentViewerAsset(url,'pdf');
 }
-function approveDocument(path){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>x.path===path);if(!found)return;if(found.aiReview?.duplicateMatches?.length&&!confirm('Possible duplicate receipt. Compare the listed originals first. Approve this as a separate transaction?'))return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
+function approveDocument(path,id){const found=[...(DB.documents||[]),...(DB.filesystemFiles||[]),...(DB.scannedDocuments||[])].find(x=>id?String(x.id)===String(id):Boolean(path)&&x.path===path);if(!found)return;if(found.aiReview?.duplicateMatches?.length&&!confirm('Possible duplicate receipt. Compare the listed originals first. Approve this as a separate transaction?'))return;found.reviewStatus='Approved';found.includedInTotals=true;found.reviewedAt=new Date().toISOString();save();toast('Approved for ledger inclusion after review');render();}
 function scannedRows(){return (DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch).map(d=>({...d,status:'Needs review'}));}
 function scanDuplicateKey(document){
   const hash=String(document?.contentHash||document?.hash||'').trim();
@@ -2482,7 +2482,7 @@ function vBank(c){
   const needsReview=transactions.filter(transaction=>transaction.allocationNeedsReview&&!transaction.ledgerPosted).length;
   c.innerHTML='<div class="cards"><div class="card"><div class="lbl">FNB closing balance · 31 Aug 2026</div><div class="val gold">'+R((all[all.length-1]||{}).closingBalance||0)+'</div></div><div class="card"><div class="lbl">Imported turnover credits</div><div class="val green">'+R(r.verifiedCredits||0)+'</div></div><div class="card"><div class="lbl">Imported turnover debits</div><div class="val amber">'+R(r.verifiedDebits||0)+'</div></div><div class="card"><div class="lbl">Statements / source rows</div><div class="val">'+(r.statementCount||0)+' / '+transactions.length+'</div></div></div><div class="toolbar">'+docFilterHtml('bank',[],['Imported'],false)+'<span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' statements shown · '+transactions.length+' unique source transactions · '+needsReview+' need allocation review</span></div><div class="panel"><h3>FNB Gold Business Account · authoritative register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+' Every unique source row has one category. Allocated source debits remain outside the operational ledger until explicitly posted, preventing duplicate expense counts.</p><table><tr><th>Statement / period</th><th>Pages</th><th>Transactions</th><th>Credits / debits</th><th>Closing balance</th><th>Status</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Transaction history</h3><p style="font-size:11px;color:var(--muted)">Each source row is retained once with its logical allocation. Only explicitly posted rows may enter the operational ledger.</p>'+history+'</div>'
 }
-function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=sortDocumentsByDate(all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date')),'documents');const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path).replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+d.name+'</td><td>'+d.category+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+d.path+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved','FNB reviewed'])+'<label class="btn gold">＋ Upload source documents<input type="file" multiple style="display:none" onchange="uploadSourceDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
+function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=sortDocumentsByDate(all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date')),'documents');const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path||'').replace(/'/g,'&#39;');const id=JSON.stringify(d.id||'').replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+escapeHtml(d.name||'Source document')+'</td><td>'+escapeHtml(d.category||'Unclassified')+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+escapeHtml(d.path||(d.managedDocumentId||String(d.url||'').startsWith('/api/documents/')?'Managed document storage':'Source unavailable'))+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+','+id+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved','FNB reviewed'])+'<label class="btn gold">＋ Upload source documents<input type="file" multiple style="display:none" onchange="uploadSourceDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
 function vAssistant(c){
   const uniqueExpenseRows=uniqueExpenses(DB.expenses);
   const inc=uniqueInvoices().reduce((s,i)=>s+invoiceCollectedAmount(i),0), exp=uniqueExpenseRows.reduce((s,e)=>s+(e.amount||0),0)+employeeWagesTotal(), outstanding=uniqueInvoices().reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=uniqueInvoices().filter(i=>invBalance(i)>0.005);

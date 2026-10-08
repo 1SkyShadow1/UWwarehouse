@@ -23,7 +23,7 @@ const startServer = async mode => {
       const body = JSON.parse(init.body);
       const hasInlineData = body.contents.some(content => content.parts.some(part => part.inline_data));
       const prompt = body.contents.flatMap(content => content.parts).map(part => part.text || '').join(' ');
-      fs.appendFileSync(process.env.GEMINI_TEST_MODEL_LOG, JSON.stringify({ model, hasInlineData, prompt }) + '\\n');
+      fs.appendFileSync(process.env.GEMINI_TEST_MODEL_LOG, JSON.stringify({ model, hasInlineData, prompt, generationConfig:body.generationConfig }) + '\\n');
       if (prompt.includes('invalid-request-test')) {
         return new Response(JSON.stringify({
           error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Invalid request for test.' }
@@ -197,6 +197,9 @@ const runDocumentReviewFallbackTest = async () => {
     assert.equal(duplicateResponse.status,200);
     const duplicates=await duplicateResponse.json();
     assert.deepEqual(duplicates.groups[0].ids,['existing-receipt','second-receipt']);
+    const duplicateRequests=fs.readFileSync(server.requestLogPath,'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(item=>item.prompt.includes('possible duplicate documents'));
+    assert(duplicateRequests.length);
+    assert(duplicateRequests.every(item=>item.generationConfig.responseMimeType==='application/json'&&item.generationConfig.responseSchema.required.includes('groups')));
     assert.equal((await server.request('/api/ai/duplicate-scans',{scans:[null]})).status,400);
     console.log('Gemini receipt review falls back on quota exhaustion and retains the document bytes.');
   } finally {
