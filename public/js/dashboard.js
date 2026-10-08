@@ -40,6 +40,17 @@ function openDailyAction(kind,id){
     modal(`<h3>Bank allocation review</h3><p>${escapeHtml(id)} · ${escapeHtml(row.date||'')} · ${escapeHtml(row.description||'')}</p><p>Debit ${R(row.debit||0)} · Credit ${R(row.credit||0)} · ${escapeHtml(row.statementName||'')}</p><label>Allocation category<select aria-label="Bank action category" onchange="setFnbTransactionCategory(${escapeHtml(JSON.stringify(row.statementId))},${escapeHtml(JSON.stringify(row.id))},this.value);closeModal()"><option value="">Unallocated</option>${(window.UW_FNB_STATEMENTS?.categories||[]).map(category=>`<option ${row.category===category?'selected':''}>${escapeHtml(category)}</option>`).join('')}</select></label><p>Allocation does not post another expense.</p><button class="btn" onclick="closeModal()">Open bank register</button>`);
   }
 }
+function financialAuditWarningHtml(){
+  const scans=new Map((DB.scannedDocuments||[]).map(scan=>[String(scan.id),scan]));
+  const pendingPosted=uniqueExpenses(DB.expenses).filter(expense=>expense.sourceType==='scan').filter(expense=>{
+    const scan=scans.get(String(expense.sourceId));return !scan||scan.reviewStatus!=='Approved'||scan.includedInTotals!==true;
+  }).length;
+  const unpriced=uniqueInvoices().filter(invoice=>!(invoice.items||[]).length||(invoice.items||[]).some(line=>line.price==null||Number(line.price)<=0)).length;
+  const ids=new Set(uniqueInvoices().map(invoice=>String(invoice.id)));
+  const brokenJobs=(DB.jobs||[]).filter(job=>job.invoiceId&&!ids.has(String(job.invoiceId))).length;
+  if(!pendingPosted&&!unpriced&&!brokenJobs)return '';
+  return `<p role="status" style="color:var(--amber)"><b>Financial totals remain provisional.</b> ${pendingPosted} previously posted scan expense(s) lack explicit approval; ${unpriced} invoice(s) have missing or zero line prices; ${brokenJobs} job(s) have unresolved invoice links. Existing records are retained for source reconciliation. New scan expenses require approval before posting.</p>`;
+}
 function vDashboard(c){
   state.mfilter=getMF()||state.mfilter;
   const mf=state.mfilter;
@@ -56,7 +67,7 @@ function vDashboard(c){
   const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
   const out=inv.filter(i=>invBalance(i)>0.005);
   const outT=out.reduce((s,i)=>s+invBalance(i),0);
-  const qPend=uniqueQuotes().filter(q=>q.status!=='Accepted').length;
+  const qPend=uniqueQuotes().filter(q=>!['Accepted','Rejected','Cancelled'].includes(q.status)).length;
   const cats={};exp.forEach(e=>{const category=canonicalExpenseCategory(e.category);cats[category]=(cats[category]||0)+Number(e.amount||0);});
   if(wageT)cats['Employee wages / Salary']=(cats['Employee wages / Salary']||0)+wageT;
   const maxC=Math.max(1,...Object.values(cats));
@@ -65,10 +76,10 @@ function vDashboard(c){
   <div class="toolbar">${monthFilterHtml('mf')}</div>
   <div class="cards">
     <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} unique invoice(s)${mf?' · '+mf:''} · paid + deposits</div></div>
-    <div class="card"><div class="lbl">Total Expenses</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + employee wages':''}</div></div>
+    <div class="card"><div class="lbl">${mf?'Recorded expenses':'Recorded costs + payroll estimate'}</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + undated payroll obligation':''}</div></div>
     <div class="card"><div class="lbl">FNB reconciled spend</div><div class="val amber">${R(fnbSummary.total)}</div><div class="sub">${R(fnbSummary.posted)} posted once · ${R(fnbAllocatedTotal)} still unposted</div></div>
     <div class="card"><div class="lbl">Receipt/card cross-reference</div><div class="val">${crossRef.matchedScanCount}</div><div class="sub">${R(crossRef.matchedScanAmount)} receipt evidence matched · ${crossRef.reviewedScanCount} reviewed</div></div>
-    <div class="card"><div class="lbl">Net Profit / Loss</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">income − expenses</div></div>
+    <div class="card"><div class="lbl">Income less recorded costs</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">${mf?'Invoice-date income − dated expenses':'Collected income − expenses − undated payroll estimate'}</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
     <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${uniqueQuotes().length} unique total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
     <div class="card"><div class="lbl">Scanned documents awaiting Gemini</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length}</div><div class="sub">Failed and pending scans can be retried</div></div>
@@ -82,7 +93,7 @@ function vDashboard(c){
     </div>
     <div class="panel"><h3>Recent Invoices</h3>
       <table><tr><th>No</th><th>Customer</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th></tr>
-      ${uniqueInvoices().slice(0,6).map(i=>`<tr><td>${i.id}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R(invBalance(i))}</td><td>${statusBadge(i.status)}</td></tr>`).join('')}
+      ${inv.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.id).localeCompare(String(a.id))).slice(0,6).map(i=>`<tr><td>${i.id}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R(invBalance(i))}</td><td>${statusBadge(i.status)}</td></tr>`).join('')}
       </table>
     </div>
   </div>
@@ -91,7 +102,8 @@ function vDashboard(c){
     ${Object.keys(fnbCats).length?Object.entries(fnbCats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar-row"><span style="width:190px;color:var(--muted)">FNB · ${k} <small>(unposted)</small></span><div class="bar-track"><div class="bar-fill" style="width:${(v/Math.max(1,...Object.values(fnbCats))*100).toFixed(1)}%"></div></div><b style="width:110px;text-align:right">${R(v)}</b></div>`).join(''):'<div class="empty">No unposted FNB debits for this period</div>'}
   </div>
   <div class="panel"><h3>Financial data controls</h3>
-    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB reconciled total contains eligible bank debits exactly once: ${R(fnbSummary.posted)} are posted into the ledger and ${R(fnbSummary.unposted)} remain unposted source evidence. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s), totaling ${R(fnbExpenseOverlapTotal)}, match recorded expenses by amount and date; they are not added again.`:'No FNB debit currently matches a recorded expense by amount and date.'} Receipt cross-reference: ${crossRef.matchedScanCount} reviewed receipt(s) match card debits for ${R(crossRef.matchedScanAmount)}; ${crossRef.reviewedScanCount-crossRef.matchedScanCount} reviewed receipt(s) remain unmatched for review. Unreviewed scans never affect totals. Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
+    ${financialAuditWarningHtml()}
+    <p style="font-size:11px;color:var(--muted)">Employee wages / Salary is the only wage section and includes both unique recorded salary payments and the payroll ledger obligation; neither source is discarded. The expense category panel contains recorded operational expenses only. The FNB reconciled total contains eligible bank debits exactly once: ${R(fnbSummary.posted)} are posted into the ledger and ${R(fnbSummary.unposted)} remain unposted source evidence. ${fnbExpenseOverlaps?`${fnbExpenseOverlaps} FNB debit(s), totaling ${R(fnbExpenseOverlapTotal)}, match recorded expenses by debit amount, date and available merchant evidence; they are not added again.`:'No FNB debit currently matches a recorded expense by debit amount, date and available merchant evidence.'} Receipt cross-reference: ${crossRef.matchedScanCount} reviewed receipt(s) match card debits for ${R(crossRef.matchedScanAmount)}; ${crossRef.reviewedScanCount-crossRef.matchedScanCount} reviewed receipt(s) remain unmatched for review. New scan expenses require explicit approval before posting; retained historical scan expenses without approval remain flagged for review. Month-filtered totals exclude undated aggregate payroll rather than assigning it to the wrong month.</p>
   </div>
   <div class="panel"><h3>Quick Actions</h3>
     <div class="toolbar">

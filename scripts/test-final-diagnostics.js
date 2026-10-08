@@ -54,7 +54,7 @@ test('startup migrations never write a whole ledger to quota-limited localStorag
 test('large job lists load invoice choices on demand and retain linked invoice IDs',()=>{
   const invoices=Array.from({length:512},(_,index)=>({id:'INV-'+(index%384)}));
   const jobs=Array.from({length:100},(_,index)=>({id:'JOB-'+index,invoiceId:'INV-'+index,stage:'Quoted'}));
-  const c=vm.createContext({DB:{invoices,jobs,quotes:[]},state:{},R:String,escapeHtml:String,invBalance:()=>0,invTotal:()=>10,
+  const c=vm.createContext({DB:{invoices,jobs,quotes:[]},uniqueQuotes:()=>[],state:{},R:String,escapeHtml:String,invBalance:()=>0,invTotal:()=>10,
     Option:class{constructor(text,value,defaultSelected,selected){Object.assign(this,{text,value,selected});}}});
   vm.runInContext(html.slice(html.indexOf('function populateJobInvoiceOptions('),html.indexOf('function updateJobStage(')),c);
   const target={};c.vJobs(target);

@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=56">
-<link rel="stylesheet" href="css/scans.css?v=56">
+<link rel="stylesheet" href="css/pricing.css?v=57">
+<link rel="stylesheet" href="css/scans.css?v=57">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=56">
+<link rel="stylesheet" href="css/documents.css?v=57">
 </head>
 <body>
 
@@ -339,32 +339,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=56"></script>
-<script src="income-2026.js?v=56"></script>
-<script src="operations-data.js?v=56"></script>
-<script src="scanned-data.js?v=56"></script>
-<script src="bank-statements.js?v=56"></script>
-<script src="js/pricing-core.js?v=56"></script>
-<script src="js/fabrics.js?v=56"></script>
-<script src="item-presets.js?v=56"></script>
-<script src="js/item-presets.js?v=56"></script>
-<script src="js/document-lines.js?v=56"></script>
-<script src="js/fabric-picker.js?v=56"></script>
-<script src="js/pricing.js?v=56"></script>
-<script src="js/quote-history.js?v=56"></script>
-<script src="js/document-numbers.js?v=56"></script>
-<script src="js/imported-quotes.js?v=56"></script>
-<script src="js/scan-duplicates.js?v=56"></script>
-<script src="js/scan-cleanup.js?v=56"></script>
-<script src="js/document-editor.js?v=56"></script>
-<script src="js/document-format.js?v=56"></script>
-<script src="js/document-views.js?v=56"></script>
-<script src="js/quotes.js?v=56"></script>
-<script src="js/dashboard.js?v=56"></script>
-<script src="js/suppliers.js?v=56"></script>
-<script src="js/app-version.js?v=56"></script>
-<script src="js/shared-sync.js?v=56"></script>
-<script src="js/local-recovery.js?v=56"></script>
+<script src="imported-data.js?v=57"></script>
+<script src="income-2026.js?v=57"></script>
+<script src="operations-data.js?v=57"></script>
+<script src="scanned-data.js?v=57"></script>
+<script src="bank-statements.js?v=57"></script>
+<script src="js/pricing-core.js?v=57"></script>
+<script src="js/fabrics.js?v=57"></script>
+<script src="item-presets.js?v=57"></script>
+<script src="js/item-presets.js?v=57"></script>
+<script src="js/document-lines.js?v=57"></script>
+<script src="js/fabric-picker.js?v=57"></script>
+<script src="js/pricing.js?v=57"></script>
+<script src="js/quote-history.js?v=57"></script>
+<script src="js/document-numbers.js?v=57"></script>
+<script src="js/imported-quotes.js?v=57"></script>
+<script src="js/scan-duplicates.js?v=57"></script>
+<script src="js/scan-cleanup.js?v=57"></script>
+<script src="js/document-editor.js?v=57"></script>
+<script src="js/document-format.js?v=57"></script>
+<script src="js/document-views.js?v=57"></script>
+<script src="js/quotes.js?v=57"></script>
+<script src="js/dashboard.js?v=57"></script>
+<script src="js/suppliers.js?v=57"></script>
+<script src="js/app-version.js?v=57"></script>
+<script src="js/shared-sync.js?v=57"></script>
+<script src="js/local-recovery.js?v=57"></script>
 
 <script>
 /* ============================================================
@@ -639,7 +639,7 @@ function syncExpenseEvidence(db){
     additions.push({...expense,sourceType,sourceId,postedFromEvidence:true});
     existingSources.add(sourceKey);
   };
-  (db.scannedDocuments||[]).filter(document=>!isLegacyBulkScan(document)&&document.canonical&&!document.existingMatch&&geminiReviewComplete(document)).forEach(document=>{
+  (db.scannedDocuments||[]).filter(document=>!isLegacyBulkScan(document)&&document.canonical&&!document.existingMatch&&geminiReviewComplete(document)&&document.reviewStatus==='Approved'&&document.includedInTotals===true).forEach(document=>{
     const amount=extractedDocumentAmount(document),date=extractedDocumentDate(document),review=document.aiReview||document.extraction||{};
     if(amount>0&&date&&Number(review.confidence||0)>=0.65){
       const cardMatch=scanFnbMatch(document,sourceTransactions);
@@ -685,8 +685,13 @@ function fnbExpenseMatches(month=''){
     const expenseAmount=Math.abs(Number(expense.amount)||0),expenseDate=Date.parse(expense.date||'');
     if(!expenseAmount||!Number.isFinite(expenseDate))return;
     transactions.forEach(transaction=>{
-      const amount=Math.abs(fnbTransactionAmount(transaction)),txDate=Date.parse(transaction.date||'');
+      const signedAmount=fnbTransactionAmount(transaction);
+      if(!(signedAmount<0))return;
+      const amount=Math.abs(signedAmount),txDate=Date.parse(transaction.date||'');
       if(!amount||!Number.isFinite(txDate))return;
+      if(expense.sourceType==='fnb'&&String(expense.sourceId)!==String(transaction.id))return;
+      const vendorTokens=fnbMerchantTokens(expense.vendor),bankTokens=fnbMerchantTokens(fnbTransactionMerchant(transaction));
+      if(vendorTokens.length&&!vendorTokens.some(token=>bankTokens.some(candidate=>candidate===token||(token.length>=6&&candidate.includes(token))||(candidate.length>=6&&token.includes(candidate)))))return;
       const amountDelta=Math.abs(amount-expenseAmount),dateDelta=Math.abs(txDate-expenseDate);
       if(amountDelta<0.02&&dateDelta<=3*86400000){
         candidates.push({expense,transaction,expenseIndex,amountDelta,dateDelta});
@@ -1989,22 +1994,27 @@ function vJobs(c){
   const filter=state.jobStage||'All';
   const normalizedStage=s=>({ 'In progress':'In production','In Production':'In production','Quote':'Quoted','Quoted ':'Quoted'}[String(s||'').trim()]||String(s||'').trim()||'Quoted');
   const existingIds=new Set((DB.jobs||[]).map(j=>String(j.quoteId||j.invoiceId||j.id)));
-  const quoteJobs=(DB.quotes||[]).filter(q=>!existingIds.has(String(q.id))&&q.status!=='Accepted').map(q=>({id:q.id,quoteId:q.id,customer:q.customer||'',project:q.projectReference||'',stage:'Quoted',startDate:q.date||'',balance:0,invoiceTotal:q.items.reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.price)||0),0),notes:'Live from quote ledger'}));
+  const quoteJobs=uniqueQuotes().filter(q=>!existingIds.has(String(q.id))&&!['Accepted','Rejected','Cancelled'].includes(q.status)).map(q=>({id:q.id,quoteId:q.id,customer:q.customer||'',project:q.projectReference||'',stage:'Quoted',startDate:q.date||'',balance:0,invoiceTotal:q.items.reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.price)||0),0),notes:'Live from quote ledger'}));
   const jobs=(DB.jobs||[]).map(j=>{const inv=j.invoiceId?DB.invoices.find(i=>i.id===j.invoiceId):null;return {...j,stage:normalizedStage(j.stage),liveBalance:inv?Math.max(0,invBalance(inv)):Number(j.balance||0),invoiceTotal:inv?invTotal(inv):Number(j.invoiceTotal||0),invoiceId:inv?inv.id:j.invoiceId};}).concat(quoteJobs).filter(j=>filter==='All'||j.stage===filter);
   c.innerHTML=`<div class="toolbar"><select class="search" onchange="state.jobStage=this.value;render()">${stages.map(s=>`<option ${filter===s?'selected':''}>${s}</option>`).join('')}</select><button class="btn gold" onclick="newJob()">+ New Job</button></div>
   <div class="cards">${stages.slice(1).map(s=>`<div class="card"><div class="lbl">${s}</div><div class="val">${jobs.filter(j=>j.stage===s).length}</div></div>`).join('')}</div>
   <div class="panel"><h3>Production Job Cards</h3><p style="font-size:11px;color:var(--muted)">Balances and invoice totals are read live from linked invoices. Update the invoice or record a payment and this page reflects it immediately.</p><table><tr><th>Job</th><th>Customer</th><th>Project</th><th>Invoice</th><th>Stage</th><th>Start</th><th class="num">Invoice total</th><th class="num">Balance</th><th></th></tr>${jobs.map((j,i)=>`<tr><td style="color:var(--gold2)">${j.id}</td><td>${j.customer}</td><td>${j.project||''}</td><td><select class="search" onfocus="populateJobInvoiceOptions(this)" onmousedown="populateJobInvoiceOptions(this)" onchange="linkJobInvoice('${j.id}',this.value)"><option value="">Not linked</option>${j.invoiceId?`<option value="${escapeHtml(j.invoiceId)}" selected>${escapeHtml(j.invoiceId)}</option>`:''}</select></td><td><select class="search" style="min-width:145px" onchange="updateJobStage('${j.id}',this.value)">${stages.slice(1).map(s=>`<option ${j.stage===s?'selected':''}>${s}</option>`).join('')}</select></td><td>${j.startDate||''}</td><td class="num">${R(j.invoiceTotal)}</td><td class="num">${R(j.liveBalance)}</td><td><button class="btn sm" onclick="viewJob('${j.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No jobs</td></tr>'}</table></div>`;
 }
-function updateJobStage(id,stage){const job=DB.jobs.find(item=>String(item.id)===String(id));if(!job){toast('This live quote job must be saved as a job before changing its stage');return;}job.stage=stage;save();render();}
+function updateJobStage(id,stage){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before editing.');render();return;}const job=matches[0];if(!job){toast('This live quote job must be saved as a job before changing its stage');return;}job.stage=stage;save();render();}
 function linkJobInvoice(id,invoiceId){
-  const job=DB.jobs.find(item=>String(item.id)===String(id));if(!job){toast('This live quote job must be saved as a job before linking an invoice');return;}
+  const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before linking an invoice.');render();return;}const job=matches[0];if(!job){toast('This live quote job must be saved as a job before linking an invoice');return;}
   const invoice=DB.invoices.find(item=>item.id===invoiceId);
   job.invoiceId=invoiceId||'';
   if(invoice){job.customer=job.customer||invoice.customer||'';job.project=job.project||invoice.project||'';job.balance=invBalance(invoice);}
   save();render();toast(invoice?`Job ${id} linked to ${invoice.id}`:`Invoice unlinked from job ${id}`);
 }
 function newJob(){modal(`<h3>New Job Card</h3><div class="frm"><div class="fld"><label>Job No</label><input id="j-id" value="JOB-${Date.now()}"></div><div class="fld"><label>Invoice</label><select id="j-invoice"><option value="">Not linked</option>${DB.invoices.map(i=>`<option value="${i.id}">${i.id} — ${i.customer}</option>`).join('')}</select></div><div class="fld"><label>Customer</label><input id="j-cust"></div><div class="fld"><label>Project</label><input id="j-project"></div><div class="fld"><label>Start date</label><input id="j-date" type="date" value="${today()}"></div><div class="fld"><label>Stage</label><select id="j-stage">${['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="fld"><label>Notes</label><input id="j-notes"></div></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="const inv=DB.invoices.find(i=>i.id===fa('j-invoice'));DB.jobs.push({id:fa('j-id'),invoiceId:fa('j-invoice'),customer:fa('j-cust')||(inv?.customer||''),project:fa('j-project')||(inv?.project||''),stage:fa('j-stage'),startDate:fa('j-date'),balance:inv?invBalance(inv):0,notes:fa('j-notes')});save();closeModal();render()">Save Job</button></div>`)}
-function viewJob(id){const j=DB.jobs.find(x=>x.id===id);modal(`<h3>Job ${j.id}</h3><div class="kv"><span>Customer</span><b>${j.customer}</b></div><div class="kv"><span>Project</span><b>${j.project||''}</b></div><div class="kv"><span>Stage</span><b>${j.stage}</b></div><div class="kv"><span>Notes</span><b>${j.notes||''}</b></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`)}
+function viewJob(id){
+  const quote=uniqueQuotes().find(q=>String(q.id)===String(id)&&!['Accepted','Rejected','Cancelled'].includes(q.status));
+  const j=(DB.jobs||[]).find(x=>String(x.id)===String(id))||(quote?{id:quote.id,customer:quote.customer,project:quote.projectReference||quote.project,stage:'Quoted',notes:'Live from quote ledger'}:null);
+  if(!j){toast('Job is no longer available. Refresh the job register.');return;}
+  modal(`<h3>Job ${escapeHtml(j.id)}</h3><div class="kv"><span>Customer</span><b>${escapeHtml(j.customer||'')}</b></div><div class="kv"><span>Project</span><b>${escapeHtml(j.project||'')}</b></div><div class="kv"><span>Stage</span><b>${escapeHtml(j.stage||'')}</b></div><div class="kv"><span>Notes</span><b>${escapeHtml(j.notes||'')}</b></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`);
+}
 function vPayables(c){
   normalizePayables(DB);
   const all=DB.payables||[],rows=sortDocumentsByDate(all.filter(p=>docMatches(p,'payables','Supplier payable',p.status)),'payables');
@@ -2545,16 +2555,17 @@ function buildAiContext(){
     if(DB[key]!==undefined) context[key]=DB[key];
   });
   context.derived={
-    invoiceBalances:(DB.invoices||[]).map(i=>({
+    invoiceBalances:uniqueInvoices().map(i=>({
       id:i.id,date:i.date,customer:i.customer,project:i.project,total:invTotal(i),
-      paid:Number(i.paid)||0,balance:invBalance(i),status:i.status
+      paid:Number(i.paid)||0,deposit:Number(i.deposit)||0,collected:invoiceCollectedAmount(i),balance:invBalance(i),status:i.status
     })),
     totals:{
-      invoiceCount:(DB.invoices||[]).length,
+      invoiceCount:uniqueInvoices().length,
       receiptCount:(DB.receipts||[]).length,
-      expenseCount:(DB.expenses||[]).length,
-      income:(DB.invoices||[]).reduce((sum,i)=>sum+(Number(i.paid)||0),0),
-      outstanding:(DB.invoices||[]).reduce((sum,i)=>sum+Math.max(0,invBalance(i)),0)
+      expenseCount:uniqueExpenses(DB.expenses).length,
+      expenses:uniqueExpenses(DB.expenses).reduce((sum,e)=>sum+Number(e.amount||0),0),
+      income:uniqueInvoices().reduce((sum,i)=>sum+invoiceCollectedAmount(i),0),
+      outstanding:uniqueInvoices().reduce((sum,i)=>sum+Math.max(0,invBalance(i)),0)
     }
   };
   return context;
@@ -2615,18 +2626,19 @@ function vReports(c){
     const exp=uniqueExpenses(DB.expenses).filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
     return {m,inc,qtot,exp,net:inc-exp};
   });
-  const tI=rows.reduce((s,r)=>s+r.inc,0),tE=rows.reduce((s,r)=>s+r.exp,0)+employeeWagesTotal();
+  const tI=invoices.reduce((s,i)=>s+invoiceCollectedAmount(i),0),tE=uniqueExpenses(DB.expenses).reduce((s,e)=>s+Number(e.amount||0),0)+employeeWagesTotal();
   const y25=invoices.filter(i=>i.fy==='2025').reduce((s,i)=>s+invoiceCollectedAmount(i),0);
   const y26=invoices.filter(i=>i.fy==='2026').reduce((s,i)=>s+invoiceCollectedAmount(i),0);
   const maxN=Math.max(1,...rows.map(r=>Math.abs(r.net)));
   c.innerHTML=`
   <div class="cards">
-    <div class="card"><div class="lbl">P&L (all data)</div><div class="val ${tI-tE>=0?'green':'red'}">${R(tI-tE)}</div><div class="sub">${R(tI)} income − ${R(tE)} expenses incl. payroll ledger</div></div>
+    <div class="card"><div class="lbl">Income less recorded costs (all data)</div><div class="val ${tI-tE>=0?'green':'red'}">${R(tI-tE)}</div><div class="sub">${R(tI)} income − ${R(tE)} costs incl. undated payroll estimate</div></div>
     <div class="card"><div class="lbl">FY 2025 Collected</div><div class="val gold">${R(y25)}</div></div>
     <div class="card"><div class="lbl">FY 2026 Collected</div><div class="val gold">${R(y26)}</div></div>
   </div>
-  <p style="font-size:11px;color:var(--muted)">Monthly expense rows include dated salary payments. The undated payroll ledger is included once in the all-data P&L and is not assigned to an arbitrary month.</p>
-  <div class="panel"><h3>Monthly Profit & Loss</h3><div style="overflow-x:auto"><table>
+  ${financialAuditWarningHtml()}
+  <p style="font-size:11px;color:var(--muted)">Collected income is grouped by invoice date, not the date each payment reached the bank. FY figures retain the imported financial-year labels. Monthly expense rows include dated salary payments. The undated payroll estimate is included once in the all-data costs and is not assigned to an arbitrary month. These figures do not certify cash flow or accounting profit.</p>
+  <div class="panel"><h3>Monthly Income & Recorded Costs</h3><div style="overflow-x:auto"><table>
     <tr><th>Month</th><th class="num">Invoiced</th><th class="num">Collected</th><th class="num">Expenses</th><th class="num">Net</th><th>Trend</th></tr>
     ${rows.map(r=>`<tr><td>${r.m}</td><td class="num">${R(r.qtot)}</td><td class="num" style="color:var(--gold2)">${R(r.inc)}</td><td class="num" style="color:var(--red)">${R(r.exp)}</td>
     <td class="num" style="color:${r.net>=0?'var(--green)':'var(--red)'}">${R(r.net)}</td>

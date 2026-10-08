@@ -495,6 +495,26 @@ async function run() {
       await page.evaluate(()=>{closeModal();go('fabrics');setDocFilter('fabrics','q','');setDocFilter('fabrics','category','The Mill');applyDocFilter('fabrics');});
       await page.screenshot({path:process.env.UW_TEST_SCREENSHOT.replace(/\.png$/,'.catalog.png'),fullPage:true});
     }
+    if(process.env.UW_AUDIT_STATE){
+      const snapshot=JSON.parse(fs.readFileSync(process.env.UW_AUDIT_STATE,'utf8'));
+      await page.evaluate(data=>{DB=structuredClone(data);save=()=>true;state.mfilter='';state.docFilters={};},snapshot.data);
+      const pages=await page.evaluate(()=>NAV.filter(item=>item.id).map(item=>item.id));
+      for(const view of pages){
+        await page.evaluate(id=>{closeModal();go(id);},view);
+        assert((await page.locator('#content').innerHTML()).length>0,view+' must render');
+      }
+      await page.evaluate(()=>go('dashboard'));
+      assert.match(await page.locator('#content').innerText(),/Financial totals remain provisional/);
+      if(process.env.UW_AUDIT_EXPECTED){
+        const expected=JSON.parse(fs.readFileSync(process.env.UW_AUDIT_EXPECTED,'utf8')).summary;
+        assert.equal(snapshot.revision,expected.revision,'Expected figures must refer to the same ledger snapshot');
+        const totals=await page.evaluate(()=>buildAiContext().derived.totals);
+        assert.equal(totals.income,expected.collected);assert.equal(totals.invoiceCount,expected.uniqueInvoices);
+        assert.equal(Math.round(totals.outstanding*100)/100,expected.outstanding);
+      }
+      console.log('PASS: all '+pages.length+' screens render using the read-only audit snapshot.');
+    }
+    assert.deepEqual(errors,[],'No browser exceptions after all workflow and audit checks');
     console.log('PASS: pricing, quote/invoice workflows, receipt upload/Gemini extraction/preview/duplicates, and calculator reconciliation; no browser exceptions.');
   } finally {
     await browser.close();
