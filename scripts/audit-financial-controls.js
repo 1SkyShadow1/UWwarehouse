@@ -5,8 +5,8 @@ if(!statePath||!outputPath)throw Error('Usage: node audit-financial-controls.js 
 const snapshot=JSON.parse(fs.readFileSync(statePath,'utf8')),DB=snapshot.data;
 const html=fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8');
 function section(start,end){const a=html.indexOf(start),b=html.indexOf(end,a);if(a<0||b<0)throw Error('Audit helper not found: '+start);return html.slice(a,b);}
-const c=vm.createContext({DB,serverRevision:snapshot.revision,monthOf:d=>String(d||'').slice(0,7)});
-vm.runInContext(section('const invTotal =','function toast(msg)')+section('function canonicalExpenseCategory(','function duplicateExpenseCount(')+section('function wageLedgerAmount(','function canonicalExpenseCategory(')+section('function fnbTransactionAmount(','function fnbAllocationRule(')+section('function fnbTransactionMerchant(','function crossReferenceFnbPurchase('),c);
+const c=vm.createContext({DB,serverRevision:snapshot.revision,today:()=>new Date().toLocaleDateString('en-CA'),monthOf:d=>String(d||'').slice(0,7)});
+vm.runInContext(section('function dateMatchesFinancialPeriod(','function fyData(')+section('const invTotal =','function toast(msg)')+section('function canonicalExpenseCategory(','function duplicateExpenseCount(')+section('function wageLedgerAmount(','function canonicalExpenseCategory(')+section('function fnbTransactionAmount(','function fnbAllocationRule(')+section('function fnbTransactionMerchant(','function crossReferenceFnbPurchase('),c);
 vm.runInContext('globalThis.invTotal=invTotal;globalThis.invBalance=invBalance;',c);
 c.fnbSourceTransactions=()=>{const seen=new Set();return DB.fnbStatements.flatMap(s=>(s.transactions||[]).map(t=>({...t,statementId:s.id}))).filter(t=>{if(seen.has(String(t.id)))return false;seen.add(String(t.id));return true;});};
 vm.runInContext(section('function fnbExpenseMatches(','function fnbExpenseOverlapCount(')+section('function buildAiContext(){','function escapeHtml('),c);

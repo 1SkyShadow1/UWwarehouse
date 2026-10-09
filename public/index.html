@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=58">
-<link rel="stylesheet" href="css/scans.css?v=58">
+<link rel="stylesheet" href="css/pricing.css?v=59">
+<link rel="stylesheet" href="css/scans.css?v=59">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=58">
+<link rel="stylesheet" href="css/documents.css?v=59">
 </head>
 <body>
 
@@ -339,32 +339,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=58"></script>
-<script src="income-2026.js?v=58"></script>
-<script src="operations-data.js?v=58"></script>
-<script src="scanned-data.js?v=58"></script>
-<script src="bank-statements.js?v=58"></script>
-<script src="js/pricing-core.js?v=58"></script>
-<script src="js/fabrics.js?v=58"></script>
-<script src="item-presets.js?v=58"></script>
-<script src="js/item-presets.js?v=58"></script>
-<script src="js/document-lines.js?v=58"></script>
-<script src="js/fabric-picker.js?v=58"></script>
-<script src="js/pricing.js?v=58"></script>
-<script src="js/quote-history.js?v=58"></script>
-<script src="js/document-numbers.js?v=58"></script>
-<script src="js/imported-quotes.js?v=58"></script>
-<script src="js/scan-duplicates.js?v=58"></script>
-<script src="js/scan-cleanup.js?v=58"></script>
-<script src="js/document-editor.js?v=58"></script>
-<script src="js/document-format.js?v=58"></script>
-<script src="js/document-views.js?v=58"></script>
-<script src="js/quotes.js?v=58"></script>
-<script src="js/dashboard.js?v=58"></script>
-<script src="js/suppliers.js?v=58"></script>
-<script src="js/app-version.js?v=58"></script>
-<script src="js/shared-sync.js?v=58"></script>
-<script src="js/local-recovery.js?v=58"></script>
+<script src="imported-data.js?v=59"></script>
+<script src="income-2026.js?v=59"></script>
+<script src="operations-data.js?v=59"></script>
+<script src="scanned-data.js?v=59"></script>
+<script src="bank-statements.js?v=59"></script>
+<script src="js/pricing-core.js?v=59"></script>
+<script src="js/fabrics.js?v=59"></script>
+<script src="item-presets.js?v=59"></script>
+<script src="js/item-presets.js?v=59"></script>
+<script src="js/document-lines.js?v=59"></script>
+<script src="js/fabric-picker.js?v=59"></script>
+<script src="js/pricing.js?v=59"></script>
+<script src="js/quote-history.js?v=59"></script>
+<script src="js/document-numbers.js?v=59"></script>
+<script src="js/imported-quotes.js?v=59"></script>
+<script src="js/scan-duplicates.js?v=59"></script>
+<script src="js/scan-cleanup.js?v=59"></script>
+<script src="js/document-editor.js?v=59"></script>
+<script src="js/document-format.js?v=59"></script>
+<script src="js/document-views.js?v=59"></script>
+<script src="js/quotes.js?v=59"></script>
+<script src="js/dashboard.js?v=59"></script>
+<script src="js/suppliers.js?v=59"></script>
+<script src="js/app-version.js?v=59"></script>
+<script src="js/shared-sync.js?v=59"></script>
+<script src="js/local-recovery.js?v=59"></script>
 
 <script>
 /* ============================================================
@@ -604,7 +604,7 @@ function scanFnbMatch(document, transactions=fnbSourceTransactions()){
   return result.accountConfirmed===true?{transaction:result.transaction}:null;
 }
 function crossReferenceSummary(month=''){
-  const scans=scannedExpenseEvidence().filter(document=>geminiReviewComplete(document)&&(!month||monthOf(extractedDocumentDate(document))===month));
+  const scans=scannedExpenseEvidence().filter(document=>geminiReviewComplete(document)&&dateMatchesFinancialPeriod(extractedDocumentDate(document),month));
   const reviewedScans=scans.filter(document=>extractedDocumentAmount(document)>0&&extractedDocumentDate(document));
   const matchedTransactionIds=new Set();
   const reviewedMatches=reviewedScans.map(document=>({document,match:scanFnbMatch(document)}));
@@ -679,7 +679,7 @@ function deduplicateExpenseLedger(db){
   return db;
 }
 function fnbExpenseMatches(month=''){
-  const expenses=uniqueExpenses(DB.expenses).filter(expense=>!month||monthOf(expense.date)===month);
+  const expenses=uniqueExpenses(DB.expenses).filter(expense=>dateMatchesFinancialPeriod(expense.date,month));
   const transactions=fnbSourceTransactions().map(transaction=>({transaction,amount:fnbTransactionAmount(transaction),date:Date.parse(transaction.date||'')})).filter(row=>row.amount<0&&Number.isFinite(row.date));
   const candidates=[];
   expenses.forEach((expense,expenseIndex)=>{
@@ -1102,7 +1102,7 @@ function markFnbLedgerPosted(transactionId){
 }
 function fnbAllocatedCategoryTotals(month=''){
   const totals={};
-  fnbSourceTransactions().filter(transaction=>transaction.category&&!transaction.ledgerPosted&&(!month||String(transaction.date||'').slice(0,7)===month)).forEach(transaction=>{
+  fnbSourceTransactions().filter(transaction=>transaction.category&&!transaction.ledgerPosted&&dateMatchesFinancialPeriod(transaction.date,month)).forEach(transaction=>{
     const amount=fnbTransactionAmount(transaction);
     if(amount<0){
       const category=canonicalFnbCategory(transaction.category);
@@ -1116,7 +1116,7 @@ function fnbReconciliationSummary(month=''){
     const amount=fnbTransactionAmount(transaction);
     const category=canonicalExpenseCategory(canonicalFnbCategory(transaction.category));
     return amount<0&&!transaction.allocationNeedsReview&&!['Transfer','Client Receipt/Income','Loan Account','Other'].includes(category)
-      &&(!month||String(transaction.date||'').slice(0,7)===month);
+      &&dateMatchesFinancialPeriod(transaction.date,month);
   });
   return {
     eligible,
@@ -1579,13 +1579,25 @@ function toggleSidebar(){document.getElementById('sidebar').classList.toggle('co
 function go(id){current=id;renderNav();render();document.getElementById('content').scrollTop=0;}
 
 /* ---------- Shared helpers ---------- */
+function dateMatchesFinancialPeriod(value,period='',asOf=today()){
+  if(!period)return true;
+  const date=String(value||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+  const parsed=new Date(date+'T12:00:00Z');
+  if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)return false;
+  if(/^\d{4}-\d{2}$/.test(period))return date.slice(0,7)===period;
+  if(/^year:\d{4}$/.test(period))return date.slice(0,4)===period.slice(5);
+  if(/^ytd:\d{4}$/.test(period))return date>=period.slice(4)+'-01-01'&&date<=asOf&&date.slice(0,4)===period.slice(4);
+  return false;
+}
 function monthOf(d){return (d||'').slice(0,7);}
 function fyData(arr){return arr.filter(x=>x.fy===DB.meta.fy);}
 function statusBadge(s){return `<span class="tag ${s.toLowerCase()}">${s}</span>`;}
 function monthFilterHtml(id){
-  const start=new Date(2024,0,1); const end=new Date(); end.setDate(1);
-  const months=[]; for(let d=new Date(end);d>=start;d.setMonth(d.getMonth()-1)) months.push(localCalendarDate(d).slice(0,7));
-  return `<select class="search" id="${id}" aria-label="Date range" onchange="state.mfilter=this.value;render()"><option value="">All dates (2024–present)</option>${months.map(m=>`<option value="${m}" ${state.mfilter===m?'selected':''}>${m}</option>`).join('')}</select>`;
+  const end=today(),year=Number(end.slice(0,4)),months=[];
+  for(let y=year;y>=2024;y--)for(let m=y===year?Number(end.slice(5,7)):12;m>=1;m--)months.push(`${y}-${String(m).padStart(2,'0')}`);
+  const option=(value,label)=>`<option value="${value}" ${state.mfilter===value?'selected':''}>${label}</option>`;
+  return `<select class="search" id="${id}" aria-label="Date range" onchange="state.mfilter=this.value;render()">${option('','All recorded dates')}${option('ytd:'+year,`${year} · January to date (${end})`)}<optgroup label="Years">${Array.from({length:year-2023},(_,i)=>year-i).map(y=>option('year:'+y,String(y))).join('')}</optgroup><optgroup label="Months">${months.map(m=>option(m,m)).join('')}</optgroup></select>`;
 }
 let state={mfilter:'',docFilters:{}};
 const dateSortableDocumentLists=new Set(['invoices','quotes','receipts','expenses','payables','scanned','documents','bank','gallery']);
@@ -1858,8 +1870,8 @@ function viewReceipt(receiptNo){
 /* ---------- EXPENSES ---------- */
 const EXP_CATS=['Rent','Rent deposit','Utilities','Consumables','Office','Marketing','Vehicle','Fuel','Employee wages / Salary','Personal','Workshop','Renovations','Loan Account','Bank','Credit','CCMA','Moving','Other'];
 function vExpenses(c){
-  const mf=state.mfilter;const el=document.getElementById('mf');const mf2=el?el.value:'';
-  const exp=sortDocumentsByDate(uniqueExpenses(DB.expenses).filter(e=>(!mf2||monthOf(e.date)===mf2)&&docMatches(e,'expenses',canonicalExpenseCategory(e.category),canonicalExpenseCategory(e.category))),'expenses');
+  const mf2=state.mfilter;
+  const exp=sortDocumentsByDate(uniqueExpenses(DB.expenses).filter(e=>dateMatchesFinancialPeriod(e.date,mf2)&&docMatches(e,'expenses',canonicalExpenseCategory(e.category),canonicalExpenseCategory(e.category))),'expenses');
   const tot=exp.reduce((s,e)=>s+Number(e.amount||0),0);
   const budTot=Object.values(DB.budgets).reduce((s,v)=>s+v,0);
   const scans=scannedExpenseEvidence(),scanReviewed=scans.filter(d=>geminiReviewComplete(d)),scanAmount=scans.reduce((s,d)=>s+extractedDocumentAmount(d),0);

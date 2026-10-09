@@ -52,10 +52,9 @@ function financialAuditWarningHtml(){
   return `<p role="status" style="color:var(--amber)"><b>Financial totals remain provisional.</b> ${pendingPosted} previously posted scan expense(s) lack explicit approval; ${unpriced} invoice(s) have missing or zero line prices; ${brokenJobs} job(s) have unresolved invoice links. Existing records are retained for source reconciliation. New scan expenses require approval before posting.</p>`;
 }
 function vDashboard(c){
-  state.mfilter=getMF()||state.mfilter;
   const mf=state.mfilter;
-  const inv=uniqueInvoices().filter(i=>!mf||monthOf(i.date)===mf);
-  const exp=uniqueExpenses(mf?DB.expenses.filter(e=>monthOf(e.date)===mf):DB.expenses);
+  const inv=uniqueInvoices().filter(i=>dateMatchesFinancialPeriod(i.date,mf));
+  const exp=uniqueExpenses(DB.expenses.filter(e=>dateMatchesFinancialPeriod(e.date,mf)));
   const fnbSummary=fnbReconciliationSummary(mf);
   const crossRef=crossReferenceSummary(mf);
   const fnbCats=fnbAllocatedCategoryTotals(mf);

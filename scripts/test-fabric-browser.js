@@ -505,6 +505,22 @@ async function run() {
       }
       await page.evaluate(()=>go('dashboard'));
       assert.match(await page.locator('#content').innerText(),/Financial totals remain provisional/);
+      for(const period of ['ytd:'+new Date().getFullYear(),'year:2026','year:2025','2026-01','']){
+        await page.locator('#mf').selectOption(period);
+        const expectedPeriod=await page.evaluate(period=>{
+          const invoices=uniqueInvoices().filter(i=>dateMatchesFinancialPeriod(i.date,period));
+          const expenses=uniqueExpenses(DB.expenses).filter(e=>dateMatchesFinancialPeriod(e.date,period));
+          return {income:R(invoices.reduce((s,i)=>s+invoiceCollectedAmount(i),0)),expenses:R(expenses.reduce((s,e)=>s+Number(e.amount||0),0)+(period?0:employeeWagesTotal()))};
+        },period);
+        const cards=await page.locator('.cards').innerText();
+        assert(cards.includes(expectedPeriod.income)&&cards.includes(expectedPeriod.expenses),'Dashboard must apply '+period+' to financial figures');
+        await page.evaluate(()=>go('expenses'));
+        assert.equal(await page.locator('#mf').inputValue(),period,'Expense view keeps the chosen period');
+        await page.evaluate(()=>go('dashboard'));
+      }
+      await page.locator('#mf').selectOption('ytd:'+new Date().getFullYear());
+      await page.screenshot({path:path.join(__dirname,'..','tmp','year-to-date-dashboard.png'),fullPage:true});
+      await page.locator('#mf').selectOption('');
       if(process.env.UW_AUDIT_EXPECTED){
         const expected=JSON.parse(fs.readFileSync(process.env.UW_AUDIT_EXPECTED,'utf8')).summary;
         assert.equal(snapshot.revision,expected.revision,'Expected figures must refer to the same ledger snapshot');

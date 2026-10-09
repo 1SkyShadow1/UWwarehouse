@@ -1,7 +1,23 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8');
+test('financial periods include year and January to date without future or undated entries',()=>{
+ const c=vm.createContext({today:()=> '2026-10-09'});
+ vm.runInContext(section('function dateMatchesFinancialPeriod(','function fyData('),c);
+ const matches=c.dateMatchesFinancialPeriod;
+ assert.equal(matches('2026-01-01','ytd:2026'),true);
+ assert.equal(matches('2026-10-09','ytd:2026'),true);
+ assert.equal(matches('2026-10-10','ytd:2026'),false);
+ assert.equal(matches('2025-12-31','ytd:2026'),false);
+ assert.equal(matches('','year:2026'),false);
+ assert.equal(matches('2026-02-30','year:2026'),false);
+ assert.equal(matches('2026-12-31','year:2026'),true);
+ assert.equal(matches('2025-03-01','year:2025'),true);
+ assert.equal(matches('2026-02-01','2026-01'),false);
+ assert.equal(matches('2026-01-31','2026-01'),true);
+ assert.equal(matches('',''),true);
+});
 function section(start,end){return html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));}
-function context(db){const c=vm.createContext({DB:db,serverRevision:7,monthOf:d=>String(d).slice(0,7),uniqueExpenses:e=>e,fnbSourceTransactions:()=>db.transactions||[],fnbTransactionAmount:t=>t.amount});vm.runInContext(section('const invTotal =','function toast(msg)')+section('function fnbTransactionMerchant(','function crossReferenceFnbPurchase('),c);return c;}
+function context(db){const c=vm.createContext({DB:db,serverRevision:7,today:()=> '2026-10-09',monthOf:d=>String(d).slice(0,7),uniqueExpenses:e=>e,fnbSourceTransactions:()=>db.transactions||[],fnbTransactionAmount:t=>t.amount});vm.runInContext(section('function dateMatchesFinancialPeriod(','function fyData(')+section('const invTotal =','function toast(msg)')+section('function fnbTransactionMerchant(','function crossReferenceFnbPurchase('),c);return c;}
 test('AI financial totals agree with unique invoice reporting and include deposits',()=>{
  const invoice={id:'BB26100801',items:[{qty:2,price:100}],paid:30,deposit:20};
  const c=context({invoices:[invoice,{...invoice}],expenses:[{amount:12}],receipts:[]});
@@ -52,4 +68,5 @@ test('receipt cross-reference follows the financial month and matches each recei
  const c=context({invoices:[],expenses:[]});Object.assign(c,{scannedExpenseEvidence:()=>scans,geminiReviewComplete:()=>true,extractedDocumentDate:s=>s.date,extractedDocumentAmount:s=>s.amount,scanFnbMatch:s=>{calls++;return {transaction:{id:s.id}};},fnbReconciliationSummary:()=>({}),fnbExpenseMatches:()=>{expenseCalls++;return [];}});
  vm.runInContext(section('function crossReferenceSummary(','function syncExpenseEvidence('),c);
  const result=c.crossReferenceSummary('2026-10');assert.equal(result.reviewedScanCount,1);assert.equal(result.matchedScanAmount,20);assert.equal(calls,1);assert.equal(expenseCalls,1);
+ const year=c.crossReferenceSummary('year:2026');assert.equal(year.reviewedScanCount,2);assert.equal(year.matchedScanAmount,30);
 });
