@@ -16,8 +16,8 @@ function documentProfit(items){
 function linePricingHtml(item,prefix){
   const cost=item.unitCost??item.fabricSource?.rate??'';
   return `<label style="display:block">Cost / unit<input class="line-cost" aria-label="Unit cost" type="number" min="0" step="0.01" value="${escapeHtml(cost)}" oninput="updateLinePricing(this.closest('tr'),'cost')"></label>
-    <label style="display:block">Pricing<select class="line-pricing-mode" aria-label="Selling price calculation" onchange="updateLinePricing(this.closest('tr'),'mode')"><option value="manual">Manual selling price</option><option value="markup" ${item.pricingMode==='markup'?'selected':''}>Cost + markup</option></select></label>
-    <label style="display:block">Markup %<input class="line-markup" aria-label="Markup percentage" type="number" min="0" step="0.01" value="${escapeHtml(item.markupPercent??0)}" oninput="updateLinePricing(this.closest('tr'),'markup')"></label>
+    <label style="display:block">Pricing<select class="line-pricing-mode" aria-label="Selling price calculation" onchange="updateLinePricing(this.closest('tr'),'mode')"><option value="manual">Manual selling price</option><option value="markup" ${item.pricingMode==='markup'||(!item.pricingMode&&item.price==null)?'selected':''}>Cost + markup</option></select></label>
+    <label style="display:block">Markup %<input class="line-markup" aria-label="Markup percentage" type="number" min="0" step="0.01" value="${escapeHtml(item.markupPercent??30)}" oninput="updateLinePricing(this.closest('tr'),'markup')"></label>
     <small class="line-profit" style="display:block;white-space:normal;max-width:210px"></small>`;
 }
 function updateLinePricing(tr,reason='display'){

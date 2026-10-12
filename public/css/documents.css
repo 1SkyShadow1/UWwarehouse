@@ -24,6 +24,17 @@
 .template-doc tr,.template-doc .signature-grid{break-inside:avoid}
 .template-doc thead{display:table-header-group}
 .template-doc tfoot{display:table-row-group}
+.template-doc,.template-doc *{font-family:Calibri,'Carlito',Arial,sans-serif;font-size:11pt;line-height:1.3}
+.template-doc h1,.template-doc .doc-heading h1,.template-doc .quote-doc-heading h1,.template-doc .document-title{font-size:14pt;font-weight:700;line-height:1.2}
+.template-doc h2,.template-doc h3,.template-doc .template-section{font-size:12pt;font-weight:700;line-height:1.25}
+.template-doc table th,.template-doc table td,.template-doc .terms,.template-doc .field-grid,.template-doc .company-details,.template-doc .signature-grid,.template-doc .document-end-note{font-size:11pt;line-height:1.3}
+.template-doc table th{font-size:12pt;font-weight:700}
+.template-doc .field-grid{gap:4px 20px}
+.template-doc .field{min-width:0;overflow-wrap:anywhere;padding:3px 0}
+.template-doc .field b{min-width:0;margin-right:4px}
+.template-doc table td.right,.template-doc table th.right{font-variant-numeric:tabular-nums}
+.template-doc .signature-grid div{overflow-wrap:anywhere}
+.invoice-template table{table-layout:fixed}
 @page{size:A4;margin:0}
 @page invoice{size:Letter;margin:0}
 @page quote{size:A4;margin:0}

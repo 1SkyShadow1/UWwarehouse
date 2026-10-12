@@ -28,7 +28,7 @@ test('document export failures survive a successful shared save and Global Save 
 });
 test('editing dates enforces current document numbers while keeping historical identifiers',()=>{
   const fields={},messages=[],invoice={id:'BB26100701',date:'2026-10-07',customer:'Customer',items:[{desc:'Work',qty:1,price:10}]};let saves=0;
-  const c=load({DB:{invoices:[invoice],quotes:[]},today:()=> '2026-10-07',fa:id=>fields[id]||'',toast:s=>messages.push(s),collectDocumentItems:()=>invoice.items,save:()=>saves++,closeModal:()=>{},render:()=>{}},['quote-history','document-numbers','document-editor','quotes']);
+  const c=load({DB:{invoices:[invoice],quotes:[]},today:()=> '2026-10-07',fa:id=>fields[id]||'',toast:s=>messages.push(s),collectDocumentItems:()=>invoice.items,registerDocumentItemPresets:items=>items,save:()=>saves++,closeModal:()=>{},render:()=>{}},['quote-history','document-numbers','document-editor','quotes']);
   Object.assign(fields,{'ef-no':invoice.id,'ef-date':'2026-10-08','ef-cust':'Customer'});c.saveEditedInvoice(invoice.id);assert.equal(saves,0);assert.equal(invoice.date,'2026-10-07');
   fields['ef-no']='BB26100801';fields['ef-due']='2026-10-07';c.saveEditedInvoice(invoice.id);assert.equal(saves,0);assert.match(messages.at(-1),/payment due date/);
   fields['ef-due']='2026-10-10';c.saveEditedInvoice(invoice.id);assert.equal(saves,1);assert.equal(invoice.id,'BB26100801');

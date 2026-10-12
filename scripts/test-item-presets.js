@@ -16,6 +16,27 @@ test('archive presets retain historical rates without exposing client metadata',
   assert(presets.some(p=>p.desc==='Consumables - Glue'&&p.price===143));
   assert(!presets.some(p=>/coke|lemonade|veggies|calamari/i.test(p.desc)));
 });
+test('uncoded custom lines become reusable presets, retaining prices and avoiding duplicate codes',()=>{
+ const items=[{item:'Labour',desc:'Labour - Repair timber frame',qty:5,price:130,unitCost:100,markupPercent:30,pricingMode:'markup',customer:'Private customer'}];
+ context.registerDocumentItemPresets(items);
+ const code=items[0].code;assert.equal(code,'LAB-FRA-1');
+ const saved=context.savedLinePresets().find(p=>p.code===code);
+ assert.equal(saved.qty,1);assert.equal(saved.price,130);assert.equal(saved.unitCost,100);assert(!saved.customer);
+ const copy={...items[0],code:'',qty:20};context.registerDocumentItemPresets([copy]);assert.equal(copy.code,code);
+ const changed={...copy,code:'',price:195};context.registerDocumentItemPresets([changed]);assert.notEqual(changed.code,code);
+ assert.equal(changed.code,'LAB-FRA-2');
+ assert.equal(context.itemCodeStem({item:'Other',desc:'Three seater recliner couch'}),'REC-COU');
+ assert.equal(context.itemCodeStem({item:'Other',desc:'Wingback chair'}),'WIN-CHR');
+ assert.equal(context.itemCodeStem({item:'Consumables',desc:'Consumables - Glue'}),'CON-GLU');
+ const preset=context.quotePresets().find(p=>p.code===code),line=context.quotePresetLines(preset,2)[0];
+ assert.equal(line.qty,2);assert.equal(line.price,130);assert.equal(line.unitCost,100);assert.equal(line.markupPercent,30);assert.equal(line.historicalPricing,false);
+ const coded={item:'Foam',desc:'Foam',qty:1,price:20,code:'SUPPLIER-123'};context.registerDocumentItemPresets([coded]);assert.equal(coded.code,'SUPPLIER-123');
+});
+test('independent profile presets merge through the existing shared metadata object',()=>{
+ const c=vm.createContext({});vm.runInContext(fs.readFileSync(path.join(root,'js/shared-sync.js'),'utf8'),c);
+ const result=c.mergeSharedState({meta:{}},{meta:{savedItemPresets:{A:{id:'A'}}}},{meta:{savedItemPresets:{B:{id:'B'}}}});
+ assert.equal(result.conflicts.length,0);assert.equal(Object.keys(result.data.meta.savedItemPresets).length,2);
+});
 test('complete item presets print category descriptions and leave purchase costs unknown',()=>{
   const lines=context.quotePresetLines(context.DB.priceBook[0],2,3,'Sage');
   assert.equal(lines.length,3);assert.equal(lines[0].qty,6);assert.equal(lines[0].desc,'Fabric - Sage');

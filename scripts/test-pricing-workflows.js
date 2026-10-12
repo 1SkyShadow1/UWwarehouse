@@ -8,6 +8,13 @@ let lastToast='';
 const context=vm.createContext({today:()=> '2026-10-05',R:value=>'R '+Number(value).toFixed(2),toast:value=>{lastToast=value;}});
 for(const name of ['pricing-core','quote-history','suppliers','dashboard'])vm.runInContext(fs.readFileSync(path.join(root,'js',name+'.js'),'utf8'),context);
 const plain=value=>JSON.parse(JSON.stringify(value));
+test('new lines start with 30% markup while explicit saved rates and overrides remain intact',()=>{
+ context.escapeHtml=String;
+ assert.match(context.linePricingHtml({},'i'),/value="30"/);
+ assert.match(context.linePricingHtml({},'i'),/value="markup" selected/);
+ assert.match(context.linePricingHtml({price:150,markupPercent:0,pricingMode:'manual'},'i'),/value="0"/);
+ assert.equal(context.sellingFromCost(100,30),130);
+});
 
 test('markup and margin are distinct, rounded, and missing costs stay unknown',()=>{
   assert.equal(context.sellingFromCost(102,25),127.5);

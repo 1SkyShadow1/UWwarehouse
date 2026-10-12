@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=59">
-<link rel="stylesheet" href="css/scans.css?v=59">
+<link rel="stylesheet" href="css/pricing.css?v=60">
+<link rel="stylesheet" href="css/scans.css?v=60">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=59">
+<link rel="stylesheet" href="css/documents.css?v=60">
 </head>
 <body>
 
@@ -339,32 +339,32 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=59"></script>
-<script src="income-2026.js?v=59"></script>
-<script src="operations-data.js?v=59"></script>
-<script src="scanned-data.js?v=59"></script>
-<script src="bank-statements.js?v=59"></script>
-<script src="js/pricing-core.js?v=59"></script>
-<script src="js/fabrics.js?v=59"></script>
-<script src="item-presets.js?v=59"></script>
-<script src="js/item-presets.js?v=59"></script>
-<script src="js/document-lines.js?v=59"></script>
-<script src="js/fabric-picker.js?v=59"></script>
-<script src="js/pricing.js?v=59"></script>
-<script src="js/quote-history.js?v=59"></script>
-<script src="js/document-numbers.js?v=59"></script>
-<script src="js/imported-quotes.js?v=59"></script>
-<script src="js/scan-duplicates.js?v=59"></script>
-<script src="js/scan-cleanup.js?v=59"></script>
-<script src="js/document-editor.js?v=59"></script>
-<script src="js/document-format.js?v=59"></script>
-<script src="js/document-views.js?v=59"></script>
-<script src="js/quotes.js?v=59"></script>
-<script src="js/dashboard.js?v=59"></script>
-<script src="js/suppliers.js?v=59"></script>
-<script src="js/app-version.js?v=59"></script>
-<script src="js/shared-sync.js?v=59"></script>
-<script src="js/local-recovery.js?v=59"></script>
+<script src="imported-data.js?v=60"></script>
+<script src="income-2026.js?v=60"></script>
+<script src="operations-data.js?v=60"></script>
+<script src="scanned-data.js?v=60"></script>
+<script src="bank-statements.js?v=60"></script>
+<script src="js/pricing-core.js?v=60"></script>
+<script src="js/fabrics.js?v=60"></script>
+<script src="item-presets.js?v=60"></script>
+<script src="js/item-presets.js?v=60"></script>
+<script src="js/document-lines.js?v=60"></script>
+<script src="js/fabric-picker.js?v=60"></script>
+<script src="js/pricing.js?v=60"></script>
+<script src="js/quote-history.js?v=60"></script>
+<script src="js/document-numbers.js?v=60"></script>
+<script src="js/imported-quotes.js?v=60"></script>
+<script src="js/scan-duplicates.js?v=60"></script>
+<script src="js/scan-cleanup.js?v=60"></script>
+<script src="js/document-editor.js?v=60"></script>
+<script src="js/document-format.js?v=60"></script>
+<script src="js/document-views.js?v=60"></script>
+<script src="js/quotes.js?v=60"></script>
+<script src="js/dashboard.js?v=60"></script>
+<script src="js/suppliers.js?v=60"></script>
+<script src="js/app-version.js?v=60"></script>
+<script src="js/shared-sync.js?v=60"></script>
+<script src="js/local-recovery.js?v=60"></script>
 
 <script>
 /* ============================================================
@@ -1864,7 +1864,7 @@ function saveReceipt(){
 function viewReceipt(receiptNo){
   const r=DB.receipts.find(x=>(x.receiptNo||String(x.id))===receiptNo);if(!r)return;
   const inv=DB.invoices.find(i=>i.id===r.invoiceId),m=DB.meta;
-  modal(`<h3>Receipt ${r.receiptNo||r.id}</h3><div class="doc-preview template-doc" id="print-area"><img class="template-logo" src="uw-document-logo.png" alt="Upholstery Warehouse"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px"><div><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address}<br>${m.phone} · ${m.email}</div><div style="text-align:right"><b>RECEIPT</b><br>No: ${r.receiptNo||r.id}<br>Date: ${r.date}</div></div><p style="margin:18px 0"><b>Received from:</b> ${r.customer}<br><b>For invoice:</b> ${r.invoiceId}<br><b>Payment method:</b> ${r.method}</p><h2 style="text-align:right">Amount received: ${R(r.amount)}</h2><p>Thank you for your payment. This receipt confirms the amount recorded against the invoice above.</p><div class="document-end-note">E&amp;OE. Produced by UW</div></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
+  modal(`<h3>Receipt ${r.receiptNo||r.id}</h3><div class="doc-preview template-doc" id="print-area"><img class="template-logo" src="uw-document-logo.png" alt="Upholstery Warehouse"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px"><div><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address}<br>${m.phone} · ${m.email}</div><div style="text-align:right"><b class="document-title">RECEIPT</b><br>No: ${r.receiptNo||r.id}<br>Date: ${r.date}</div></div><p style="margin:18px 0"><b>Received from:</b> ${r.customer}<br><b>For invoice:</b> ${r.invoiceId}<br><b>Payment method:</b> ${r.method}</p><h2 style="text-align:right">Amount received: ${R(r.amount)}</h2><p>Thank you for your payment. This receipt confirms the amount recorded against the invoice above.</p><div class="document-end-note">E&amp;OE. Produced by UW</div></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
 }
 
 /* ---------- EXPENSES ---------- */

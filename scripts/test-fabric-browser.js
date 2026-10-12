@@ -43,6 +43,13 @@ async function run() {
       DB.invoices = []; DB.quotes = []; DB.receipts = []; window.UW_OPERATOR={name:'Evans'};
     });
     await page.addStyleTag({content:'#boot-screen,#login-screen{display:none!important}'});
+    // Catalogue-rate regressions deliberately use zero markup; the production
+    // 30% default is exercised separately in the document-polish workflow below.
+    await page.evaluate(()=>{
+      const original=appendDocumentItem;
+      appendDocumentItem=(table,prefix,item={},code=true)=>original(table,prefix,{markupPercent:0,pricingMode:'manual',...item},code);
+      window.restoreDefaultLineMarkup=()=>{appendDocumentItem=original;};
+    });
     await page.evaluate(()=>{DB.quotes=JSON.parse(JSON.stringify(window.UW_IMPORTED.quotes));});
     const recoveredPreview=await page.evaluate(()=>{
       let checked=0;
@@ -242,7 +249,7 @@ async function run() {
     const calcQuote = await page.evaluate(() => DB.quotes[0]);
     assert.equal(calcQuote.items[0].qty, 7.5);
     assert.equal(calcQuote.items[0].unitCost,102);
-    assert.equal(calcQuote.items[0].price,122.4);
+    assert.equal(calcQuote.items[0].price,132.6);
     assert.equal(Math.round(calcQuote.items.reduce((s, i) => s + i.qty * i.price, 0)*100)/100,calcQuote.calculator.total);
     assert(!calcQuote.items.some(item=>/pricing margin/i.test(item.desc)));
 
@@ -256,6 +263,7 @@ async function run() {
     await page.locator('.i-price').fill('-1');
     assert.equal(await page.evaluate(() => collectDocumentItems('f-items', 'i')), null);
     await page.evaluate(()=>{closeModal();newQuote();document.getElementById('f-preset').value='0';applyQuotePreset('0');});
+    await page.locator('.line-markup').first().fill('0');
     await page.locator('.line-fabric').first().fill(await page.evaluate(id=>fabricLookupLabel(findFabric(id)),helm.id));
     await page.locator('.line-fabric').first().dispatchEvent('change');
     await page.locator('#f-qty').fill('3');
@@ -495,6 +503,53 @@ async function run() {
       await page.evaluate(()=>{closeModal();go('fabrics');setDocFilter('fabrics','q','');setDocFilter('fabrics','category','The Mill');applyDocFilter('fabrics');});
       await page.screenshot({path:process.env.UW_TEST_SCREENSHOT.replace(/\.png$/,'.catalog.png'),fullPage:true});
     }
+    await page.evaluate(()=>{
+      window.restoreDefaultLineMarkup();DB.invoices=[];DB.quotes=[];delete DB.meta.savedItemPresets;newQuote();
+    });
+    assert.equal(await page.locator('.line-markup').inputValue(),'30');
+    await page.getByLabel('Item category').selectOption('Labour');
+    await page.locator('.i-desc').fill('Labour - Repair timber frame');
+    await page.getByLabel('Unit cost',{exact:true}).fill('100');
+    await page.getByLabel('Unit cost',{exact:true}).dispatchEvent('input');
+    assert.equal(await page.getByLabel('Unit price',{exact:true}).inputValue(),'130');
+    await page.evaluate(()=>saveInvoice());
+    assert.equal(await page.evaluate(()=>Object.keys(DB.meta.savedItemPresets||{}).length),0,'An invalid unsaved document must not create a preset');
+    await page.locator('#f-cust').fill('Document polish test');
+    await page.locator('.i-qty').fill('2');
+    await page.evaluate(()=>saveInvoice());
+    const polishQuote=await page.evaluate(()=>structuredClone(DB.quotes[0]));
+    assert.equal(polishQuote.items[0].code,'LAB-FRA-1');
+    await page.evaluate(id=>editQuote(id),polishQuote.id);
+    assert(await page.locator('#f-preset').isVisible());
+    const savedIndex=await page.evaluate(code=>quotePresets().findIndex(p=>p.code===code),polishQuote.items[0].code);
+    await page.locator('#f-preset').selectOption(String(savedIndex));
+    await page.getByRole('button',{name:'Add preset lines',exact:true}).click();
+    assert.equal(await page.locator('#eq-items tr').count(),3,'Editing retains the original line and adds the saved preset');
+    assert.equal(await page.locator('.eq-price').last().inputValue(),'130');
+    await page.evaluate(id=>saveEditedQuote(id),polishQuote.id);
+    assert.equal(await page.evaluate(()=>Object.keys(DB.meta.savedItemPresets).length),1,'Reusing a preset does not create a duplicate');
+    await page.evaluate(id=>viewQuote(id),polishQuote.id);
+    const typography=await page.locator('#quote-preview').evaluate(el=>({body:getComputedStyle(el).fontFamily,cell:getComputedStyle(el.querySelector('tbody td')).fontSize,title:getComputedStyle(el.querySelector('h1')).fontSize}));
+    assert(typography.body.includes('Calibri'));assert.equal(typography.cell,'14.6667px');assert.equal(typography.title,'18.6667px');
+    await page.locator('#quote-preview').screenshot({path:path.join(__dirname,'..','tmp','calibri-quote-preview.png')});
+    await page.evaluate(id=>{closeModal();convertQuote(id);},polishQuote.id);
+    const polishInvoice=await page.evaluate(()=>DB.invoices[0].id);
+    await page.evaluate(id=>editInvoice(id),polishInvoice);
+    assert(await page.locator('#f-preset').isVisible());
+    await page.locator('#f-preset').selectOption(String(savedIndex));
+    await page.getByRole('button',{name:'Add preset lines',exact:true}).click();
+    assert.equal(await page.locator('#ef-items tr').count(),4);
+    await page.locator('.preset-panel').screenshot({path:path.join(__dirname,'..','tmp','edit-invoice-presets.png')});
+    await page.evaluate(id=>saveEditedInvoice(id),polishInvoice);
+    assert.equal(await page.evaluate(()=>Object.keys(DB.meta.savedItemPresets).length),1);
+    await page.evaluate(id=>viewInvoice(id),polishInvoice);
+    await page.locator('#invoice-preview').screenshot({path:path.join(__dirname,'..','tmp','calibri-invoice-preview.png')});
+    await page.evaluate(()=>{closeModal();go('pricing');});
+    assert.equal(await page.locator('#pc-mu').inputValue(),'30');
+    await page.evaluate(()=>newFabric());
+    assert.equal(await page.locator('#fa-mu').inputValue(),'30');
+    await page.evaluate(()=>closeModal());
+    console.log('PASS: edit-form presets, 30% default pricing, generated item codes and reusable shared presets; Calibri document typography.');
     if(process.env.UW_AUDIT_STATE){
       const snapshot=JSON.parse(fs.readFileSync(process.env.UW_AUDIT_STATE,'utf8'));
       await page.evaluate(data=>{DB=structuredClone(data);save=()=>true;state.mfilter='';state.docFilters={};},snapshot.data);

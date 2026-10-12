@@ -64,7 +64,7 @@ function newFabric(){
     <div class="fld"><label>Description</label><input id="fa-desc"></div>
     <div class="fld"><label>Unit</label><select id="fa-unit"><option value="m">m</option><option value="m²">m²</option><option value="side/hide">side/hide</option><option value="unit">unit</option></select></div>
     <div class="fld"><label>Cost per unit (R)</label><input id="fa-cost" type="number" min="0" step="0.01" oninput="document.getElementById('fa-sell').value=((+this.value)*(1+(+document.getElementById('fa-mu').value)/100)).toFixed(2)"></div>
-    <div class="fld"><label>Markup %</label><input id="fa-mu" type="number" value="100" oninput="document.getElementById('fa-sell').value=((+document.getElementById('fa-cost').value)*(1+(+this.value)/100)).toFixed(2)"></div>
+    <div class="fld"><label>Markup %</label><input id="fa-mu" type="number" value="30" oninput="document.getElementById('fa-sell').value=((+document.getElementById('fa-cost').value)*(1+(+this.value)/100)).toFixed(2)"></div>
     <div class="fld"><label>Selling per unit (R)</label><input id="fa-sell" type="number" min="0" step="0.01"></div>
   </div>
   <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>

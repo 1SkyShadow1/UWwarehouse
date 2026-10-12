@@ -16,7 +16,7 @@ function vPricing(c){
       <div class="fld"><label>Labor rate (R/hr)</label><input id="pc-lrate" type="number" value="400" oninput="calcPrice()"></div>
       <div class="fld"><label>Labor quantity (items)</label><input id="pc-lqty" type="number" value="1" min="0" step="1" oninput="calcPrice()"></div>
       <div class="fld"><label>Labor hrs / item</label><input id="pc-lhrs" type="number" oninput="calcPrice()"></div>
-      <div class="fld"><label>Markup % (on cost)</label><input id="pc-mu" type="number" value="20" oninput="calcPrice()"></div>
+      <div class="fld"><label>Markup % (on cost)</label><input id="pc-mu" type="number" value="30" oninput="calcPrice()"></div>
       <div class="fld"><label>Transport / extras (R)</label><input id="pc-extra" type="number" value="0" oninput="calcPrice()"></div>
     </div>
     <div id="pc-out"></div>
