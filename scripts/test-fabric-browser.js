@@ -552,7 +552,7 @@ async function run() {
     console.log('PASS: edit-form presets, 30% default pricing, generated item codes and reusable shared presets; Calibri document typography.');
     if(process.env.UW_AUDIT_STATE){
       const snapshot=JSON.parse(fs.readFileSync(process.env.UW_AUDIT_STATE,'utf8'));
-      await page.evaluate(data=>{DB=structuredClone(data);save=()=>true;state.mfilter='';state.docFilters={};},snapshot.data);
+      await page.evaluate(snapshot=>{DB=structuredClone(snapshot.data);serverRevision=snapshot.revision;DB.meta.syncPending=false;save=()=>true;state.mfilter='';state.docFilters={};},snapshot);
       const pages=await page.evaluate(()=>NAV.filter(item=>item.id).map(item=>item.id));
       for(const view of pages){
         await page.evaluate(id=>{closeModal();go(id);},view);
@@ -584,6 +584,51 @@ async function run() {
         assert.equal(Math.round(totals.outstanding*100)/100,expected.outstanding);
       }
       console.log('PASS: all '+pages.length+' screens render using the read-only audit snapshot.');
+      await page.evaluate(()=>go('assistant'));
+      const originalFinancialRows=await page.evaluate(()=>JSON.stringify([DB.invoices,DB.quotes,DB.expenses,DB.receipts]));
+      const assistantTotals=await page.evaluate(()=>assistantReport().summary);
+      const ledgerTotals=await page.evaluate(()=>buildAiContext().derived.totals);
+      assert.equal(assistantTotals.collected,ledgerTotals.income);assert.equal(assistantTotals.recordedExpenses,Math.round(ledgerTotals.expenses*100)/100);assert.equal(assistantTotals.outstanding,Math.round(ledgerTotals.outstanding*100)/100);
+      await page.getByRole('button',{name:'Collections',exact:true}).click();
+      assert.match(await page.locator('#content').innerText(),/Collections worklist/);
+      await page.getByRole('button',{name:'Draft follow-up',exact:true}).first().click();
+      assert.match(await page.locator('#assistant-answer').innerText(),/Draft only/);
+      assert(!/interest will|deliver.*tomorrow/i.test(await page.locator('#assistant-answer').innerText()));
+      await page.locator('#mf').selectOption('ytd:'+new Date().getFullYear());
+      assert.match(await page.locator('#content').innerText(),/Undated payroll excluded/);
+      await page.locator('#assistant-search').fill('CHAMDOR');
+      assert((await page.locator('#assistant-search-results').innerText()).includes('CHAMDOR'));
+      await page.getByRole('button',{name:'Ask assistant',exact:true}).click();
+      assert.match(await page.locator('#assistant-answer').innerText(),/Local analysis/);
+      let sentAssistantBody;
+      await page.route('**/api/ai/generate',async route=>{
+        sentAssistantBody=route.request().postDataJSON();
+        await new Promise(resolve=>setTimeout(resolve,700));
+        await route.fulfill({contentType:'application/json',body:JSON.stringify({text:'Review source records before issuing. <b>Evidence remains provisional.</b>',provider:'gemini'})});
+      });
+      await page.locator('#assistant-provider').selectOption('gemini');
+      await page.locator('#assistant-question').fill('What quote and bank evidence needs attention?');
+      await page.getByRole('button',{name:'Ask assistant',exact:true}).click();
+      assert(await page.locator('#assistant-ask').isDisabled());
+      await page.locator('.assistant-running').waitFor();
+      await page.locator('#assistant-answer[aria-busy="false"]').waitFor();
+      assert.match(await page.locator('#assistant-answer').innerText(),/Gemini AI/);
+      assert.equal(await page.locator('#assistant-answer b').count(),0,'Model text must never execute as HTML');
+      assert.equal(sentAssistantBody.provider,'gemini');assert(sentAssistantBody.context.coverage.detailListsAreLimited);
+      assert(!sentAssistantBody.context.meta&&!sentAssistantBody.context.filesystemFiles&&!sentAssistantBody.context.scannedDocuments,'No full raw ledger or document binaries sent');
+      await page.getByRole('button',{name:'Save working note',exact:true}).click();
+      await page.getByRole('button',{name:'Save working note',exact:true}).click();
+      assert.equal(await page.evaluate(()=>DB.aiNotes.length),1);
+      assert.equal(await page.evaluate(()=>JSON.stringify([DB.invoices,DB.quotes,DB.expenses,DB.receipts])),originalFinancialRows);
+      await page.getByRole('button',{name:'Priorities',exact:true}).click();
+      await page.locator('#mf').selectOption('');
+      await page.screenshot({path:path.join(__dirname,'..','tmp','business-assistant-preview.png'),fullPage:true});
+      await page.setViewportSize({width:480,height:900});
+      await page.screenshot({path:path.join(__dirname,'..','tmp','business-assistant-mobile.png'),fullPage:true});
+      const assistantMobile=await page.locator('.assistant-workbench').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth,overflow:[...el.querySelectorAll('*')].filter(n=>!n.closest('.assistant-table')&&n.getBoundingClientRect().right>el.getBoundingClientRect().right+2&&getComputedStyle(n).display!=='none').slice(0,12).map(n=>({element:n.tagName+'.'+n.className,right:n.getBoundingClientRect().right,top:n.getBoundingClientRect().top,width:n.getBoundingClientRect().width,text:n.textContent.slice(0,90)}))}));
+      assert(assistantMobile.scroll<=assistantMobile.width+2,'Assistant workbench should fit mobile width: '+JSON.stringify(assistantMobile));
+      await page.setViewportSize({width:1440,height:1000});
+      console.log('PASS: business assistant ledger totals, collections drafts, scoped evidence search, Gemini loading, bounded context, safe output and shared working notes.');
     }
     assert.deepEqual(errors,[],'No browser exceptions after all workflow and audit checks');
     console.log('PASS: pricing, quote/invoice workflows, receipt upload/Gemini extraction/preview/duplicates, and calculator reconciliation; no browser exceptions.');

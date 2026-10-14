@@ -11,8 +11,8 @@
 <meta name="msapplication-TileImage" content="uw-round-logo.png?v=20260924">
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
-<link rel="stylesheet" href="css/pricing.css?v=60">
-<link rel="stylesheet" href="css/scans.css?v=60">
+<link rel="stylesheet" href="css/pricing.css?v=61">
+<link rel="stylesheet" href="css/scans.css?v=61">
 <style>
 :root{
   --bg:#121212; --bg2:#1a1a1a; --bg3:#222222; --card:#1d1d1d;
@@ -270,7 +270,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=60">
+<link rel="stylesheet" href="css/documents.css?v=61">
+<link rel="stylesheet" href="css/assistant.css?v=61">
 </head>
 <body>
 
@@ -339,32 +340,34 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="modal-root"></div>
 
-<script src="imported-data.js?v=60"></script>
-<script src="income-2026.js?v=60"></script>
-<script src="operations-data.js?v=60"></script>
-<script src="scanned-data.js?v=60"></script>
-<script src="bank-statements.js?v=60"></script>
-<script src="js/pricing-core.js?v=60"></script>
-<script src="js/fabrics.js?v=60"></script>
-<script src="item-presets.js?v=60"></script>
-<script src="js/item-presets.js?v=60"></script>
-<script src="js/document-lines.js?v=60"></script>
-<script src="js/fabric-picker.js?v=60"></script>
-<script src="js/pricing.js?v=60"></script>
-<script src="js/quote-history.js?v=60"></script>
-<script src="js/document-numbers.js?v=60"></script>
-<script src="js/imported-quotes.js?v=60"></script>
-<script src="js/scan-duplicates.js?v=60"></script>
-<script src="js/scan-cleanup.js?v=60"></script>
-<script src="js/document-editor.js?v=60"></script>
-<script src="js/document-format.js?v=60"></script>
-<script src="js/document-views.js?v=60"></script>
-<script src="js/quotes.js?v=60"></script>
-<script src="js/dashboard.js?v=60"></script>
-<script src="js/suppliers.js?v=60"></script>
-<script src="js/app-version.js?v=60"></script>
-<script src="js/shared-sync.js?v=60"></script>
-<script src="js/local-recovery.js?v=60"></script>
+<script src="imported-data.js?v=61"></script>
+<script src="income-2026.js?v=61"></script>
+<script src="operations-data.js?v=61"></script>
+<script src="scanned-data.js?v=61"></script>
+<script src="bank-statements.js?v=61"></script>
+<script src="js/pricing-core.js?v=61"></script>
+<script src="js/fabrics.js?v=61"></script>
+<script src="item-presets.js?v=61"></script>
+<script src="js/item-presets.js?v=61"></script>
+<script src="js/document-lines.js?v=61"></script>
+<script src="js/fabric-picker.js?v=61"></script>
+<script src="js/pricing.js?v=61"></script>
+<script src="js/quote-history.js?v=61"></script>
+<script src="js/document-numbers.js?v=61"></script>
+<script src="js/imported-quotes.js?v=61"></script>
+<script src="js/scan-duplicates.js?v=61"></script>
+<script src="js/scan-cleanup.js?v=61"></script>
+<script src="js/document-editor.js?v=61"></script>
+<script src="js/document-format.js?v=61"></script>
+<script src="js/document-views.js?v=61"></script>
+<script src="js/quotes.js?v=61"></script>
+<script src="js/dashboard.js?v=61"></script>
+<script src="js/suppliers.js?v=61"></script>
+<script src="js/app-version.js?v=61"></script>
+<script src="js/shared-sync.js?v=61"></script>
+<script src="js/assistant-core.js?v=61"></script>
+<script src="js/assistant.js?v=61"></script>
+<script src="js/local-recovery.js?v=61"></script>
 
 <script>
 /* ============================================================
@@ -2501,61 +2504,7 @@ function vBank(c){
   c.innerHTML='<div class="cards"><div class="card"><div class="lbl">FNB closing balance · 31 Aug 2026</div><div class="val gold">'+R((all[all.length-1]||{}).closingBalance||0)+'</div></div><div class="card"><div class="lbl">Imported turnover credits</div><div class="val green">'+R(r.verifiedCredits||0)+'</div></div><div class="card"><div class="lbl">Imported turnover debits</div><div class="val amber">'+R(r.verifiedDebits||0)+'</div></div><div class="card"><div class="lbl">Statements / source rows</div><div class="val">'+(r.statementCount||0)+' / '+transactions.length+'</div></div></div><div class="toolbar">'+docFilterHtml('bank',[],['Imported'],false)+'<span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' statements shown · '+transactions.length+' unique source transactions · '+needsReview+' need allocation review</span></div><div class="panel"><h3>FNB Gold Business Account · authoritative register</h3><p style="font-size:11px;color:var(--muted)">'+meta.extractionStatus+' Every unique source row has one category. Allocated source debits remain outside the operational ledger until explicitly posted, preventing duplicate expense counts.</p><table><tr><th>Statement / period</th><th>Pages</th><th>Transactions</th><th>Credits / debits</th><th>Closing balance</th><th>Status</th><th></th></tr>'+body+'</table></div><div class="panel"><h3>Transaction history</h3><p style="font-size:11px;color:var(--muted)">Each source row is retained once with its logical allocation. Only explicitly posted rows may enter the operational ledger.</p>'+history+'</div>'
 }
 function vDocuments(c){const registered=(DB.documents||[]).map(d=>({...d,registered:true}));const known=new Set(registered.map(d=>String(d.path).toLowerCase()));const all=registered.concat((DB.filesystemFiles||[]).filter(f=>!known.has(String(f.path).toLowerCase())).map(f=>({...f,status:f.backup?'Backup/copy':'Needs review',reviewStatus:f.reviewStatus||'Needs review'}))).concat(scannedRows().map(f=>({...f,scanned:true,category:f.category||scannedCategory(f)})));const categories=[...new Set(all.map(d=>d.category||'Unclassified').filter(Boolean))].sort();const rows=sortDocumentsByDate(all.filter(d=>docMatches(d,'documents',d.category||'Unclassified',d.reviewStatus||'Needs review','date')),'documents');const audit=DB.filesystemAudit||{};const body=rows.slice(0,1000).map(d=>{const approved=d.reviewStatus==='Approved';const payload=JSON.stringify(d).replace(/'/g,'&#39;');const path=JSON.stringify(d.path||'').replace(/'/g,'&#39;');const id=JSON.stringify(d.id||'').replace(/'/g,'&#39;');return '<tr class="'+(approved?'review-approved':'review-needed')+'"><td>'+escapeHtml(d.name||'Source document')+'</td><td>'+escapeHtml(d.category||'Unclassified')+'</td><td>'+(d.year||'—')+'</td><td><b>'+(d.reviewStatus||'Needs review')+'</b></td><td style="font-size:10px;color:var(--muted)">'+escapeHtml(d.path||(d.managedDocumentId||String(d.url||'').startsWith('/api/documents/')?'Managed document storage':'Source unavailable'))+'</td><td><button class="btn sm" onclick=\'viewDocument('+payload+')\'>View</button>'+(approved?'':' <button class="btn sm gold" onclick=\'approveDocument('+path+','+id+')\'>Approve</button>')+'</td></tr>'}).join('');c.innerHTML='<div class="toolbar">'+docFilterHtml('documents',categories,['Needs review','Approved','FNB reviewed'])+'<label class="btn gold">＋ Upload source documents<input type="file" multiple style="display:none" onchange="uploadSourceDocuments(event)"></label><span style="color:var(--muted);font-size:12px">'+rows.length+' of '+all.length+' files · '+registered.length+' structured records · '+(DB.scannedDocuments||[]).length+' scanned records · '+(audit.files||0)+' indexed</span></div><div class="panel"><h3>Complete D:\\UW filesystem register</h3><p style="font-size:11px;color:var(--muted)">Red rows need review before any amount is included in primary totals. Approval is recorded locally and does not invent or duplicate amounts.</p><table><tr><th>Name</th><th>Category</th><th>Year</th><th>Review</th><th>Source path</th><th></th></tr>'+body+'</table></div>'}
-function vAssistant(c){
-  const uniqueExpenseRows=uniqueExpenses(DB.expenses);
-  const inc=uniqueInvoices().reduce((s,i)=>s+invoiceCollectedAmount(i),0), exp=uniqueExpenseRows.reduce((s,e)=>s+(e.amount||0),0)+employeeWagesTotal(), outstanding=uniqueInvoices().reduce((s,i)=>s+Math.max(0,invBalance(i)),0), unpaid=uniqueInvoices().filter(i=>invBalance(i)>0.005);
-  const category={};uniqueExpenseRows.forEach(e=>category[canonicalExpenseCategory(e.category)]=(category[canonicalExpenseCategory(e.category)]||0)+e.amount);const top=Object.entries(category).sort((a,b)=>b[1]-a[1])[0];
-  const insights=[`Collected income is ${R(inc)} against ${R(exp)} total expenses including the payroll ledger, a calculated net of ${R(inc-exp)}.`,`There are ${unpaid.length} unpaid invoices with ${R(outstanding)} outstanding.`,`The largest recorded expense category is ${top?top[0]:'not available'} at ${R(top?top[1]:0)}.`,`There are ${(DB.jobs||[]).filter(j=>j.stage!=='Closed').length} active production jobs and ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length} supplier documents awaiting review.`];
-  const sourceGaps=(DB.payables||[]).filter(p=>!p.amount||p.amount===0).length+(DB.stock||[]).filter(s=>!s.quantity).length;const audit=DB.filesystemAudit||{};
-  c.innerHTML=`<div class="panel ai-shell">
-    <div class="ai-hero">
-      <div class="ai-hero-badge">
-        <span class="ai-eyebrow">UW intelligence</span>
-        <h3>Local AI Business Assistant</h3>
-      </div>
-      <span class="tag paid">No cloud/API required</span>
-    </div>
-    <p class="ai-copy">This explainable assistant analyses the complete UW dataset currently loaded in this workspace, including imported accounting records and source evidence. It never invents amounts and flags records requiring source review.</p>
-    <div class="ai-stats">
-      ${insights.map(x=>`<div class="ai-stat"><span class="label">Signal</span><span class="value">?</span><div style="font-size:12px;color:var(--muted)">${x}</div></div>`).join('')}
-      <div class="ai-stat"><span class="label">Source gaps</span><span class="value">${sourceGaps}</span><div style="font-size:12px;color:var(--muted)">Need amount/qty verification</div></div>
-      <div class="ai-stat"><span class="label">Indexed files</span><span class="value">${audit.files||0}</span><div style="font-size:12px;color:var(--muted)">Filesystem evidence</div></div>
-      <div class="ai-stat"><span class="label">Excluded copies</span><span class="value">${audit.backupOrCopy||0}</span><div style="font-size:12px;color:var(--muted)">Backup copies held out</div></div>
-    </div>
-    <div class="toolbar ai-actions">
-      <button class="btn gold" onclick="askGemini()">Ask AI</button>
-      <button class="btn" onclick="runAiTask('cashflow')">Audit cash flow</button>
-      <button class="btn" onclick="runAiTask('fnb')">Review FNB / scanned docs</button>
-      <button class="btn" onclick="runAiTask('followup')">Draft client follow-up</button>
-      <button class="btn" onclick="exportAssistantReport()">Export AI Review</button>
-      <button class="btn" onclick="go('documents')">View Source Documents</button>
-      <button class="btn" onclick="go('jobs')">Open Jobs</button>
-      <button class="btn" onclick="go('payables')">Review Payables</button>
-    </div>
-  </div>
-  <div class="panel"><h3>Suggested next actions</h3><div class="kv"><span>Review unpaid invoices and allocate receipts</span><b>${unpaid.length}</b></div><div class="kv"><span>Review imported supplier documents</span><b>${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}</b></div><div class="kv"><span>Update stock quantities and reorder levels</span><b>${(DB.stock||[]).length}</b></div></div>`;
-}function buildAiPrompt(task='custom'){
-  const outstanding=uniqueInvoices().reduce((s,i)=>s+Math.max(0,invBalance(i)),0);
-  const unpaid=uniqueInvoices().filter(i=>invBalance(i)>0.005);
-  const payablesUnreviewed=(DB.payables||[]).filter(p=>p.status==='Unreviewed').length;
-  const jobsOpen=(DB.jobs||[]).filter(j=>j.stage!=='Closed').length;
-  const scannedNeedsReview=(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length;
-  const fy=DB.meta.fy||new Date().getFullYear();
-  const base=[
-    'You are acting as an operations and financial review assistant for UW Upholstery Warehouse.',
-    'Use only the locally stored database and source evidence in this system. Never invent totals, invoices, or bank entries.',
-    `Current FY: ${fy}.`,
-    `Outstanding receivables: ${R(outstanding)} across ${unpaid.length} unpaid invoice(s).`,
-    `Unreviewed payables: ${payablesUnreviewed}.`,
-    `Open jobs: ${jobsOpen}.`,
-    `Scanned documents still awaiting review: ${scannedNeedsReview}.`,
-    'When you give a recommendation, separate facts from assumptions and flag any record that needs source validation.'
-  ].join('\n');
-  if(task==='cashflow') return `${base}\n\nTask: Produce a practical cash-flow and collections review for the business. Identify the top unpaid invoices, explain where receipts need matching, and prioritise the three actions that will improve collections without inventing financial data.`;
-  if(task==='fnb') return `${base}\n\nTask: Review the FNB statement reconciliation and scanned receipts/invoices. Highlight the matching risks, note which scanned items should be approved or rejected, and give a concise evidence-driven plan for reconciling the bank ledger to source documents.`;
-  if(task==='followup') return `${base}\n\nTask: Draft a professional customer follow-up for an overdue or pending upholstery job. Include a clear call to action, acknowledgement of the current work status, and a short, credible payment or delivery reminder without making unsupported claims.`;
-  return `${base}\n\nTask: ${task || 'Provide a practical operational recommendation based on the current UW data set.'}`;
-}
+function vAssistant(c){return renderBusinessAssistant(c);}
 function buildAiContext(){
   const keys=['meta','invoices','receipts','expenses','quotes','jobs','payables','bankStatements','fnbStatements','documents','scannedDocuments','filesystemAudit','filesystemFiles','suppliers','stock','priceBook','fabrics','wages','wageOperationalCosts','customers','vendors','budgets','counters'];
   const context={source:'signed-in UW Accounting System browser state',localRevision:serverRevision||null};
@@ -2579,50 +2528,6 @@ function buildAiContext(){
   return context;
 }
 function escapeHtml(value=''){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
-function askGemini(prefill=''){
-  modal(`<div class="ai-modal">
-    <div class="ai-modal-header">
-      <div>
-        <span class="ai-eyebrow">UW AI Studio</span>
-        <h3>Ask the warehouse assistant</h3>
-      </div>
-      <button class="btn sm" onclick="closeModal()">Close</button>
-    </div>
-    <div class="ai-modal-meta">
-      <div class="ai-provider">
-        <span>Provider</span>
-        <select id="ai-provider">
-          <option value="gemini">Gemini</option>
-        </select>
-      </div>
-      <span style="font-size:11px;color:var(--muted)">Complex prompts work best for reviews, reconciliation, and client follow-ups.</span>
-    </div>
-    <div class="ai-prompt-box">
-      <textarea id="gemini-prompt" class="ai-prompt-input" rows="6" placeholder="e.g. Draft a professional follow-up message for an overdue upholstery invoice.">${escapeHtml(prefill)}</textarea>
-      <div class="ai-prompt-actions">
-        <span class="ai-tip">Use local data and source records only for factual recommendations.</span>
-        <button class="btn gold" onclick="runGemini()">Send to AI</button>
-      </div>
-    </div>
-    <pre id="gemini-result" class="ai-result"></pre>
-  </div>`);
-}async function runAiTask(task){
-  const prompt = buildAiPrompt(task);
-  askGemini(prompt);
-  setTimeout(() => {
-    const ta = document.getElementById('gemini-prompt');
-    if (ta) ta.value = prompt;
-  }, 0);
-}
-async function runGemini(){
-  const prompt=fa('gemini-prompt');if(!prompt){toast('Enter a prompt first');return}
-  const result=document.getElementById('gemini-result');result.textContent='Working…';
-  const providerEl=document.getElementById('ai-provider');
-  const provider=providerEl ? providerEl.value : 'auto';
-  try{const response=await fetch('/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,provider,context:buildAiContext()})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'AI request failed');result.textContent=(payload.text||'No response returned.')+(payload.truncated?'\n\n[The response reached the model limit. Ask “continue from where you stopped” to retrieve the remaining details.]':'')}catch(error){result.textContent=error.message;toast('AI request failed')}
-}
-function exportAssistantReport(){const text=['UW Accounting Local AI Review',today(),'',`Income: ${R(uniqueInvoices().reduce((s,i)=>s+invoiceCollectedAmount(i),0))}`,`Expenses: ${R(uniqueExpenses(DB.expenses).reduce((s,e)=>s+e.amount,0))}`,`Employee wages / Salary: ${R(consolidatedEmployeeWagesTotal())}`,`Outstanding: ${R(uniqueInvoices().reduce((s,i)=>s+Math.max(0,invBalance(i)),0))}`,`Jobs: ${(DB.jobs||[]).length}`,`Payables awaiting review: ${(DB.payables||[]).filter(p=>p.status==='Unreviewed').length}`].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UW_AI_REVIEW_'+today()+'.txt';a.click();toast('AI review exported')}
-
 /* ---------- REPORTS ---------- */
 function vReports(c){
   const invoices=uniqueInvoices();

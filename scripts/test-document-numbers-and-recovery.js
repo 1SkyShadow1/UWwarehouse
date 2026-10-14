@@ -31,7 +31,16 @@ test('server startup repairs placeholders once through the existing ledger and p
   const original={version:1,revision:7,updatedAt:'2026-10-01T00:00:00Z',data:{quotes:[{id:'BB10062501',customer:'Imported quote',items:[{desc:'Imported quote',qty:1,price:45848}],notes:'Imported from source',status:'Imported'}],invoices:[{id:'OLD',customer:'Keep',items:[{desc:'Work',qty:1,price:99}],paid:30}],meta:{sentinel:'unchanged'}}};
   fs.writeFileSync(stateFile,JSON.stringify(original));
   const env={...process.env,NODE_ENV:'test',UW_LOCAL_ONLY:'1',HOST:'127.0.0.1',PORT:String(port),UW_DATA_DIR:dir,UW_DOCUMENTS_DIR:path.join(dir,'documents'),UW_INVOICES_DIR:path.join(dir,'invoices'),UW_QUOTES_DIR:path.join(dir,'quotes'),UW_API_KEY:'quote-test-key',UW_AUTH_USERS_JSON:'{}',SUPABASE_URL:'',SUPABASE_SERVICE_ROLE_KEY:''};
-  async function start(){const child=spawn(process.execPath,[path.join(root,'server.js')],{env,stdio:'ignore',windowsHide:true});try{for(let i=0;i<80;i++){if(child.exitCode!==null)throw Error('Server failed startup');try{if((await fetch(`http://127.0.0.1:${port}/api/health`)).ok)return child;}catch{}await new Promise(resolve=>setTimeout(resolve,250));}throw Error('Server startup timeout');}catch(error){child.kill();throw error;}}
+  async function start(){
+    const child=spawn(process.execPath,[path.join(root,'server.js')],{env,stdio:['ignore','pipe','pipe'],windowsHide:true});let diagnostics='',lastFailure='';
+    for(const stream of [child.stdout,child.stderr])stream.on('data',chunk=>{diagnostics=(diagnostics+chunk).slice(-3000);});
+    try{for(let i=0;i<80;i++){
+      if(child.exitCode!==null)throw Error('Server failed startup: '+diagnostics);
+      try{const response=await fetch(`http://127.0.0.1:${port}/api/health`,{signal:AbortSignal.timeout(1000)});if(response.ok)return child;lastFailure='HTTP '+response.status;}
+      catch(error){lastFailure=error.cause?.code||error.message;}
+      await new Promise(resolve=>setTimeout(resolve,250));
+    }throw Error('Server startup timeout: '+lastFailure+'\n'+diagnostics);}catch(error){child.kill();throw error;}
+  }
   let child=await start();
   try{const current=JSON.parse(fs.readFileSync(stateFile));assert.equal(current.revision,8);assert.equal(current.data.quotes[0].items.length,4);assert.deepEqual(current.data.invoices,original.data.invoices);assert.deepEqual(current.data.meta,original.data.meta);assert.equal(JSON.parse(fs.readFileSync(stateFile+'.bak')).revision,7);}
   finally{child.kill();await new Promise(resolve=>child.once('exit',resolve));}
