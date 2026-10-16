@@ -580,7 +580,7 @@ async function run() {
         const expected=JSON.parse(fs.readFileSync(process.env.UW_AUDIT_EXPECTED,'utf8')).summary;
         assert.equal(snapshot.revision,expected.revision,'Expected figures must refer to the same ledger snapshot');
         const totals=await page.evaluate(()=>buildAiContext().derived.totals);
-        assert.equal(totals.income,expected.collected);assert.equal(totals.invoiceCount,expected.uniqueInvoices);
+        assert.equal(Math.round(totals.income*100)/100,expected.collected);assert.equal(totals.invoiceCount,expected.uniqueInvoices);
         assert.equal(Math.round(totals.outstanding*100)/100,expected.outstanding);
       }
       console.log('PASS: all '+pages.length+' screens render using the read-only audit snapshot.');
@@ -588,7 +588,7 @@ async function run() {
       const originalFinancialRows=await page.evaluate(()=>JSON.stringify([DB.invoices,DB.quotes,DB.expenses,DB.receipts]));
       const assistantTotals=await page.evaluate(()=>assistantReport().summary);
       const ledgerTotals=await page.evaluate(()=>buildAiContext().derived.totals);
-      assert.equal(assistantTotals.collected,ledgerTotals.income);assert.equal(assistantTotals.recordedExpenses,Math.round(ledgerTotals.expenses*100)/100);assert.equal(assistantTotals.outstanding,Math.round(ledgerTotals.outstanding*100)/100);
+      assert.equal(assistantTotals.collected,Math.round(ledgerTotals.income*100)/100);assert.equal(assistantTotals.recordedExpenses,Math.round(ledgerTotals.expenses*100)/100);assert.equal(assistantTotals.outstanding,Math.round(ledgerTotals.outstanding*100)/100);
       await page.getByRole('button',{name:'Collections',exact:true}).click();
       assert.match(await page.locator('#content').innerText(),/Collections worklist/);
       await page.getByRole('button',{name:'Draft follow-up',exact:true}).first().click();
@@ -616,9 +616,11 @@ async function run() {
       assert.equal(await page.locator('#assistant-answer b').count(),0,'Model text must never execute as HTML');
       assert.equal(sentAssistantBody.provider,'gemini');assert(sentAssistantBody.context.coverage.detailListsAreLimited);
       assert(!sentAssistantBody.context.meta&&!sentAssistantBody.context.filesystemFiles&&!sentAssistantBody.context.scannedDocuments,'No full raw ledger or document binaries sent');
+      const existingNotes=await page.evaluate(()=>structuredClone(DB.aiNotes||[]));
       await page.getByRole('button',{name:'Save working note',exact:true}).click();
       await page.getByRole('button',{name:'Save working note',exact:true}).click();
-      assert.equal(await page.evaluate(()=>DB.aiNotes.length),1);
+      assert.equal(await page.evaluate(()=>DB.aiNotes.length),existingNotes.length+1);
+      assert.deepEqual(await page.evaluate(count=>DB.aiNotes.slice(0,count),existingNotes.length),existingNotes,'Saving an answer preserves existing shared notes');
       assert.equal(await page.evaluate(()=>JSON.stringify([DB.invoices,DB.quotes,DB.expenses,DB.receipts])),originalFinancialRows);
       await page.getByRole('button',{name:'Priorities',exact:true}).click();
       await page.locator('#mf').selectOption('');
