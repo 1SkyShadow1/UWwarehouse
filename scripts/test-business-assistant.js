@@ -49,3 +49,34 @@ test('Gemini failure falls back to retained local facts and an answer can be sav
  assert.match(result.provider,/Local analysis/);assert.match(result.text,/I1/);assert.equal(vm.runInContext('assistantState.running',c),false);
  c.saveAssistantNote();c.saveAssistantNote();assert.equal(db.aiNotes.length,1);assert.equal(db.aiNotes[0].status,'Working note');assert.equal(saves,1);assert.equal(JSON.stringify(db.invoices),original);assert(renders>0);
 });
+test('source suggestions update only after explicit approval and roll back when saving fails or the source/record is stale',async()=>{
+ const script=fs.readFileSync(path.join(__dirname,'../public/js/assistant.js'),'utf8');
+ const run=async({recordAmount=25,currentValue=25,value=40,verifyOk=true,saveResult=true}={})=>{
+  const db=fixture();db.expenses[0].amount=recordAmount;let saves=0;
+  const c=vm.createContext({DB:db,state:{mfilter:''},serverRevision:5,today:()=> '2026-10-12',UW_ASSISTANT:assistant,R:money,isLegacyBulkScan:()=>false,current:'assistant',window:{UW_OPERATOR:{name:'Brian'}},crypto:require('node:crypto'),AbortController,setTimeout,clearTimeout,document:{getElementById:()=>null},fetch:async()=>({ok:verifyOk,status:verifyOk?200:409,json:async()=>verifyOk?{valid:true}:{error:'Source changed after review.'}}),toast:()=>{},render:()=>{},save:()=>{saves++;return saveResult;}});
+  vm.runInContext(script,c);
+  vm.runInContext(`assistantState.sourceSearch.searchId='search-1';assistantState.sourceSearch.proposals=[{id:'proposal-1',collection:'expenses',recordId:'E1',field:'amount',value:${value},currentValuePresent:true,currentValue:${currentValue},sourceId:'source-1',status:'pending'}]`,c);
+  await c.approveAssistantSourceUpdate('proposal-1');
+  return {db,saves,status:vm.runInContext("assistantState.sourceSearch.proposals[0].status",c)};
+ };
+ const approved=await run();
+ assert.equal(approved.db.expenses[0].amount,40);assert.equal(approved.saves,1);assert.equal(approved.status,'approved');
+ const failedSave=await run({saveResult:false});
+ assert.equal(failedSave.db.expenses[0].amount,25,'A failed local save must revert the in-memory field.');assert.equal(failedSave.saves,1);assert.equal(failedSave.status,'failed');
+ const staleRecord=await run({recordAmount:30,currentValue:25});
+ assert.equal(staleRecord.db.expenses[0].amount,30);assert.equal(staleRecord.saves,0);assert.equal(staleRecord.status,'stale');
+ const staleSource=await run({verifyOk:false});
+ assert.equal(staleSource.db.expenses[0].amount,25);assert.equal(staleSource.saves,0);assert.equal(staleSource.status,'stale');
+});
+test('source-review panel explains empty results and provides a preview of selected-reviewable scans',()=>{
+ const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+ const c=vm.createContext({escapeHtml});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/js/assistant.js'),'utf8'),c);
+ vm.runInContext("assistantState.sourceSearch.searchId='search-1';assistantState.sourceSearch.matches=[]",c);
+ assert.match(c.assistantSourceSearchPanel(),/No supported source files matched this search/);
+ vm.runInContext("assistantState.sourceSearch.matches=[{sourceId:'source-1',name:'Receipt-1.jpg',relativePath:'Receipts\\\\Receipt-1.jpg',modifiedAt:'2026-10-21T00:00:00.000Z',size:1024,excerpt:'',filenameOnly:true,canReview:true}]",c);
+ const panel=c.assistantSourceSearchPanel();
+ assert.match(panel,/source-preview\?searchId=search-1&amp;sourceId=source-1/);
+ assert.match(panel,/target="_blank" rel="noopener">View original/);
+ assert.match(panel,/Open scanned PDFs and images before approving their transcribed evidence/);
+});

@@ -10,22 +10,30 @@
     "update:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/update-local-app.ps1",
     "install:local-autostart": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-local-autostart.ps1",
     "configure:local-integrations": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-integrations.ps1",
-    "test": "node --test scripts/test-scan-duplicates.js scripts/test-scan-review-errors.js scripts/test-final-diagnostics.js scripts/test-financial-audit.js scripts/test-business-assistant.js scripts/test-document-numbers-and-recovery.js scripts/test-fabric-catalog.js scripts/test-pricing-workflows.js scripts/test-item-presets.js scripts/test-document-pricing-pdf.js scripts/test-local-code-update.js scripts/test-shared-profile-sync.js scripts/test-external-local-storage.js && node scripts/document-date-sort-test.js && node scripts/test-local-auth-hashing.js && node scripts/supabase-bootstrap-test.js && node scripts/supabase-state-sync-test.js && node scripts/client-state-sync-queue-test.js && node scripts/scanned-review-migration-test.js && node scripts/fnb-scan-reconciliation-test.js && node scripts/gemini-model-fallback-test.js && node scripts/persistence-test.js && node scripts/vercel-smoke-test.js && node scripts/smoke-test.js",
+    "test": "node --test scripts/test-scan-duplicates.js scripts/test-scan-review-errors.js scripts/test-final-diagnostics.js scripts/test-financial-audit.js scripts/test-business-assistant.js scripts/test-assistant-source-search.js scripts/test-document-numbers-and-recovery.js scripts/test-fabric-catalog.js scripts/test-pricing-workflows.js scripts/test-item-presets.js scripts/test-document-pricing-pdf.js scripts/test-local-code-update.js scripts/test-shared-profile-sync.js scripts/test-external-local-storage.js && node scripts/assistant-source-api-test.js && node scripts/document-date-sort-test.js && node scripts/test-local-auth-hashing.js && node scripts/supabase-bootstrap-test.js && node scripts/supabase-state-sync-test.js && node scripts/client-state-sync-queue-test.js && node scripts/scanned-review-migration-test.js && node scripts/fnb-scan-reconciliation-test.js && node scripts/gemini-model-fallback-test.js && node scripts/persistence-test.js && node scripts/vercel-smoke-test.js && node scripts/smoke-test.js",
     "test:pricing": "node --test scripts/test-scan-duplicates.js scripts/test-scan-review-errors.js scripts/test-final-diagnostics.js scripts/test-financial-audit.js scripts/test-business-assistant.js scripts/test-document-numbers-and-recovery.js scripts/test-fabric-catalog.js scripts/test-pricing-workflows.js scripts/test-item-presets.js scripts/test-document-pricing-pdf.js scripts/test-local-code-update.js",
     "test:pricing:browser": "node scripts/test-fabric-browser.js",
     "test:document-sort": "node scripts/document-date-sort-test.js",
     "test:local-setup": "node scripts/test-local-auth-hashing.js && node scripts/supabase-bootstrap-test.js && node scripts/supabase-state-sync-test.js && node scripts/client-state-sync-queue-test.js && node scripts/scanned-review-migration-test.js && node scripts/fnb-scan-reconciliation-test.js",
     "test:server": "node scripts/gemini-model-fallback-test.js && node scripts/smoke-test.js",
+    "test:assistant-sources": "node --test scripts/test-assistant-source-search.js scripts/test-business-assistant.js && node scripts/assistant-source-api-test.js",
     "test:backup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/backup-local-data-test.ps1 && powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/incremental-backup-test.ps1",
     "test:vercel": "node scripts/vercel-smoke-test.js",
     "test:documents": "node scripts/document-date-sort-test.js && node scripts/smoke-test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "googleapis": "^140.0.0",
+    "mammoth": "^1.13.0",
     "multer": "^2.0.0",
     "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
     "pdfkit": "^0.15.0"
+  },
+  "overrides": {
+    "argparse": "^2.0.1",
+    "uuid": "^11.1.1"
   }
 }
