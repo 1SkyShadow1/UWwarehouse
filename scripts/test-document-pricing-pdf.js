@@ -35,6 +35,17 @@ test('invoice rendering keeps internal pricing metadata private',async()=>{
   await loadRenderer(CapturedPdf)({kind:'invoice',record});
   assert(!rendered.join('\n').includes('987654321'));
 });
+
+test('source-specific VAT wording is preserved in invoice and quote PDFs without adding tax again',async()=>{
+  const vatNote='Source contract total includes VAT of R 20,179.38.';
+  for(const kind of ['invoice','quote']){
+    await loadRenderer(CapturedPdf)({kind,record:{...record,vatNote},meta:{vatNote:'Default prices exclude VAT'}});
+    const output=rendered.join('\n');assert(output.includes(vatNote));assert(!output.includes('Default prices exclude VAT'));
+    assert(output.includes(Number(318.75).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})));
+  }
+  const {documentVatNote}=require('../public/js/document-format');
+  assert.equal(documentVatNote({vatNote:'  '},{vatNote:'Default VAT basis'}),'Default VAT basis');
+});
 if(process.env.UW_PRICING_PDF_OUTPUT){
   const render=loadRenderer(require('pdfkit'));
   render({kind:'quote',record}).then(bytes=>fs.writeFileSync(process.env.UW_PRICING_PDF_OUTPUT,bytes));

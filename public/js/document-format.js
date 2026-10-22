@@ -1,5 +1,9 @@
 // Shared by browser previews and server PDFs. Never merges financial line items.
 (function(root){
+  function documentVatNote(record={},meta={}){
+    const note=typeof record.vatNote==='string'?record.vatNote.trim():'';
+    return note||(typeof meta.vatNote==='string'?meta.vatNote.trim():'')||'*Quoted prices above exclude VAT.';
+  }
   function documentLineDescription(line={}){
     let description=String(line.desc||'').trim();
     const selected=String(line.item||'').trim();
@@ -14,6 +18,6 @@
     const contains=new RegExp('\\b'+escaped+'\\b','i').test(body);
     return contains?body:category+(body?' - '+body:'');
   }
-  if(typeof module!=='undefined'&&module.exports)module.exports={documentLineDescription};
-  else root.documentLineDescription=documentLineDescription;
+  if(typeof module!=='undefined'&&module.exports)module.exports={documentLineDescription,documentVatNote};
+  else {root.documentLineDescription=documentLineDescription;root.documentVatNote=documentVatNote;}
 })(typeof globalThis!=='undefined'?globalThis:this);
