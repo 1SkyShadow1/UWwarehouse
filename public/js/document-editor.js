@@ -42,7 +42,8 @@ function saveInvoice(){
     if(!validQuoteNo(common.id,common.date)){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
     const expiry=fa('f-expiry');if(!validQuoteExpiry(common.date,expiry)){toast('Quote expiry must be on or after its date');return;}
     registerDocumentItemPresets(items);
-    DB.quotes.unshift(initializeQuoteHistory({...common,expiry,preparedBy:fa('f-prepared-by'),projectReference:document.getElementById('f-project').value,workType:document.getElementById('f-work-type')?.value||'Reupholster',colour:document.getElementById('f-colour')?.value||'',introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false}));
+    const quote=initializeQuoteHistory({...common,expiry,preparedBy:fa('f-prepared-by'),projectReference:document.getElementById('f-project').value,workType:document.getElementById('f-work-type')?.value||'Reupholster',colour:document.getElementById('f-colour')?.value||'',introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false});
+    DB.quotes.unshift(quote);syncQuoteJob(quote);
     save();closeModal();toast('Quote '+common.id+' created');go('quotes');
   }else{
     if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}

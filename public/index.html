@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <title>UW Accounting System — Upholstery Warehouse</title>
 <link rel="stylesheet" href="css/pricing.css?v=64">
+<link rel="stylesheet" href="css/jobs.css?v=66">
 <link rel="stylesheet" href="css/scans.css?v=64">
 <style>
 :root{
@@ -220,8 +221,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   body *{visibility:hidden!important}
   #print-area,#print-area *,
   #invoice-preview,#invoice-preview *,
-  #quote-preview,#quote-preview *{visibility:visible!important}
-  #print-area,#invoice-preview,#quote-preview{
+  #quote-preview,#quote-preview *,
+  #job-print-area,#job-print-area *{visibility:visible!important}
+  #print-area,#invoice-preview,#quote-preview,#job-print-area{
     position:absolute!important;
     inset:0!important;
     width:auto!important;
@@ -352,21 +354,22 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="js/document-lines.js?v=64"></script>
 <script src="js/fabric-picker.js?v=64"></script>
 <script src="js/pricing.js?v=64"></script>
-<script src="js/quote-history.js?v=64"></script>
+<script src="js/quote-history.js?v=65"></script>
+<script src="js/job-production.js?v=65"></script>
 <script src="js/document-numbers.js?v=64"></script>
 <script src="js/imported-quotes.js?v=64"></script>
 <script src="js/scan-duplicates.js?v=64"></script>
 <script src="js/scan-cleanup.js?v=64"></script>
-<script src="js/document-editor.js?v=64"></script>
+<script src="js/document-editor.js?v=65"></script>
 <script src="js/document-format.js?v=64"></script>
 <script src="js/document-views.js?v=64"></script>
-<script src="js/quotes.js?v=64"></script>
+<script src="js/quotes.js?v=65"></script>
 <script src="js/dashboard.js?v=64"></script>
 <script src="js/suppliers.js?v=64"></script>
 <script src="js/app-version.js?v=64"></script>
 <script src="js/shared-sync.js?v=64"></script>
 <script src="js/assistant-core.js?v=64"></script>
-<script src="js/assistant.js?v=64"></script>
+<script src="js/assistant.js?v=66"></script>
 <script src="js/local-recovery.js?v=64"></script>
 
 <script>
@@ -1825,7 +1828,7 @@ function viewInvoiceLegacy(id){
     <button class="btn gold" onclick="window.print()">🖨 Print / Save PDF</button>
   </div>`,'');
 }
-function del(coll,id){if(!confirm('Delete this record?'))return;DB[coll]=DB[coll].filter(x=>x.id!==id);save();render();toast('Deleted');}
+function del(coll,id){if(!confirm('Delete this record?'))return;if(coll==='quotes'){const linkedJobs=(DB.jobs||[]).filter(job=>job.createdFromQuote&&String(job.quoteId)===String(id));if(linkedJobs.some(job=>job.stage!=='Quoted'||job.invoiceId)){toast('This quote has an active or invoiced job. Keep the quote or resolve the job first.');return;}DB.jobs=(DB.jobs||[]).filter(job=>!linkedJobs.includes(job));}DB[coll]=DB[coll].filter(x=>x.id!==id);save();render();toast('Deleted');}
 
 /* ---------- RECEIPTS ---------- */
 function vReceipts(c){
@@ -2006,27 +2009,43 @@ function vJobs(c){
   const stages=['All','Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'];
   const filter=state.jobStage||'All';
   const normalizedStage=s=>({ 'In progress':'In production','In Production':'In production','Quote':'Quoted','Quoted ':'Quoted'}[String(s||'').trim()]||String(s||'').trim()||'Quoted');
-  const existingIds=new Set((DB.jobs||[]).map(j=>String(j.quoteId||j.invoiceId||j.id)));
-  const quoteJobs=uniqueQuotes().filter(q=>!existingIds.has(String(q.id))&&!['Accepted','Rejected','Cancelled'].includes(q.status)).map(q=>({id:q.id,quoteId:q.id,customer:q.customer||'',project:q.projectReference||'',stage:'Quoted',startDate:q.date||'',balance:0,invoiceTotal:q.items.reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.price)||0),0),notes:'Live from quote ledger'}));
-  const jobs=(DB.jobs||[]).map(j=>{const inv=j.invoiceId?DB.invoices.find(i=>i.id===j.invoiceId):null;return {...j,stage:normalizedStage(j.stage),liveBalance:inv?Math.max(0,invBalance(inv)):Number(j.balance||0),invoiceTotal:inv?invTotal(inv):Number(j.invoiceTotal||0),invoiceId:inv?inv.id:j.invoiceId};}).concat(quoteJobs).filter(j=>filter==='All'||j.stage===filter);
+  const existingIds=new Set((DB.jobs||[]).flatMap(j=>[j.quoteId,j.id,DB.invoices.find(i=>String(i.id)===String(j.invoiceId))?.generatedFromQuote].filter(Boolean).map(String)));
+  const quoteJobs=uniqueQuotes().filter(q=>!existingIds.has(String(q.id))&&!['Accepted','Rejected','Cancelled'].includes(q.status)).map(q=>({id:q.id,quoteId:q.id,customer:q.customer||'',project:q.projectReference||'',stage:'Quoted',intakeDate:q.date||'',workType:q.workType||'Reupholster',colour:q.colour||'',quoteStatus:q.status,notes:q.introduction||q.notes||'',liveBalance:0,invoiceTotal:(q.items||[]).reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.price)||0),0),jobIndex:-1}));
+  const jobs=(DB.jobs||[]).map((j,index)=>{const inv=j.invoiceId?DB.invoices.find(i=>String(i.id)===String(j.invoiceId)):null;return {...j,stage:normalizedStage(j.stage),intakeDate:j.intakeDate||j.startDate||'',liveBalance:inv?Math.max(0,invBalance(inv)):Number(j.balance||0),invoiceTotal:inv?invTotal(inv):Number(j.invoiceTotal||0),invoiceId:inv?inv.id:j.invoiceId,jobIndex:index};}).concat(quoteJobs).filter(j=>filter==='All'||j.stage===filter);
+  const daysLabel=date=>{const days=jobDaysSince(date);return days==null?'Date not recorded':days===0?'Today':`${days} day${days===1?'':'s'} ago`;};
+  const cards=jobs.map(j=>{
+    const quote=quoteForJob(j),items=quote?.items||[],fabrics=jobFabricItems(quote);
+    const idArgument=escapeHtml(JSON.stringify(String(j.id)));
+    const taskSummary=quote?.introduction||quote?.notes||j.notes||'Work details have not been recorded.';
+    const fabricSummary=fabrics.length?fabrics.map(item=>`${jobFabricName(item)}${item.colour||quote?.colour?' · '+(item.colour||quote?.colour):''}`).join(' · '):j.colour?`Colour: ${j.colour}`:'Fabric not specified';
+    return `<article class="job-card">
+      <header class="job-card-header"><div><h3>${escapeHtml(j.id)}</h3><p>${escapeHtml(j.customer||'Customer not recorded')}${j.project?` · ${escapeHtml(j.project)}`:''}</p></div><span class="tag ${j.stage==='In production'?'quote':'neutral'}">${escapeHtml(j.stage)}</span></header>
+      <div class="job-card-meta"><div><span>Quote received</span><strong>${escapeHtml(j.intakeDate||'Date not recorded')}</strong><small>${escapeHtml(daysLabel(j.intakeDate))}</small></div><div><span>Time in production</span><strong>${escapeHtml(formatJobProductionElapsed(j))}</strong><small>${j.productionStartedAt?`Since ${escapeHtml(j.productionStartedAt.slice(0,10))}`:'Begins when stage changes to In production'}</small></div><div><span>Work type</span><strong>${escapeHtml(j.workType||quote?.workType||'Work not specified')}</strong><small>${escapeHtml(quote?.status||j.quoteStatus||'No linked quote')}</small></div></div>
+      <div class="job-card-work"><b>Work to complete</b><p>${escapeHtml(taskSummary)}</p>${items.length?`<ul>${items.slice(0,4).map(item=>`<li>${escapeHtml(item.qty??'')} ${escapeHtml(item.unit||'')} ${escapeHtml(item.desc||'Work item')}${item.item==='Fabric'||item.fabricId?` <span>· ${escapeHtml(jobFabricName(item))}${item.colour||quote?.colour?` · ${escapeHtml(item.colour||quote.colour)}`:''}</span>`:''}</li>`).join('')}${items.length>4?`<li class="job-more">+ ${items.length-4} more line items</li>`:''}</ul>`:''}<small>${escapeHtml(fabricSummary)}</small></div>
+      <div class="job-card-footer"><label>Stage<select aria-label="Stage for job ${escapeHtml(j.id)}" onchange="updateJobStage(${idArgument},this.value,${j.jobIndex})">${stages.slice(1).map(s=>`<option ${j.stage===s?'selected':''}>${s}</option>`).join('')}</select></label><label>Invoice link<select class="search" aria-label="Invoice for job ${escapeHtml(j.id)}" onfocus="populateJobInvoiceOptions(this)" onmousedown="populateJobInvoiceOptions(this)" onchange="linkJobInvoice(${idArgument},this.value,${j.jobIndex})"><option value="">Not linked</option>${j.invoiceId?`<option value="${escapeHtml(j.invoiceId)}" selected>${escapeHtml(j.invoiceId)}</option>`:''}</select></label><div class="job-card-finance"><span>${j.invoiceId?`Invoice ${escapeHtml(j.invoiceId)}`:'No invoice linked'}</span><strong>${R(j.invoiceTotal)}</strong>${j.invoiceId?`<small>Balance ${R(j.liveBalance)}</small>`:''}</div><div class="job-card-actions"><button class="btn sm" onclick="viewJob(${idArgument},${j.jobIndex})">Full job card</button><button class="btn sm" onclick="viewJob(${idArgument},${j.jobIndex},true)">Print</button></div></div>
+    </article>`;
+  }).join('');
   c.innerHTML=`<div class="toolbar"><select class="search" onchange="state.jobStage=this.value;render()">${stages.map(s=>`<option ${filter===s?'selected':''}>${s}</option>`).join('')}</select><button class="btn gold" onclick="newJob()">+ New Job</button></div>
   <div class="cards">${stages.slice(1).map(s=>`<div class="card"><div class="lbl">${s}</div><div class="val">${jobs.filter(j=>j.stage===s).length}</div></div>`).join('')}</div>
-  <div class="panel"><h3>Production Job Cards</h3><p style="font-size:11px;color:var(--muted)">Balances and invoice totals are read live from linked invoices. Update the invoice or record a payment and this page reflects it immediately.</p><table><tr><th>Job</th><th>Customer</th><th>Project</th><th>Invoice</th><th>Stage</th><th>Start</th><th class="num">Invoice total</th><th class="num">Balance</th><th></th></tr>${jobs.map((j,i)=>`<tr><td style="color:var(--gold2)">${j.id}</td><td>${j.customer}</td><td>${j.project||''}</td><td><select class="search" onfocus="populateJobInvoiceOptions(this)" onmousedown="populateJobInvoiceOptions(this)" onchange="linkJobInvoice('${j.id}',this.value)"><option value="">Not linked</option>${j.invoiceId?`<option value="${escapeHtml(j.invoiceId)}" selected>${escapeHtml(j.invoiceId)}</option>`:''}</select></td><td><select class="search" style="min-width:145px" onchange="updateJobStage('${j.id}',this.value)">${stages.slice(1).map(s=>`<option ${j.stage===s?'selected':''}>${s}</option>`).join('')}</select></td><td>${j.startDate||''}</td><td class="num">${R(j.invoiceTotal)}</td><td class="num">${R(j.liveBalance)}</td><td><button class="btn sm" onclick="viewJob('${j.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No jobs</td></tr>'}</table></div>`;
+  <section class="production-jobs"><div class="production-jobs-heading"><h2>Production job cards</h2><p>Job cards follow their quote and invoice. Production time starts when the stage is changed to In production; quote date is kept separately as the arrival date.</p></div>${cards||'<div class="panel production-empty"><h3>No jobs in this stage</h3><p>Create a quote to open its job card automatically, or add a job manually.</p></div>'}</section>`;
 }
-function updateJobStage(id,stage){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before editing.');render();return;}const job=matches[0];if(!job){toast('This live quote job must be saved as a job before changing its stage');return;}job.stage=stage;save();render();}
-function linkJobInvoice(id,invoiceId){
-  const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before linking an invoice.');render();return;}const job=matches[0];if(!job){toast('This live quote job must be saved as a job before linking an invoice');return;}
+function updateJobStage(id,stage,index=-1){let job=Number.isInteger(index)&&index>=0?DB.jobs[index]:null;if(!job){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before editing.');render();return;}job=matches[0];}if(!job){const quote=(DB.quotes||[]).find(item=>String(item.id)===String(id));if(quote)job=syncQuoteJob(quote);}if(!job){toast('This job is no longer available. Refresh the job register.');return;}if(!setJobProductionStage(job,stage))return;save();render();}
+function linkJobInvoice(id,invoiceId,index=-1){
+  let job=Number.isInteger(index)&&index>=0?DB.jobs[index]:null;if(!job){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before linking an invoice.');render();return;}job=matches[0];}if(!job){const quote=(DB.quotes||[]).find(item=>String(item.id)===String(id));if(quote)job=syncQuoteJob(quote);}if(!job){toast('This job is no longer available. Refresh the job register.');return;}
   const invoice=DB.invoices.find(item=>item.id===invoiceId);
   job.invoiceId=invoiceId||'';
   if(invoice){job.customer=job.customer||invoice.customer||'';job.project=job.project||invoice.project||'';job.balance=invBalance(invoice);}
   save();render();toast(invoice?`Job ${id} linked to ${invoice.id}`:`Invoice unlinked from job ${id}`);
 }
-function newJob(){modal(`<h3>New Job Card</h3><div class="frm"><div class="fld"><label>Job No</label><input id="j-id" value="JOB-${Date.now()}"></div><div class="fld"><label>Invoice</label><select id="j-invoice"><option value="">Not linked</option>${DB.invoices.map(i=>`<option value="${i.id}">${i.id} — ${i.customer}</option>`).join('')}</select></div><div class="fld"><label>Customer</label><input id="j-cust"></div><div class="fld"><label>Project</label><input id="j-project"></div><div class="fld"><label>Start date</label><input id="j-date" type="date" value="${today()}"></div><div class="fld"><label>Stage</label><select id="j-stage">${['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="fld"><label>Notes</label><input id="j-notes"></div></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="const inv=DB.invoices.find(i=>i.id===fa('j-invoice'));DB.jobs.push({id:fa('j-id'),invoiceId:fa('j-invoice'),customer:fa('j-cust')||(inv?.customer||''),project:fa('j-project')||(inv?.project||''),stage:fa('j-stage'),startDate:fa('j-date'),balance:inv?invBalance(inv):0,notes:fa('j-notes')});save();closeModal();render()">Save Job</button></div>`)}
-function viewJob(id){
-  const quote=uniqueQuotes().find(q=>String(q.id)===String(id)&&!['Accepted','Rejected','Cancelled'].includes(q.status));
-  const j=(DB.jobs||[]).find(x=>String(x.id)===String(id))||(quote?{id:quote.id,customer:quote.customer,project:quote.projectReference||quote.project,stage:'Quoted',notes:'Live from quote ledger'}:null);
-  if(!j){toast('Job is no longer available. Refresh the job register.');return;}
-  modal(`<h3>Job ${escapeHtml(j.id)}</h3><div class="kv"><span>Customer</span><b>${escapeHtml(j.customer||'')}</b></div><div class="kv"><span>Project</span><b>${escapeHtml(j.project||'')}</b></div><div class="kv"><span>Stage</span><b>${escapeHtml(j.stage||'')}</b></div><div class="kv"><span>Notes</span><b>${escapeHtml(j.notes||'')}</b></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button></div>`);
+function newJob(){modal(`<h3>New Job Card</h3><div class="frm"><div class="fld"><label>Job No</label><input id="j-id" value="JOB-${Date.now()}"></div><div class="fld"><label>Invoice</label><select id="j-invoice"><option value="">Not linked</option>${DB.invoices.map(i=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.id)} — ${escapeHtml(i.customer||'')}</option>`).join('')}</select></div><div class="fld"><label>Customer</label><input id="j-cust"></div><div class="fld"><label>Project</label><input id="j-project"></div><div class="fld"><label>Intake date</label><input id="j-date" type="date" value="${today()}"></div><div class="fld"><label>Stage</label><select id="j-stage">${['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="fld"><label>Notes / work to complete</label><input id="j-notes"></div></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="const inv=DB.invoices.find(i=>i.id===fa('j-invoice'));const job={id:fa('j-id').trim(),invoiceId:fa('j-invoice'),customer:fa('j-cust')||(inv?.customer||''),project:fa('j-project')||(inv?.project||''),stage:'Quoted',startDate:fa('j-date'),intakeDate:fa('j-date'),createdAt:new Date().toISOString(),productionElapsedMs:0,balance:inv?invBalance(inv):0,notes:fa('j-notes')};if(!job.id||!job.customer||!job.intakeDate){toast('Enter a job number, customer and intake date');return;}if(DB.jobs.some(item=>String(item.id)===job.id)){toast('This job number already exists');return;}setJobProductionStage(job,fa('j-stage'));DB.jobs.push(job);save();closeModal();render()">Save Job</button></div>`)}
+function viewJob(id,index=-1,printAfterOpen=false){
+  const record=Number.isInteger(index)&&index>=0?DB.jobs[index]:(DB.jobs||[]).find(x=>String(x.id)===String(id));
+  const quote=record?quoteForJob(record):uniqueQuotes().find(q=>String(q.id)===String(id));
+  const job=record||(quote?{id:quote.id,quoteId:quote.id,customer:quote.customer,project:quote.projectReference||quote.project,stage:'Quoted',intakeDate:quote.date,workType:quote.workType,colour:quote.colour,notes:quote.introduction||quote.notes}:null);
+  if(!job){toast('Job is no longer available. Refresh the job register.');return;}
+  const inv=job.invoiceId?DB.invoices.find(item=>String(item.id)===String(job.invoiceId)):null,items=quote?.items||[],received=job.intakeDate||job.startDate||quote?.date||'',work=quote?.introduction||quote?.notes||job.notes||'No work specification recorded.',fabrics=jobFabricItems(quote);
+  modal(`<article class="job-detail" id="job-print-area"><img class="job-print-logo" src="uw-document-logo.png" alt="Upholstery Warehouse"><header><div><h2>${escapeHtml(job.id)}</h2><p>${escapeHtml(job.customer||quote?.customer||'Customer not recorded')}${job.project||quote?.projectReference?` · ${escapeHtml(job.project||quote.projectReference)}`:''}</p></div><span class="tag ${job.stage==='In production'?'quote':''}">${escapeHtml(job.stage||'Quoted')}</span></header><div class="job-detail-summary"><div><span>Quote / intake date</span><strong>${escapeHtml(received||'Not recorded')}</strong></div><div><span>Time in production</span><strong>${escapeHtml(formatJobProductionElapsed(job))}</strong></div><div><span>Production started</span><strong>${escapeHtml(job.productionStartedAt?.slice(0,10)||'Not started')}</strong></div><div><span>Work type</span><strong>${escapeHtml(job.workType||quote?.workType||'Not specified')}</strong></div></div><section><h3>Work to complete</h3><p>${escapeHtml(work)}</p>${items.length?`<div class="job-detail-lines">${items.map(item=>`<div class="job-detail-line"><div><strong>${escapeHtml(item.desc||'Work item')}</strong><small>${escapeHtml(item.item||'Work')} · Qty ${escapeHtml(item.qty??'—')} ${escapeHtml(item.unit||'')}</small></div>${item.item==='Fabric'||item.fabricId?`<div><span>Fabric</span><strong>${escapeHtml(jobFabricName(item))}</strong><small>${escapeHtml(item.colour||quote?.colour||'Colour not specified')}</small></div>`:''}</div>`).join('')}</div>`:'<p class="job-detail-empty">No quote line items are available for this job.</p>'}</section><section><h3>Customer and materials</h3><div class="job-detail-fields"><div><span>Customer</span><strong>${escapeHtml(job.customer||quote?.customer||'Not recorded')}</strong></div><div><span>Contact</span><strong>${escapeHtml(quote?.contact||'Not recorded')}</strong></div><div><span>Telephone</span><strong>${escapeHtml(quote?.phone||'Not recorded')}</strong></div><div><span>Fabric / colour</span><strong>${escapeHtml(fabrics.length?fabrics.map(item=>`${jobFabricName(item)}${item.colour||quote?.colour?' · '+(item.colour||quote.colour):''}`).join('; '):job.colour||quote?.colour||'Not specified')}</strong></div><div><span>Quote</span><strong>${escapeHtml(quote?.id||job.quoteId||'No linked quote')}</strong></div><div><span>Invoice</span><strong>${escapeHtml(inv?.id||'Not linked')}</strong></div></div></section><section><h3>Current production status</h3><p>${job.stage==='In production'?'Production is active':'Production time is tracked only while the stage is In production.'} ${job.productionStartedAt?`Started ${escapeHtml(job.productionStartedAt.slice(0,10))}.`:''}</p>${inv?`<p>Invoice total ${R(invTotal(inv))} · balance ${R(Math.max(0,invBalance(inv)))}</p>`:''}</section></article><div class="toolbar job-detail-actions" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close job card</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
+  if(printAfterOpen)window.print();
 }
 function vPayables(c){
   normalizePayables(DB);

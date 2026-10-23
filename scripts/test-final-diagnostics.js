@@ -57,6 +57,7 @@ test('large job lists load invoice choices on demand and retain linked invoice I
   const jobs=Array.from({length:100},(_,index)=>({id:'JOB-'+index,invoiceId:'INV-'+index,stage:'Quoted'}));
   const c=vm.createContext({DB:{invoices,jobs,quotes:[]},uniqueQuotes:()=>[],state:{},R:String,escapeHtml:String,invBalance:()=>0,invTotal:()=>10,
     Option:class{constructor(text,value,defaultSelected,selected){Object.assign(this,{text,value,selected});}}});
+  vm.runInContext(fs.readFileSync(path.join(root,'public/js/job-production.js'),'utf8'),c);
   vm.runInContext(html.slice(html.indexOf('function populateJobInvoiceOptions('),html.indexOf('function updateJobStage(')),c);
   const target={};c.vJobs(target);
   assert((target.innerHTML.match(/<option/g)||[]).length<2000,'Initial rendering must not build an invoice catalogue for every job');

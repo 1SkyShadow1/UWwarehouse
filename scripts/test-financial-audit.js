@@ -17,7 +17,7 @@ test('financial periods include year and January to date without future or undat
  assert.equal(matches('',''),true);
 });
 function section(start,end){return html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));}
-function context(db){const c=vm.createContext({DB:db,serverRevision:7,today:()=> '2026-10-09',monthOf:d=>String(d).slice(0,7),uniqueExpenses:e=>e,fnbSourceTransactions:()=>db.transactions||[],fnbTransactionAmount:t=>t.amount});vm.runInContext(section('function dateMatchesFinancialPeriod(','function fyData(')+section('const invTotal =','function toast(msg)')+section('function fnbTransactionMerchant(','function crossReferenceFnbPurchase('),c);return c;}
+function context(db){const c=vm.createContext({DB:db,serverRevision:7,today:()=> '2026-10-09',monthOf:d=>String(d).slice(0,7),uniqueExpenses:e=>e,fnbSourceTransactions:()=>db.transactions||[],fnbTransactionAmount:t=>t.amount});vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/js/job-production.js'),'utf8'),c);vm.runInContext(section('function dateMatchesFinancialPeriod(','function fyData(')+section('const invTotal =','function toast(msg)')+section('function fnbTransactionMerchant(','function crossReferenceFnbPurchase('),c);return c;}
 test('AI financial totals agree with unique invoice reporting and include deposits',()=>{
  const invoice={id:'BB26100801',items:[{qty:2,price:100}],paid:30,deposit:20};
  const c=context({invoices:[invoice,{...invoice}],expenses:[{amount:12}],receipts:[]});

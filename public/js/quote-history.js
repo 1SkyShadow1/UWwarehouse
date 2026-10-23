@@ -45,7 +45,7 @@ function acceptQuoteVersion(q){
   if(entry){entry.acceptedAt=q.acceptedVersion.acceptedAt;entry.acceptedSnapshot=JSON.parse(JSON.stringify(q.acceptedVersion.snapshot));}
   return true;
 }
-function acceptQuote(id){const q=DB.quotes.find(q=>q.id===id);if(!q||!acceptQuoteVersion(q))return;save();render();toast('Quote revision '+q.revision+' accepted');}
+function acceptQuote(id){const q=DB.quotes.find(q=>q.id===id);if(!q||!acceptQuoteVersion(q))return;syncQuoteJob(q);save();render();toast('Quote revision '+q.revision+' accepted');}
 function quoteChanges(before,after){
   const changes=[];
   for(const key of ['id','date','expiry','customer','contact','projectReference','workType','colour','introduction'])if((before[key]||'')!==(after[key]||''))changes.push(`${key}: ${before[key]||'—'} → ${after[key]||'—'}`);
