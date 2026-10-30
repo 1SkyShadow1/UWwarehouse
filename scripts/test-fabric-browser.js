@@ -81,6 +81,18 @@ async function run() {
     assert.equal(await page.locator('#f-items tr:nth-child(2) .i-price').inputValue(),'143');
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#modal-root .modal').count(),0,'Escape must close a quote without relying on backdrop clicks');
+    await page.evaluate(()=>newQuote());
+    await page.locator('#f-length').fill('4');
+    await page.locator('#f-colour').fill('Hemingway (Shadow)');
+    const sleeperPresetIndex=await page.evaluate(()=>quotePresets().findIndex(p=>p.desc==='Two Seater Couch - Sleeper'&&!p.lines));
+    await page.locator('#f-preset').selectOption(String(sleeperPresetIndex));
+    assert.equal(await page.locator('#f-items tr').count(),5,'Complete-item selection should immediately add Fabric, materials, labour, and Foam');
+    assert.equal(await page.locator('#f-items tr:nth-child(2) .i-desc').inputValue(),'1 x Two Seater Couch - Sleeper - Fabric - Hemingway (Shadow)','Fabric description includes its product and chosen colour even when replacing the blank starter row');
+    assert.equal(await page.locator('#f-items tr:nth-child(2) .i-qty').inputValue(),'4','Fabric quantity uses the selected material length');
+    assert.equal(await page.locator('#f-items tr:nth-child(5) .i-item').inputValue(),'Foam');
+    assert.equal(await page.locator('#f-items tr:nth-child(5) .i-price').inputValue(),'','No separate Foam price is invented');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#modal-root .modal').count(),0,'Escape must close the complete-item quote');
     // Category gating, historical consumable selection and custom colour persistence.
     await page.evaluate(()=>newQuote());
     const gated=page.locator('#f-items tr').nth(1);

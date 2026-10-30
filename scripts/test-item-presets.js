@@ -68,6 +68,32 @@ test('quote complete-item presets apply on selection and label each added compon
   assert.equal(rows[2].querySelector('.i-item').value,'Foam');
   assert.equal(context.quotePresetProductDescription({desc:'1 x One Seater Couch'},'Foam',1),'1 x One Seater Couch - Foam');
 });
+test('complete-item presets label every new component when replacing the blank starter row',()=>{
+  const preset={code:'STD-COU-1',desc:'One Seater Couch - Standard',mtr:7,fabCost:120,matCost:150,labHr:4};
+  context.DB.priceBook.push(preset);
+  const header={},blankRow={querySelector:selector=>selector==='.i-desc'?{value:''}:null},rows=[header,blankRow],table={querySelectorAll:()=>rows};
+  context.document={getElementById:id=>id==='blank-items'?table:id==='f-qty'?{value:'2'}:null};
+  context.applyQuotePreset=value=>{
+    rows.splice(1,1);
+    for(const line of context.quotePresetLines(context.quotePresets()[Number(value)],2)){
+      const fields={'.i-desc':{value:line.desc},'.i-item':{value:line.item},'.i-qty':{value:String(line.qty)}};
+      rows.push({querySelector:selector=>fields[selector]||null});
+    }
+  };
+  context.appendDocumentItem=(tableId,prefix,line)=>{
+    const fields={'.i-desc':{value:line.desc},'.i-item':{value:line.item},'.i-qty':{value:String(line.qty)}};
+    rows.push({querySelector:selector=>fields[selector]||null});
+  };
+  context.updateLinePricing=()=>{};
+  context.applyQuotePresetForQuote(String(context.quotePresets().indexOf(preset)),'blank-items','i','f');
+  const descriptions=rows.slice(1).map(row=>row.querySelector('.i-desc').value);
+  assert.deepEqual(descriptions,[
+    '2 x One Seater Couch - Standard - Fabric',
+    '2 x One Seater Couch - Standard - Consumables - Materials allowance',
+    '2 x One Seater Couch - Standard - Labour - Upholster',
+    '2 x One Seater Couch - Standard - Foam',
+  ]);
+});
 test('quote forms auto-add every preset while invoice forms keep the explicit add action',()=>{
   const quotePicker=context.quotePresetPickerHtml('f-items','i','f',true);
   assert.match(quotePicker,/onchange="previewQuotePreset\(\);applyQuotePresetForQuote\(this\.value,'f-items','i','f'\)"/);

@@ -59,17 +59,17 @@ function applyQuotePresetForQuote(value,tableId='f-items',prefix='i',formPrefix=
   const table=document.getElementById(tableId);
   if(!preset||!table)return;
   const isCompleteItem=!preset.item&&!preset.savedPreset;
-  const existingRows=table.querySelectorAll('tr').length;
+  const existingRows=new Set(table.querySelectorAll('tr'));
   const multiplier=document.getElementById(`${formPrefix}-qty`)?.value||1;
   applyQuotePreset(value);
-  let newRows=Array.from(table.querySelectorAll('tr')).slice(existingRows);
+  let newRows=Array.from(table.querySelectorAll('tr')).filter(row=>!existingRows.has(row));
   if(isCompleteItem&&!preset.lines&&preset.matCost!=null&&!newRows.some(row=>row.querySelector(`.${prefix}-item`)?.value==='Foam')){
     appendDocumentItem(tableId,prefix,{item:'Foam',desc:'Foam',qty:multiplier,price:''});
   }
   if(!isCompleteItem)return;
   const titlePrefix=String(preset.desc||'').trim().replace(/^\d+(?:\.\d+)?\s*[x×]\s*/i,'');
   if(!titlePrefix)return;
-  newRows=Array.from(table.querySelectorAll('tr')).slice(existingRows);
+  newRows=Array.from(table.querySelectorAll('tr')).filter(row=>!existingRows.has(row));
   for(const row of newRows){
     const description=row.querySelector(`.${prefix}-desc`);
     if(!description||!description.value.trim())continue;
