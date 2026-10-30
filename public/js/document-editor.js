@@ -20,7 +20,7 @@ function newInvoice(mode='invoice'){
     <div class="fld"><label>Material metres per item</label><input id="f-length" type="number" min="0" step="0.01" placeholder="Use preset length" onchange="refreshQuotePreset()"></div>
     <div class="fld"><label>Fabric colour</label><input id="f-colour" list="fabric-colours" placeholder="Choose or type any colour" onchange="refreshQuotePreset()"><small>Confirm this colour with the selected supplier.</small></div>`:''}
   </div>
-  ${quotePresetPickerHtml()+fabricColourOptions()}
+  ${quotePresetPickerHtml('f-items','i','f',mode==='quote')+fabricColourOptions()}
   ${mode==='quote'?'<div class="fld" style="margin-bottom:8px"><label>Introduction, notes and specifications</label><textarea id="f-introduction" rows="3"></textarea></div>':''}
   <div class="fld" style="margin-bottom:8px"><label>Line Items</label></div>
   <table id="f-items"><tr><th>Code</th><th>Description</th><th>Supplier fabric / price basis</th>${mode==='quote'?'<th>Item</th>':''}<th>Qty</th><th class="num">Selling / unit · internal cost</th><th></th></tr></table>

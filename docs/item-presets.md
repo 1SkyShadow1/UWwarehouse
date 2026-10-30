@@ -1,8 +1,11 @@
 The quote editor combines the existing price book with reusable lines extracted
 from historical quotes and invoices in the UW archive. Search by product or
-material and filter by Item category. Review the selected preset, then use
-**Add preset lines**. Existing lines and entered notes are retained. Changes to
-quantity, work type or colour apply to the next preset addition.
+material and filter by Item category. In a quote, selecting any of the available
+presets immediately adds its saved line or component lines. Complete-item and
+historical job presets include the product name in each component description;
+standalone material and work presets retain their own descriptions. Existing
+lines and entered notes are retained. Invoice forms retain the explicit
+**Add preset lines** action.
 
 Historical job bundles keep their original line quantities. The quantity field
 becomes a job multiplier when one is selected; it does not infer how many metres
@@ -13,8 +16,8 @@ Each line has an Item category. Supplier, fabric, price basis, supplier VAT and
 fabric colour controls apply only to **Fabric**. Changing a supplier-priced Fabric
 line to another category clears its supplier snapshot and calculated rate.
 Labour, Foam, Consumables, Delivery and Other lines can use category-specific
-historical choices or an entered description. Product names remain in the preset
-picker; document descriptions show the category and detail once.
+historical choices or an entered description. Complete-item quote descriptions
+include the product followed by its category and detail.
 
 Fabric colours can be selected from the palette or entered freely. A colour
 choice is a specification, not a claim that a supplier has it in stock.

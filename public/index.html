@@ -213,8 +213,11 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .footer-note{margin-top:auto;font-size:10.5px;color:#55554e;padding:12px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between}
 .toast{position:fixed;bottom:24px;right:24px;background:#242424;border:1px solid var(--gold);color:var(--gold2);padding:11px 18px;border-radius:9px;font-size:13px;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.6)}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50}
-.modal{background:var(--bg2);border:1px solid var(--gold-dim);border-radius:14px;padding:22px;width:min(720px,94vw);max-height:88vh;overflow-y:auto}
-.modal h3{color:var(--gold2);margin-bottom:16px}
+.modal{position:relative;background:var(--bg2);border:1px solid var(--gold-dim);border-radius:14px;padding:22px;width:min(720px,94vw);max-height:88vh;overflow-y:auto}
+.modal-close{position:absolute;inset-block-start:10px;inset-inline-end:12px;z-index:1;display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--gold-dim);border-radius:8px;background:var(--bg);color:var(--gold2);font-size:22px;line-height:1;cursor:pointer}
+.modal-close:hover{border-color:var(--gold);background:var(--bg2)}
+.modal-close:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.modal h3{color:var(--gold2);margin-bottom:16px;padding-inline-end:38px}
 .modal:has(#f-items,#ef-items,#eq-items){width:min(1280px,96vw);overflow:auto}
 .modal table input,.modal table select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:6px;font-size:12px}
 @media print{
@@ -350,7 +353,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="js/pricing-core.js?v=64"></script>
 <script src="js/fabrics.js?v=64"></script>
 <script src="item-presets.js?v=64"></script>
-<script src="js/item-presets.js?v=64"></script>
+<script src="js/item-presets.js?v=68"></script>
 <script src="js/document-lines.js?v=64"></script>
 <script src="js/fabric-picker.js?v=64"></script>
 <script src="js/pricing.js?v=64"></script>
@@ -369,7 +372,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="js/app-version.js?v=64"></script>
 <script src="js/shared-sync.js?v=64"></script>
 <script src="js/assistant-core.js?v=64"></script>
-<script src="js/assistant.js?v=66"></script>
+<script src="js/assistant.js?v=68"></script>
 <script src="js/local-recovery.js?v=64"></script>
 
 <script>
@@ -2671,8 +2674,16 @@ function vSettings(c){
 }
 
 /* ---------- Modal ---------- */
-function modal(html){document.getElementById('modal-root').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;}
+function modal(html){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true" tabindex="-1"><button type="button" class="modal-close" aria-label="Close dialog" title="Close dialog" onclick="closeModal()">×</button>${html}</div></div>`;
+  const dialog=root.querySelector('.modal'),heading=dialog.querySelector('h3');
+  if(heading){heading.id='modal-heading';dialog.setAttribute('aria-labelledby',heading.id);}
+  else dialog.setAttribute('aria-label','Dialog');
+  root.querySelector('.modal-close')?.focus();
+}
 function closeModal(){document.getElementById('modal-root').innerHTML='';}
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.querySelector('#modal-root .modal'))closeModal();});
 
 const tutorialSteps=[
   {icon:'◈',title:'Your command centre',copy:'The dashboard gives you a clean read on income, expenses, outstanding balances and the work moving through Upholstery Warehouse.'},

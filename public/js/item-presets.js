@@ -39,8 +39,43 @@ function fabricColourOptions(){
   const colours=['Black','White','Ivory','Cream','Ecru','Natural','Pearl','Off White','Beige','Sand','Desert','Dessert','Stone','Oatmeal','Linen','Taupe','Mushroom','Mocha','Chocolate','Brown','Tan','Camel','Cognac','Caramel','Coffee','Walnut','Grey','Light Grey','Silver','Sterling','Slate','Graphite','Charcoal','Anthracite','Navy','Midnight Blue','Royal Blue','Cobalt','Denim','Sky Blue','Powder Blue','Duck Egg','Teal','Turquoise','Aqua','Petrol','Emerald','Forest Green','Olive','Sage','Mint','Pistachio','Khaki','Lime','Mustard','Gold','Ochre','Yellow','Rust','Terracotta','Copper','Orange','Coral','Peach','Blush','Dusty Pink','Rose','Magenta','Red','Burgundy','Wine','Maroon','Plum','Purple','Lilac','Lavender','Violet','Multi-colour'];
   return `<datalist id="fabric-colours">${colours.map(c=>`<option value="${escapeHtml(c)}"></option>`).join('')}</datalist>`;
 }
-function quotePresetPickerHtml(tableId='f-items',prefix='i',formPrefix='f'){
-  return `<section class="preset-panel" data-table="${tableId}" data-prefix="${prefix}" data-form="${formPrefix}"><h4>Build from a previous item</h4><div class="preset-controls"><label>Find a size, type or material<input id="preset-query" type="search" placeholder="Search sofa, chair, cushion…" oninput="filterQuotePresets()"></label><label>Preset type<select id="preset-type" onchange="filterQuotePresets()"><option value="">All presets</option>${['Complete item','Fabric','Foam','Labour','Consumables','Delivery','Other'].map(c=>`<option>${c}</option>`).join('')}</select></label><label>Item preset<select id="f-preset" onchange="previewQuotePreset()"><option value="">Choose an item preset…</option>${quotePresets().map((p,i)=>`<option value="${i}" data-category="${escapeHtml(p.originalJobQuantities||!p.lines?'Complete item':p.item)}">${escapeHtml(p.code||'')} — ${escapeHtml(p.desc||'Priced item')}${p.originalJobQuantities?' · '+R(p.total):''}${p.sourceDate?' · '+escapeHtml(p.sourceDate):''}</option>`).join('')}</select></label><button id="preset-add" type="button" class="btn gold" disabled onclick="applyQuotePreset(document.getElementById('f-preset').value)">Add preset lines</button></div><p id="preset-preview">${quotePresets().length} presets available. Choose a preset to review its quantities and rates. Adding a preset keeps existing lines.</p><small>Historical rates need checking before issuing a quote. Fabric lines use current supplier pricing when you choose a fabric.</small></section>`;
+function quotePresetPickerHtml(tableId='f-items',prefix='i',formPrefix='f',autoApplyPresets=formPrefix==='eq'){
+  const addPreset=autoApplyPresets
+    ?`applyQuotePresetForQuote(document.getElementById('f-preset').value,'${tableId}','${prefix}','${formPrefix}')`
+    :`applyQuotePreset(document.getElementById('f-preset').value)`;
+  const selectionHandler=autoApplyPresets
+    ?`previewQuotePreset();applyQuotePresetForQuote(this.value,'${tableId}','${prefix}','${formPrefix}')`
+    :'previewQuotePreset()';
+  return `<section class="preset-panel" data-table="${tableId}" data-prefix="${prefix}" data-form="${formPrefix}" data-auto-apply="${autoApplyPresets}"><h4>Build from a previous item</h4><div class="preset-controls"><label>Find a size, type or material<input id="preset-query" type="search" placeholder="Search sofa, chair, cushion…" oninput="filterQuotePresets()"></label><label>Preset type<select id="preset-type" onchange="filterQuotePresets()"><option value="">All presets</option>${['Complete item','Fabric','Foam','Labour','Consumables','Delivery','Other'].map(c=>`<option>${c}</option>`).join('')}</select></label><label>Item preset<select id="f-preset" onchange="${selectionHandler}"><option value="">Choose an item preset…</option>${quotePresets().map((p,i)=>`<option value="${i}" data-category="${escapeHtml(p.originalJobQuantities||!p.lines||(!p.item&&!p.savedPreset)?'Complete item':p.item)}">${escapeHtml(p.code||'')} — ${escapeHtml(p.desc||'Priced item')}${p.originalJobQuantities?' · '+R(p.total):''}${p.sourceDate?' · '+escapeHtml(p.sourceDate):''}</option>`).join('')}</select></label><button id="preset-add" type="button" class="btn gold" ${autoApplyPresets?'hidden':''} disabled onclick="${addPreset}">Add preset lines</button></div><p id="preset-preview">${quotePresets().length} presets available. ${autoApplyPresets?'Selecting any preset adds its lines automatically; existing lines are kept.':'Choose a preset and use Add preset lines to insert it.'}</p><small>Historical rates need checking before issuing a quote. Fabric lines use current supplier pricing when you choose a fabric.</small></section>`;
+}
+function quotePresetProductDescription(preset,lineDescription,quantity=1){
+  const title=String(preset?.desc||'').trim().replace(/^\d+(?:\.\d+)?\s*[x×]\s*/i,'');
+  if(!title)return lineDescription;
+  const count=Math.max(1,Number(quantity)||1);
+  return `${count} x ${title} - ${lineDescription}`;
+}
+function applyQuotePresetForQuote(value,tableId='f-items',prefix='i',formPrefix='f'){
+  const preset=value===''?null:quotePresets()[Number(value)];
+  const table=document.getElementById(tableId);
+  if(!preset||!table)return;
+  const isCompleteItem=!preset.item&&!preset.savedPreset;
+  const existingRows=table.querySelectorAll('tr').length;
+  const multiplier=document.getElementById(`${formPrefix}-qty`)?.value||1;
+  applyQuotePreset(value);
+  let newRows=Array.from(table.querySelectorAll('tr')).slice(existingRows);
+  if(isCompleteItem&&!preset.lines&&preset.matCost!=null&&!newRows.some(row=>row.querySelector(`.${prefix}-item`)?.value==='Foam')){
+    appendDocumentItem(tableId,prefix,{item:'Foam',desc:'Foam',qty:multiplier,price:''});
+  }
+  if(!isCompleteItem)return;
+  const titlePrefix=String(preset.desc||'').trim().replace(/^\d+(?:\.\d+)?\s*[x×]\s*/i,'');
+  if(!titlePrefix)return;
+  newRows=Array.from(table.querySelectorAll('tr')).slice(existingRows);
+  for(const row of newRows){
+    const description=row.querySelector(`.${prefix}-desc`);
+    if(!description||!description.value.trim())continue;
+    description.value=quotePresetProductDescription(preset,description.value.trim(),multiplier);
+    updateLinePricing(row);
+  }
 }
 function filterQuotePresets(){
   const query=document.getElementById('preset-query').value.trim().toLowerCase();
@@ -51,9 +86,11 @@ function filterQuotePresets(){
 function previewQuotePreset(){
   const value=document.getElementById('f-preset')?.value,p=value===''?null:quotePresets()[Number(value)];
   const preview=document.getElementById('preset-preview');if(!preview)return;
-  document.getElementById('preset-add').disabled=!p;
+  const addButton=document.getElementById('preset-add');if(addButton)addButton.disabled=!p;
   const quantityLabel=document.getElementById('f-qty')?.parentElement.querySelector('label');if(quantityLabel)quantityLabel.textContent=p?.originalJobQuantities?'Repeat original job (multiplier)':'Number of items';
-  preview.textContent=p?(p.originalJobQuantities?`${p.desc} · ${p.lines.length} original lines · Previous bundle ${R(p.total)}. Keeps original job quantities; confirm measurements and current rates.`:p.lines?(p.price==null?`${p.item} · Description found in previous documents. Enter a confirmed rate.`:`${p.item} · ${p.savedPreset?'Saved selling rate':'Historical source rate'} ${R(p.price)} per documented unit. Check quantity and current rate before use.`):`${p.desc} · Fabric ${p.mtr||0}m per item · Historical fabric ${R(p.fabCost||0)}/m · Materials ${R(p.matCost||0)} · Labour ${p.labHr||0} hours. Confirm rates before use.`):'Choose an item preset to review its quantities and rates.';
+  const autoApply=document.querySelector('.preset-panel')?.dataset.autoApply==='true';
+  const details=p?(p.originalJobQuantities?`${p.desc} · ${p.lines.length} original lines · Previous bundle ${R(p.total)}. Keeps original job quantities; confirm measurements and current rates.`:p.lines?(p.price==null?`${p.item} · Description found in previous documents. Enter a confirmed rate.`:`${p.item} · ${p.savedPreset?'Saved selling rate':'Historical source rate'} ${R(p.price)} per documented unit. Check quantity and current rate before use.`):`${p.desc} · Fabric ${p.mtr||0}m per item · Historical fabric ${R(p.fabCost||0)}/m · Materials ${R(p.matCost||0)} · Labour ${p.labHr||0} hours. Confirm rates before use.`):'Choose an item preset to review its quantities and rates.';
+  preview.textContent=p?`${details}${autoApply?' Selected preset lines are added automatically; existing quote lines are kept.':''}`:details;
 }
 function refreshQuotePreset(){previewQuotePreset();}
 function presetNumber(value){return value!==''&&value!=null&&Number.isFinite(Number(value))?Number(value):null;}

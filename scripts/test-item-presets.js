@@ -1,7 +1,9 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),test=require('node:test');
 const root=path.join(__dirname,'..','public');
-const context=vm.createContext({window:{},DB:{priceBook:[{code:'QA',desc:'Wingback chair',mtr:3,fabCost:110,matCost:420,labHr:2}]},escapeHtml:v=>String(v),R:v=>'R '+v});
+const savedPresets=Object.fromEntries(Array.from({length:4},(_,index)=>[`TEST-SAVED-${index+1}`,{id:`TEST-SAVED-${index+1}`,code:`TEST-SAVED-${index+1}`,item:'Labour',desc:`Saved labour ${index+1}`,qty:1,price:100,savedPreset:true}]));
+const priceBook=Array.from({length:110},(_,index)=>index===0?{code:'QA',desc:'Wingback chair',mtr:3,fabCost:110,matCost:420,labHr:2}:{code:`TEST-${index}`,desc:`Test item ${index}`,mtr:1,fabCost:10,matCost:20,labHr:1});
+const context=vm.createContext({window:{},DB:{priceBook,meta:{savedItemPresets:savedPresets}},escapeHtml:v=>String(v),R:v=>'R '+v});
 for(const file of ['item-presets.js','js/document-format.js','js/item-presets.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);
 test('archive presets retain historical rates without exposing client metadata',()=>{
   const presets=context.window.UW_ITEM_PRESETS.presets;
@@ -43,6 +45,71 @@ test('complete item presets print category descriptions and leave purchase costs
   assert(lines.every(p=>p.unitCost===null&&p.pricingMode==='manual'));
   assert(lines.every(p=>!p.desc.includes('Wingback')));
   assert(!lines.some(p=>p.item==='Consumables'&&p.price===20));
+});
+test('quote complete-item presets apply on selection and label each added component with the product',()=>{
+  const preset={code:'STD-COU-1',desc:'One Seater Couch - Standard',mtr:7,fabCost:120,matCost:150,labHr:4};
+  context.DB.priceBook.push(preset);
+  const existing={descriptionField:{value:'Existing work line'},querySelector:()=>null},added={descriptionField:{value:'Fabric - Sage'},querySelector:selector=>selector==='.i-desc'?added.descriptionField:null},rows=[existing];
+  const table={querySelectorAll:()=>rows};
+  context.document={getElementById:id=>id==='f-items'?table:id==='f-qty'?{value:'2'}:null};
+  context.applyQuotePreset=()=>rows.push(added);
+  context.appendDocumentItem=(tableId,prefix,item)=>{
+    const fields={'.i-desc':{value:item.desc},'.i-item':{value:item.item},'.i-qty':{value:String(item.qty)}};
+    rows.push({querySelector:selector=>fields[selector]||null});
+  };
+  context.updateLinePricing=row=>{row.pricingUpdated=true;};
+  const index=context.quotePresets().indexOf(preset);
+  context.applyQuotePresetForQuote(String(index),'f-items','i','f');
+  assert.equal(existing.descriptionField.value,'Existing work line','Existing quote lines must be retained unchanged');
+  assert.equal(added.descriptionField.value,'2 x One Seater Couch - Standard - Fabric - Sage');
+  assert.equal(added.pricingUpdated,true,'Changed line descriptions should refresh their calculated display');
+  assert.equal(rows[2].querySelector('.i-desc').value,'2 x One Seater Couch - Standard - Foam');
+  assert.equal(rows[2].querySelector('.i-qty').value,'2');
+  assert.equal(rows[2].querySelector('.i-item').value,'Foam');
+  assert.equal(context.quotePresetProductDescription({desc:'1 x One Seater Couch'},'Foam',1),'1 x One Seater Couch - Foam');
+});
+test('quote forms auto-add every preset while invoice forms keep the explicit add action',()=>{
+  const quotePicker=context.quotePresetPickerHtml('f-items','i','f',true);
+  assert.match(quotePicker,/onchange="previewQuotePreset\(\);applyQuotePresetForQuote\(this\.value,'f-items','i','f'\)"/);
+  assert.match(quotePicker,/data-auto-apply="true"/);
+  assert.match(quotePicker,/<button id="preset-add"[^>]*hidden/);
+  assert.match(quotePicker,/onclick="applyQuotePresetForQuote/);
+  const invoicePicker=context.quotePresetPickerHtml('ef-items','ei','ef');
+  assert.match(invoicePicker,/onchange="previewQuotePreset\(\)"/);
+  assert.match(invoicePicker,/onclick="applyQuotePreset\(document\.getElementById/);
+  const editedQuotePicker=context.quotePresetPickerHtml('eq-items','eq','eq');
+  assert.match(editedQuotePicker,/applyQuotePresetForQuote\(this\.value,'eq-items','eq','eq'\)/);
+  const editor=fs.readFileSync(path.join(root,'js/document-editor.js'),'utf8');
+  assert.match(editor,/quotePresetPickerHtml\('f-items','i','f',mode==='quote'\)/);
+});
+test('every available preset auto-adds its lines to a quote while preserving existing rows',()=>{
+  const presets=context.quotePresets();
+  assert(presets.length>=541,`Expected at least 541 available presets; found ${presets.length}`);
+  assert.equal(110+context.window.UW_ITEM_PRESETS.presets.length+context.archiveJobPresets().length+4,541);
+  let rows=[];
+  const table={querySelectorAll:()=>rows};
+  const existing={querySelector:()=>null};
+  context.document={getElementById:id=>id==='all-presets-items'?table:id==='f-qty'?{value:'1'}:null};
+  context.appendDocumentItem=(tableId,prefix,item)=>{
+    const fields={'.t-desc':{value:item.desc},'.t-item':{value:item.item},'.t-qty':{value:String(item.qty)}};
+    rows.push({querySelector:selector=>fields[selector]||null});
+  };
+  context.applyQuotePreset=value=>{
+    for(const line of context.quotePresetLines(presets[Number(value)],1))context.appendDocumentItem('all-presets-items','t',line);
+  };
+  context.updateLinePricing=()=>{};
+  let addedLines=0;
+  for(let index=0;index<presets.length;index++){
+    const preset=presets[index];
+    rows=[existing];
+    context.applyQuotePresetForQuote(String(index),'all-presets-items','t','f');
+    let expected=context.quotePresetLines(preset,1).length;
+    if(!preset.item&&!preset.savedPreset&&!preset.lines&&preset.matCost!=null&&!context.quotePresetLines(preset,1).some(line=>line.item==='Foam'))expected++;
+    assert.equal(rows.length,expected+1,`Preset ${index} (${preset.desc}) should add every generated line`);
+    assert.equal(rows[0],existing,'Existing quote lines must not be removed');
+    addedLines+=expected;
+  }
+  assert(addedLines>=presets.length,'Every preset must add at least one quote line');
 });
 test('historical lines preserve unit rates; descriptions without a price require entry',()=>{
   const preset=context.quotePresets().find(p=>p.desc==='Consumables - Glue');

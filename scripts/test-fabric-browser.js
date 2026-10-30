@@ -65,9 +65,22 @@ async function run() {
     assert.equal(await page.locator('#f-no').inputValue(),'BB26100701');
     await page.locator('#f-prefix').selectOption('SS');assert.equal(await page.locator('#f-no').inputValue(),'SS26100701');
     await page.locator('#f-date').fill('2026-10-08');await page.locator('#f-date').dispatchEvent('change');assert.equal(await page.locator('#f-no').inputValue(),'SS26100801');
-    await page.evaluate(()=>closeModal());
+    await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
+    assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside a quote must not close it');
+    const closeBounds=await page.locator('#modal-root .modal-close').evaluate(button=>{const b=button.getBoundingClientRect(),m=button.closest('.modal').getBoundingClientRect();return {right:m.right-b.right,top:b.top-m.top};});
+    assert(closeBounds.right>=0&&closeBounds.top>=0,'The close button must be positioned inside the modal at the top right');
+    await page.getByRole('button',{name:'Close dialog'}).click();
+    assert.equal(await page.locator('#modal-root .modal').count(),0,'The quote close button must dismiss the form');
     const catalog = await page.evaluate(() => window.UW_FABRIC_CATALOG);
     assert.equal(catalog.fabrics.length, 1421);
+    await page.evaluate(()=>newQuote());
+    const archiveGlueIndex=await page.evaluate(()=>quotePresets().findIndex(p=>p.item==='Consumables'&&p.desc==='Consumables - Glue'));
+    await page.locator('#f-preset').selectOption(String(archiveGlueIndex));
+    assert.equal(await page.locator('#f-items tr').count(),2,'Selecting a standalone preset adds it immediately to a quote');
+    assert.equal(await page.locator('#f-items tr:nth-child(2) .i-desc').inputValue(),'Consumables - Glue');
+    assert.equal(await page.locator('#f-items tr:nth-child(2) .i-price').inputValue(),'143');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#modal-root .modal').count(),0,'Escape must close a quote without relying on backdrop clicks');
     // Category gating, historical consumable selection and custom colour persistence.
     await page.evaluate(()=>newQuote());
     const gated=page.locator('#f-items tr').nth(1);
@@ -94,7 +107,8 @@ async function run() {
     await page.locator('#f-colour').fill('Terracotta');await page.locator('#f-colour').dispatchEvent('change');
     assert.equal(await gated.locator('.i-desc').inputValue(),beforeRefresh);
     await page.locator('#preset-type').selectOption('Complete item');
-    await page.locator('#f-preset').selectOption('0');await page.getByRole('button',{name:'Add preset lines'}).click();
+    await page.locator('#f-preset').selectOption('0');
+    assert.equal(await page.locator('#preset-add').isVisible(),false,'Quotes must not offer a duplicate manual-add action');
     assert.equal(await page.locator('#f-items tr').count(),5,'Existing consumable and three preset lines are retained');
     assert.equal(await gated.locator('.i-desc').inputValue(),'Consumables - Glue');
     assert.equal(await page.evaluate(()=>quotePresets().length),110+ (await page.evaluate(()=>archiveLinePresets().length+archiveJobPresets().length)));
@@ -110,11 +124,10 @@ async function run() {
     const historicalBundle=await page.evaluate(()=>archiveJobPresets()[0]);
     if(historicalBundle){
       await page.evaluate(()=>newQuote());
+      await page.locator('#f-qty').fill('2');
       await page.locator('#f-preset').selectOption('110');
       assert((await page.locator('#preset-preview').innerText()).includes('Keeps original job quantities'));
       assert((await page.locator('#f-qty').locator('..').innerText()).toLowerCase().includes('multiplier'));
-      await page.locator('#f-qty').fill('2');
-      await page.getByRole('button',{name:'Add preset lines'}).click();
       const lines=await page.evaluate(()=>collectDocumentItems('f-items','i'));
       assert.equal(lines.length,historicalBundle.lines.length);
       assert.equal(Math.round(lines.reduce((s,l)=>s+l.qty*l.price,0)*100)/100,2*historicalBundle.total);
@@ -127,6 +140,16 @@ async function run() {
     await page.getByRole('button',{name:'Browse fabrics',exact:true}).first().click();
     assert.equal(await page.locator('#content table tr').count(),15);
     assert((await page.locator('#content').innerText()).includes('African Gameskin'));
+    await page.evaluate(() => newInvoice());
+    const invoicePresetIndex=await page.evaluate(()=>quotePresets().findIndex(p=>p.item==='Consumables'&&p.desc==='Consumables - Glue'));
+    await page.locator('#f-preset').selectOption(String(invoicePresetIndex));
+    assert.equal(await page.locator('#f-items tr').count(),2,'Invoice preset selection must remain manual');
+    await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
+    assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside an invoice must not close it');
+    await page.getByRole('button',{name:'Add preset lines'}).click();
+    assert.equal(await page.locator('#f-items tr:nth-child(2) .i-desc').inputValue(),'Consumables - Glue');
+    await page.getByRole('button',{name:'Close dialog'}).click();
+    assert.equal(await page.locator('#modal-root .modal').count(),0,'The invoice close button must dismiss the form');
     await page.evaluate(() => newInvoice());
     const representatives = Object.keys(catalog.sources).map(key => catalog.fabrics.find(f => f.sourceId === key && !f.needsPriceConfirmation));
     for (let index = 0; index < representatives.length; index++) {
