@@ -94,6 +94,12 @@ test('complete-item presets label every new component when replacing the blank s
     '2 x One Seater Couch - Standard - Foam',
   ]);
 });
+test('quote preset notes describe the selected work and fabric correctly',()=>{
+  const preset={desc:'Two Seater Couch - Sleeper'};
+  assert.equal(context.quotePresetJobDescription(preset,1,'Reupholster',4,'Hemingway (Shadow)'),'1 x Two Seater Couch - Sleeper to be reupholstered in 4m Hemingway (Shadow) fabric.');
+  assert.equal(context.quotePresetJobDescription(preset,2,'Repair'),'2 x Two Seater Couch - Sleeper to be repaired.');
+  assert.equal(context.quotePresetJobDescription(preset,1,'Manufacturing',2.5,'Bahamas (PL13)'),'1 x Two Seater Couch - Sleeper to be made in 2.5m Bahamas (PL13) fabric.');
+});
 test('quote forms auto-add every preset while invoice forms keep the explicit add action',()=>{
   const quotePicker=context.quotePresetPickerHtml('f-items','i','f',true);
   assert.match(quotePicker,/onchange="previewQuotePreset\(\);applyQuotePresetForQuote\(this\.value,'f-items','i','f'\)"/);
@@ -133,6 +139,13 @@ test('every available preset auto-adds its lines to a quote while preserving exi
     if(!preset.item&&!preset.savedPreset&&!preset.lines&&preset.matCost!=null&&!context.quotePresetLines(preset,1).some(line=>line.item==='Foam'))expected++;
     assert.equal(rows.length,expected+1,`Preset ${index} (${preset.desc}) should add every generated line`);
     assert.equal(rows[0],existing,'Existing quote lines must not be removed');
+    if(!preset.item&&!preset.savedPreset){
+      const title=String(preset.desc||'').trim().replace(/^\d+(?:\.\d+)?\s*[x×]\s*/i,'');
+      for(const row of rows.slice(1)){
+        const description=row.querySelector('.t-desc')?.value||'';
+        assert(description.includes(title),`Preset ${index} (${preset.desc}) should label each generated line with its product`);
+      }
+    }
     addedLines+=expected;
   }
   assert(addedLines>=presets.length,'Every preset must add at least one quote line');

@@ -54,6 +54,14 @@ function quotePresetProductDescription(preset,lineDescription,quantity=1){
   const count=Math.max(1,Number(quantity)||1);
   return `${count} x ${title} - ${lineDescription}`;
 }
+function quotePresetJobDescription(preset,quantity=1,workType='Reupholster',length=null,colour=''){
+  const title=String(preset?.desc||'Item').trim().replace(/^\d+(?:\.\d+)?\s*[x×]\s*/i,'');
+  const count=Math.max(1,Number(quantity)||1);
+  const action=({Manufacturing:'made',Repair:'repaired',Reupholster:'reupholstered'})[workType]||String(workType||'Reupholster').toLowerCase();
+  const subject=preset?.originalJobQuantities?String(preset.desc||'Previous job'):`${count} x ${title||'Item'}`;
+  const fabric=length==null?'':` in ${length}m${colour?' '+colour:''} fabric`;
+  return `${subject} to be ${action}${fabric}.`;
+}
 function applyQuotePresetForQuote(value,tableId='f-items',prefix='i',formPrefix='f'){
   const preset=value===''?null:quotePresets()[Number(value)];
   const table=document.getElementById(tableId);
@@ -115,7 +123,7 @@ function applyQuotePreset(index,select){
   const colour=document.getElementById(formPrefix+'-colour')?.value.trim()||'';
   const introduction=document.getElementById(formPrefix+'-introduction');
   if(introduction&&(preset.originalJobQuantities||!preset.lines)){
-    const job=preset.originalJobQuantities?`${preset.desc} to be ${workType.toLowerCase()}.`:`${quantity} x ${preset.desc||'Item'} to be ${workType.toLowerCase()}${length==null?'':` in ${length}m${colour?' '+colour:''} fabric`}.`;
+    const job=quotePresetJobDescription(preset,quantity,workType,length,colour);
     introduction.value=[introduction.value.trim(),job].filter(Boolean).join('\n');
   }
   const project=document.getElementById(formPrefix+'-project');if(project&&!project.value.trim()&&(preset.originalJobQuantities||!preset.lines))project.value=preset.desc||'';

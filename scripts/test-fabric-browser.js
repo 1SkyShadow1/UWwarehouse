@@ -91,8 +91,27 @@ async function run() {
     assert.equal(await page.locator('#f-items tr:nth-child(2) .i-qty').inputValue(),'4','Fabric quantity uses the selected material length');
     assert.equal(await page.locator('#f-items tr:nth-child(5) .i-item').inputValue(),'Foam');
     assert.equal(await page.locator('#f-items tr:nth-child(5) .i-price').inputValue(),'','No separate Foam price is invented');
+    assert.equal(await page.locator('#f-introduction').inputValue(),'1 x Two Seater Couch - Sleeper to be reupholstered in 4m Hemingway (Shadow) fabric.');
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#modal-root .modal').count(),0,'Escape must close the complete-item quote');
+    await page.evaluate(()=>newInvoice('invoice'));
+    await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
+    assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside an invoice must not close it');
+    await page.getByRole('button',{name:'Close dialog'}).click();
+    assert.equal(await page.locator('#modal-root .modal').count(),0,'The invoice close button must dismiss the form');
+    await page.evaluate(()=>{DB.quotes=[{id:'BB26103001',date:'2026-10-30',customer:'Preview only',items:[],status:'Draft',revision:1,workType:'Reupholster'}];editQuote('BB26103001');});
+    const editSleeperIndex=await page.evaluate(()=>quotePresets().findIndex(p=>p.desc==='Two Seater Couch - Sleeper'&&!p.lines));
+    await page.locator('#f-preset').selectOption(String(editSleeperIndex));
+    assert.equal(await page.locator('#eq-items tr:nth-child(2) .eq-desc').inputValue(),'1 x Two Seater Couch - Sleeper - Fabric','Editing a quote also adds the product-prefixed component lines');
+    assert.equal(await page.locator('#eq-introduction').inputValue(),'1 x Two Seater Couch - Sleeper to be reupholstered in 8m fabric.');
+    await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
+    assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside an edited quote must not close it');
+    await page.getByRole('button',{name:'Close dialog'}).click();
+    await page.evaluate(()=>{DB.invoices=[{id:'BB26103002',date:'2026-10-30',customer:'Preview only',items:[]}];editInvoice('BB26103002');});
+    await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
+    assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside an edited invoice must not close it');
+    await page.getByRole('button',{name:'Close dialog'}).click();
+    assert.equal(await page.locator('#modal-root .modal').count(),0,'The edited invoice close button must dismiss the form');
     // Category gating, historical consumable selection and custom colour persistence.
     await page.evaluate(()=>newQuote());
     const gated=page.locator('#f-items tr').nth(1);
