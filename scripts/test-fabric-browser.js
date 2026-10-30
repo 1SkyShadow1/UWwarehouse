@@ -92,6 +92,16 @@ async function run() {
     assert.equal(await page.locator('#f-items tr:nth-child(5) .i-item').inputValue(),'Foam');
     assert.equal(await page.locator('#f-items tr:nth-child(5) .i-price').inputValue(),'','No separate Foam price is invented');
     assert.equal(await page.locator('#f-introduction').inputValue(),'1 x Two Seater Couch - Sleeper to be reupholstered in 4m Hemingway (Shadow) fabric.');
+    await page.locator('#f-items tr:nth-child(5) .i-price').fill('650');
+    const savedLineDescriptions=await page.evaluate(()=>collectDocumentItems('f-items','i',true).map(item=>item.desc));
+    assert.deepEqual(savedLineDescriptions,[
+      '1 x Two Seater Couch - Sleeper - Fabric - Hemingway (Shadow)',
+      '1 x Two Seater Couch - Sleeper - Consumables - Materials allowance',
+      '1 x Two Seater Couch - Sleeper - Labour - Upholster',
+      '1 x Two Seater Couch - Sleeper - Foam',
+    ],'Quote collection must retain product prefixes instead of normalizing lines to generic categories');
+    const quotePreview=await page.evaluate(items=>{DB.quotes=[{id:'BB26103001',date:'2026-10-30',expiry:'2026-11-06',customer:'Preview only',items,introduction:document.getElementById('f-introduction').value,status:'Draft',revision:1}];viewQuote('BB26103001');return document.getElementById('quote-preview').innerText;},await page.evaluate(()=>collectDocumentItems('f-items','i',true)));
+    assert(quotePreview.includes('1 x Two Seater Couch - Sleeper - Fabric - Hemingway (Shadow)'),'Quote preview should retain product-specific line descriptions');
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#modal-root .modal').count(),0,'Escape must close the complete-item quote');
     await page.evaluate(()=>newInvoice('invoice'));
@@ -107,7 +117,7 @@ async function run() {
     await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
     assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside an edited quote must not close it');
     await page.getByRole('button',{name:'Close dialog'}).click();
-    await page.evaluate(()=>{DB.invoices=[{id:'BB26103002',date:'2026-10-30',customer:'Preview only',items:[]}];editInvoice('BB26103002');});
+    await page.evaluate(()=>{DB.invoices=[{id:'BB26103002',date:'2026-10-30',customer:'Preview only',status:'Unpaid',items:[]}];editInvoice('BB26103002');});
     await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
     assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside an edited invoice must not close it');
     await page.getByRole('button',{name:'Close dialog'}).click();
@@ -140,7 +150,7 @@ async function run() {
     await page.locator('#preset-type').selectOption('Complete item');
     await page.locator('#f-preset').selectOption('0');
     assert.equal(await page.locator('#preset-add').isVisible(),false,'Quotes must not offer a duplicate manual-add action');
-    assert.equal(await page.locator('#f-items tr').count(),5,'Existing consumable and three preset lines are retained');
+    assert.equal(await page.locator('#f-items tr').count(),6,'Existing consumable and all four preset lines, including Foam, are retained');
     assert.equal(await gated.locator('.i-desc').inputValue(),'Consumables - Glue');
     assert.equal(await page.evaluate(()=>quotePresets().length),110+ (await page.evaluate(()=>archiveLinePresets().length+archiveJobPresets().length)));
     await page.setViewportSize({width:480,height:900});
@@ -577,7 +587,7 @@ async function run() {
     assert(await page.locator('#f-preset').isVisible());
     const savedIndex=await page.evaluate(code=>quotePresets().findIndex(p=>p.code===code),polishQuote.items[0].code);
     await page.locator('#f-preset').selectOption(String(savedIndex));
-    await page.getByRole('button',{name:'Add preset lines',exact:true}).click();
+    assert.equal(await page.locator('#preset-add').isVisible(),false,'Editing a quote applies the selected preset automatically');
     assert.equal(await page.locator('#eq-items tr').count(),3,'Editing retains the original line and adds the saved preset');
     assert.equal(await page.locator('.eq-price').last().inputValue(),'130');
     await page.evaluate(id=>saveEditedQuote(id),polishQuote.id);

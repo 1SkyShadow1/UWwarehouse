@@ -33,7 +33,7 @@ function newInvoice(mode='invoice'){
 }
 function addItemRow(item={}){appendDocumentItem('f-items','i',item);}
 function saveInvoice(){
-  const items=collectDocumentItems('f-items','i');if(!items)return;
+  const items=collectDocumentItems('f-items','i',window.invoiceFormMode==='quote');if(!items)return;
   const common={id:document.getElementById('f-no').value,date:document.getElementById('f-date').value,customer:document.getElementById('f-cust').value,contact:document.getElementById('f-contact').value,phone:document.getElementById('f-phone').value,billingAddress:document.getElementById('f-billing-address').value,email:document.getElementById('f-email').value,items};
   if(!common.id||!common.date||!common.customer||!items.length){toast('Enter invoice number, date, customer and at least one line item');return;}
   const collection=window.invoiceFormMode==='quote'?DB.quotes:DB.invoices;

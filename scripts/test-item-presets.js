@@ -62,6 +62,7 @@ test('quote complete-item presets apply on selection and label each added compon
   context.applyQuotePresetForQuote(String(index),'f-items','i','f');
   assert.equal(existing.descriptionField.value,'Existing work line','Existing quote lines must be retained unchanged');
   assert.equal(added.descriptionField.value,'2 x One Seater Couch - Standard - Fabric - Sage');
+  assert.equal(added._lineItem.quoteProductPrefix,true,'Preset-generated quote components must retain their product identity when collected');
   assert.equal(added.pricingUpdated,true,'Changed line descriptions should refresh their calculated display');
   assert.equal(rows[2].querySelector('.i-desc').value,'2 x One Seater Couch - Standard - Foam');
   assert.equal(rows[2].querySelector('.i-qty').value,'2');

@@ -32,7 +32,7 @@ function editQuote(id){
 function addEditQuoteRow(item={}){appendDocumentItem('eq-items','eq',item);}
 function saveEditedQuote(id){
   const quote=DB.quotes.find(x=>x.id===id);if(!quote)return;
-  const items=collectDocumentItems('eq-items','eq');if(!items)return;
+  const items=collectDocumentItems('eq-items','eq',true);if(!items)return;
   const nextId=fa('eq-no').trim();
   if(!nextId||!fa('eq-date')||!fa('eq-cust')||!items.length){toast('Complete quote number, date, customer and line items');return;}
   if((nextId!==id||validQuoteNo(id,quote.date))&&!validQuoteNo(nextId,fa('eq-date'))){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example SS26100701');return;}

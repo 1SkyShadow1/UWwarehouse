@@ -81,6 +81,7 @@ function applyQuotePresetForQuote(value,tableId='f-items',prefix='i',formPrefix=
   for(const row of newRows){
     const description=row.querySelector(`.${prefix}-desc`);
     if(!description||!description.value.trim())continue;
+    row._lineItem={...row._lineItem,quoteProductPrefix:true};
     description.value=quotePresetProductDescription(preset,description.value.trim(),multiplier);
     updateLinePricing(row);
   }

@@ -57,6 +57,18 @@ test('material descriptions appear once and custom item references do not leak i
   assert.equal(documentLineDescription({item:'Foam',desc:'Foam - Foam - Yellow'}),'Foam - Yellow');
   assert.equal(documentLineDescription({item:'Fabric',desc:'Lounge suite - Fabric Stone'}),'Fabric Stone');
   assert.equal(documentLineDescription({item:'STOCK-123',desc:'High density foam'}),'High density foam');
+  const productLine={item:'Fabric',desc:'1 x One Seater Couch - Standard - Fabric - Sage',quoteProductPrefix:true};
+  assert.equal(documentLineDescription(productLine),'Fabric - Sage');
+  assert.equal(documentLineDescription(productLine,{preserveProductPrefix:true}),productLine.desc);
+  assert.equal(require('../public/js/document-format').documentLineProductPrefix(productLine),'1 x One Seater Couch - Standard');
+});
+test('quote PDF keeps preset product names while invoice descriptions stay category-focused',async()=>{
+  const item={item:'Fabric',desc:'1 x One Seater Couch - Standard - Fabric - Sage',quoteProductPrefix:true,qty:6,price:120};
+  await loadRenderer(CapturedPdf)({kind:'quote',record:{...record,items:[item]}});
+  assert(rendered.includes(item.desc),'Issued quote line should retain the selected product and component');
+  await loadRenderer(CapturedPdf)({kind:'invoice',record:{...record,items:[item]}});
+  assert(rendered.some(line=>line.startsWith('Fabric - Sage')),'Invoice should retain its existing category-focused description');
+  assert(!rendered.some(line=>line.includes('One Seater Couch')),'Invoice output should not inherit quote product prefixes');
 });
 
 test('real PDFs paginate long records and very long descriptions',async()=>{

@@ -52,7 +52,11 @@ function changeLineCategory(tr,changed=true){
 }
 function updateLineColour(tr){
   tr._lineItem.colour=tr.querySelector('.line-colour').value.trim();
-  if(tr._lineItem.fabricId)tr.querySelector(`.${tr.dataset.prefix}-desc`).value=`Fabric - ${findFabric(tr._lineItem.fabricId)?.desc||''}${tr._lineItem.colour?' - '+tr._lineItem.colour:''}`;
+  if(tr._lineItem.fabricId){
+    const description=tr.querySelector(`.${tr.dataset.prefix}-desc`),prefix=tr._lineItem.quoteProductPrefix?documentLineProductPrefix({...tr._lineItem,item:'Fabric',desc:description.value}):'';
+    const detail=`Fabric - ${findFabric(tr._lineItem.fabricId)?.desc||''}${tr._lineItem.colour?' - '+tr._lineItem.colour:''}`;
+    description.value=prefix?`${prefix} - ${detail}`:detail;
+  }
 }
 function configureFabricRow(tr,key,vat='listed'){
   const f=findFabric(tr._lineItem.fabricId);if(!f)return;
@@ -105,7 +109,9 @@ function repriceFabricRow(tr){
       listedAmount:p?.amount,listedVat:p?.vat,listedUnit:p?.unit,unit,rate,costRate}};
   const code=tr.querySelector(`.${prefix}-code`);if(code)code.value=f.code;
   tr._lineItem.fabricDescription=f.desc;
-  tr.querySelector(`.${prefix}-desc`).value=`Fabric - ${f.desc}${tr._lineItem.colour?' - '+tr._lineItem.colour:''}`;
+  const description=tr.querySelector(`.${prefix}-desc`),productPrefix=tr._lineItem.quoteProductPrefix?documentLineProductPrefix({...tr._lineItem,item:'Fabric',desc:description.value}):'';
+  const fabricDescription=`Fabric - ${f.desc}${tr._lineItem.colour?' - '+tr._lineItem.colour:''}`;
+  description.value=productPrefix?`${productPrefix} - ${fabricDescription}`:fabricDescription;
   const category=tr.querySelector(`.${prefix}-item`);if(category)category.value='Fabric';
   tr.querySelector('.line-cost').value=costRate==null||!Number.isFinite(costRate)||f.needsPriceConfirmation?'':costRate;
   tr.querySelector('.line-pricing-mode').value=f.localIndex!=null&&key==='sell'?'manual':'markup';
@@ -134,7 +140,7 @@ function updateFabricLineInfo(tr){
   const vatLabel=effectiveVat==='incl'?'incl supplier VAT':effectiveVat==='excl'?'excl supplier VAT':'VAT unspecified';
   info.textContent=`Qty in ${tr._lineItem.unit||p?.unit||'units'} · ${vatLabel} · ${priceInput.value!==''&&Number.isFinite(qty)&&Number.isFinite(rate)?'Line total '+R(qty*rate):'Enter confirmed price'} · ${tr._lineItem.fabricSource?.date||source.date||'User-entered'}${warnings.length?' · '+warnings.join(' · '):''}`;
 }
-function collectDocumentItems(tableId,prefix){
+function collectDocumentItems(tableId,prefix,preserveProductPrefix=false){
   const items=[];
   for(const tr of [...document.querySelectorAll(`#${tableId} tr`)].slice(1)){
     const desc=tr.querySelector(`.${prefix}-desc`).value.trim();
@@ -152,7 +158,7 @@ function collectDocumentItems(tableId,prefix){
     if((cost!==''&&(!Number.isFinite(Number(cost))||!Number.isFinite(qty*Number(cost))||Number(cost)<0))||markup===''||!Number.isFinite(Number(markup))||Number(markup)<0||((mode==='markup'||tr._lineItem.fabricId)&&cost==='')){toast('Enter a confirmed non-negative cost and markup, or choose manual pricing for a line without a recorded cost');return null;}
     const item={...tr._lineItem,unitCost:cost===''?null:Number(cost),markupPercent:Number(markup),pricingMode:mode,code:tr.querySelector(`.${prefix}-code`)?.value??tr._lineItem?.code??'',desc,
       item:category,qty,price};
-    item.desc=documentLineDescription(item);
+    item.desc=documentLineDescription(item,{preserveProductPrefix:preserveProductPrefix&&item.quoteProductPrefix});
     if(item.fabricSource)item.priceOverridden=price!==item.fabricSource.rate;
     items.push(item);
   }
