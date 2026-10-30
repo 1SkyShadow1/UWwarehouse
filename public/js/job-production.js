@@ -1,7 +1,8 @@
 function quoteForJob(job){
   const invoice=DB.invoices?.find(item=>String(item.id)===String(job.invoiceId));
   const quoteId=job.quoteId||invoice?.generatedFromQuote||job.id;
-  return (DB.quotes||[]).find(quote=>String(quote.id)===String(quoteId))||null;
+  const quote=(DB.quotes||[]).find(item=>String(item.id)===String(quoteId))||null;
+  return invoice?.acceptedQuoteSnapshot||job.acceptedQuoteSnapshot||quote?.acceptedVersion?.snapshot||quote;
 }
 function syncQuoteJob(quote,previousId=quote.id){
   DB.jobs=Array.isArray(DB.jobs)?DB.jobs:[];
@@ -23,6 +24,12 @@ function syncQuoteJob(quote,previousId=quote.id){
     colour:quote.colour||'',
     quoteStatus:quote.status||'Draft',
   });
+  if(quote.status==='Accepted'){
+    const snapshot=quote.acceptedVersion?.snapshot||quote;
+    job.acceptedQuoteSnapshot=JSON.parse(JSON.stringify(snapshot));
+    delete job.acceptedQuoteSnapshot.revisions;
+    delete job.acceptedQuoteSnapshot.acceptedVersion;
+  }
   return job;
 }
 function jobProductionElapsedMs(job,now=Date.now()){
@@ -41,7 +48,7 @@ function formatJobProductionElapsed(job,now=Date.now()){
 }
 function setJobProductionStage(job,stage,now=new Date()){
   const rawCurrent=String(job.stage||'Quoted').trim();
-  const current=({'In Production':'In production','In progress':'In production'})[rawCurrent]||rawCurrent;
+  const current=({'In Production':'In production','In progress':'In production','Quote':'Quoted','Quoted ':'Quoted'})[rawCurrent]||rawCurrent;
   if(current===stage)return false;
   const timestamp=now instanceof Date?now.toISOString():new Date(now).toISOString();
   if(current==='In production'&&job.productionStartedAt){
@@ -50,6 +57,8 @@ function setJobProductionStage(job,stage,now=new Date()){
     job.productionStartedAt='';
   }
   if(stage==='In production'&&current!=='In production')job.productionStartedAt=timestamp;
+  job.stageHistory=Array.isArray(job.stageHistory)?job.stageHistory:[];
+  job.stageHistory.push({from:current,to:stage,changedAt:timestamp});
   job.stage=stage;
   return true;
 }

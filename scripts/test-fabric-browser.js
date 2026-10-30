@@ -36,7 +36,7 @@ async function run() {
     page.on('dialog', dialog => dialog.accept());
     await page.goto(`http://127.0.0.1:${server.address().port}`, { waitUntil: 'load' });
     await page.evaluate(() => {
-      save = () => { window.testSaves = (window.testSaves || 0) + 1; };
+      save = () => { window.testSaves = (window.testSaves || 0) + 1; return true; };
       document.getElementById('boot-screen').style.display = 'none';
       document.getElementById('login-screen').classList.add('hidden');
       document.body.classList.add('app-ready');

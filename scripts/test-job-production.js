@@ -16,10 +16,19 @@ test('creating or revising a quote keeps one linked production job with current 
   assert.equal(c.quoteForJob(job),quote);
   assert.deepEqual(Array.from(c.jobFabricItems(quote)).map(item=>c.jobFabricName(item)),['Harbour weave']);
 });
+test('job work scope stays on the accepted quote snapshot after a Draft revision',()=>{
+  const accepted={id:'Q-1',status:'Accepted',customer:'Client',items:[{desc:'Accepted fabric',qty:1,price:100}]};
+  const quote={...accepted,acceptedVersion:{snapshot:JSON.parse(JSON.stringify(accepted))}},db={quotes:[quote],invoices:[],jobs:[]},c=load(db),job=c.syncQuoteJob(quote);
+  assert.equal(c.quoteForJob(job).items[0].desc,'Accepted fabric');
+  quote.status='Draft';quote.items=[{desc:'Revised draft fabric',qty:2,price:200}];c.syncQuoteJob(quote);
+  assert.equal(c.quoteForJob(job).items[0].desc,'Accepted fabric');
+  assert.equal(c.quoteForJob(job).items[0].qty,1);
+});
 test('production duration starts on entry, pauses outside production and accumulates on return',()=>{
   const c=load({quotes:[],invoices:[],jobs:[]}),job={id:'JOB-1',stage:'Quoted',productionElapsedMs:0};
   assert.equal(c.setJobProductionStage(job,'In production','2026-10-22T10:00:00.000Z'),true);
   assert.equal(job.productionStartedAt,'2026-10-22T10:00:00.000Z');
+  assert.deepEqual(Array.from(job.stageHistory).map(entry=>[entry.from,entry.to]),[['Quoted','In production']]);
   assert.equal(c.formatJobProductionElapsed(job,Date.parse('2026-10-23T11:30:00.000Z')),'1 day 1 hr');
   assert.equal(c.setJobProductionStage(job,'Quality check','2026-10-23T12:00:00.000Z'),true);
   assert.equal(job.productionElapsedMs,26*60*60*1000);assert.equal(job.productionStartedAt,'');
@@ -28,6 +37,7 @@ test('production duration starts on entry, pauses outside production and accumul
   assert.equal(c.formatJobProductionElapsed(job,Date.parse('2026-10-25T14:00:00.000Z')),'1 day 4 hrs');
   assert.equal(c.setJobProductionStage(job,'Quality check','2026-10-25T14:00:00.000Z'),true);
   assert.equal(job.productionElapsedMs,28*60*60*1000);
+  assert.equal(job.stageHistory.length,4,'Every actual stage change should be retained for audit');
   assert.equal(c.formatJobProductionElapsed({stage:'In production'}),'Start date not recorded');
   assert.equal(c.formatJobProductionElapsed({stage:'Quoted'}),'Not started');
 });
@@ -75,4 +85,11 @@ test('converting a quote attaches the invoice to its existing job instead of cre
   vm.runInContext(fs.readFileSync(path.join(root,'public/js/quotes.js'),'utf8'),c);
   c.convertQuote(quote.id);
   assert.equal(db.jobs.length,1);assert.equal(db.jobs[0].quoteId,quote.id);assert.equal(db.jobs[0].invoiceId,'BB26102303');assert.equal(db.invoices.length,1);assert.equal(quote.status,'Accepted');
+});
+test('failed quote conversion restores the quote and leaves no orphan invoice or job',()=>{
+  const quote={id:'BB26102303',date:'2026-10-23',expiry:'2026-11-22',customer:'A Customer',items:[{desc:'Repair',qty:1,price:50}],status:'Sent'};
+  const db={quotes:[quote],invoices:[],jobs:[],meta:{fy:'2026'}},messages=[],c=load(db);
+  vm.runInContext(fs.readFileSync(path.join(root,'public/js/quote-history.js'),'utf8'),c);c.today=()=> '2026-10-23';c.nextInvoiceNo=()=> 'BB26102304';c.save=()=>false;c.toast=message=>messages.push(message);c.go=()=>{};
+  vm.runInContext(fs.readFileSync(path.join(root,'public/js/quotes.js'),'utf8'),c);c.convertQuote(quote.id);
+  assert.equal(db.quotes[0].status,'Sent');assert.equal(db.quotes[0].acceptedVersion,undefined);assert.equal(db.invoices.length,0);assert.equal(db.jobs.length,0);assert.equal(messages.length,0);
 });

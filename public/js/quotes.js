@@ -38,29 +38,38 @@ function saveEditedQuote(id){
   if((nextId!==id||validQuoteNo(id,quote.date))&&!validQuoteNo(nextId,fa('eq-date'))){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example SS26100701');return;}
   if(DB.quotes.some(other=>other!==quote&&other.id===nextId)){toast('This quote number already exists');return;}
   if(!validQuoteExpiry(fa('eq-date'),fa('eq-expiry'))){toast('Quote expiry must be on or after its date');return;}
+  const quoteIndex=DB.quotes.indexOf(quote),previousQuote=JSON.parse(JSON.stringify(quote)),previousJobs=JSON.parse(JSON.stringify(DB.jobs||[])),previousInvoices=JSON.parse(JSON.stringify(DB.invoices||[])),previousPresets=DB.meta?.savedItemPresets;
   registerDocumentItemPresets(items);
   reviseQuote(quote,{...(document.getElementById('eq-source-reviewed')?.checked?{sourcePricingWarnings:[]}:{}),id:nextId,date:fa('eq-date'),customer:fa('eq-cust'),contact:fa('eq-contact'),phone:fa('eq-phone'),email:fa('eq-email'),billingAddress:fa('eq-billing-address'),expiry:fa('eq-expiry'),preparedBy:fa('eq-prepared-by'),projectReference:fa('eq-project'),workType:fa('eq-work-type'),colour:fa('eq-colour'),introduction:fa('eq-introduction'),notes:fa('eq-introduction'),items});
   syncQuoteJob(quote,id);
   if(nextId!==id)for(const invoice of DB.invoices||[])if(invoice.generatedFromQuote===id)invoice.generatedFromQuote=nextId;
-  save();closeModal();toast('Quote updated');render();
+  if(!save()){DB.quotes[quoteIndex]=previousQuote;DB.jobs=previousJobs;DB.invoices=previousInvoices;if(DB.meta){if(previousPresets===undefined)delete DB.meta.savedItemPresets;else DB.meta.savedItemPresets=previousPresets;}return;}
+  closeModal();toast('Quote updated');render();
 }
 function convertQuote(id){
   const q=DB.quotes.find(x=>x.id===id);
   if(!q)return;
   if(DB.invoices.some(i=>i.generatedFromQuote===id||(q.invoiceId&&i.id===q.invoiceId))){toast('This quote already has an invoice; use Undo invoice first');return;}
+  const quoteIndex=DB.quotes.indexOf(q),previousQuote=JSON.parse(JSON.stringify(q)),previousJobs=JSON.parse(JSON.stringify(DB.jobs||[])),previousInvoices=(DB.invoices||[]).slice();
   if(!acceptQuoteVersion(q))return;
   const job=syncQuoteJob(q);
   const invoiceId=nextInvoiceNo(today(),String(q.id).startsWith('SS')?'SS':'BB');
   DB.invoices.unshift({id:invoiceId,date:today(),customer:q.customer,contact:q.contact||'',phone:q.phone||'',billingAddress:q.billingAddress||'',email:q.email||'',project:q.projectReference||'Re-Upholstery',introduction:q.introduction||q.notes||'',items:JSON.parse(JSON.stringify(q.items)).map(i=>({code:'',...i})),deposit:0,paid:0,status:'Pending',fy:DB.meta.fy,reviewStatus:'Approved',includedInTotals:true,generatedFromQuote:id,quoteRevision:q.revision,acceptedQuoteSnapshot:quoteSnapshot(q)});
-  q.status='Accepted';q.invoicedAt=new Date().toISOString();q.invoiceId=invoiceId;job.invoiceId=invoiceId;save();toast('Quote '+id+' converted to invoice '+invoiceId);go('invoices');
+  q.status='Accepted';q.invoicedAt=new Date().toISOString();q.invoiceId=invoiceId;job.invoiceId=invoiceId;
+  if(!save()){DB.quotes[quoteIndex]=previousQuote;DB.jobs=previousJobs;DB.invoices=previousInvoices;return;}
+  toast('Quote '+id+' converted to invoice '+invoiceId);go('invoices');
 }
 function undoQuoteInvoice(invoiceId){
   const invoice=DB.invoices.find(i=>i.id===invoiceId),quote=invoice&&DB.quotes.find(q=>q.id===invoice.generatedFromQuote);
   if(!invoice||!quote)return;
   const paid=(invoice.paid||0)+(invoice.deposit||0),receipts=(DB.receipts||[]).filter(r=>r.invoiceId===invoiceId);
   if(paid>0||receipts.length){toast('Cannot undo an invoice with payments or receipts recorded');return;}
+  const job=(DB.jobs||[]).find(item=>String(item.quoteId||'')===String(quote.id)&&String(item.invoiceId||'')===String(invoiceId));
+  if(job&&(job.stage&&job.stage!=='Quoted'&&job.stage!=='Quote'||Number(job.productionElapsedMs||0)>0||job.productionStartedAt||(job.stageHistory||[]).some(entry=>entry.from!=='Quoted'&&entry.from!=='Quote'||entry.to!=='Quoted'&&entry.to!=='Quote'))){toast('Cannot undo an invoice after production has advanced');return;}
   if(!confirm('Undo this invoice and return the quote to Draft?'))return;
+  const previousInvoices=DB.invoices,previousQuote={status:quote.status,invoiceId:quote.invoiceId,invoicedAt:quote.invoicedAt},linkedJobs=(DB.jobs||[]).filter(item=>String(item.quoteId||'')===String(quote.id)&&String(item.invoiceId||'')===String(invoiceId));
   DB.invoices=DB.invoices.filter(i=>i!==invoice);quote.status='Draft';delete quote.invoiceId;delete quote.invoicedAt;
-  for(const job of DB.jobs||[])if(String(job.quoteId||'')===String(quote.id)&&String(job.invoiceId||'')===String(invoiceId))job.invoiceId='';
-  save();toast('Invoice undone; quote returned to Draft');go('quotes');
+  for(const job of linkedJobs)job.invoiceId='';
+  if(!save()){DB.invoices=previousInvoices;quote.status=previousQuote.status;if(previousQuote.invoiceId===undefined)delete quote.invoiceId;else quote.invoiceId=previousQuote.invoiceId;if(previousQuote.invoicedAt===undefined)delete quote.invoicedAt;else quote.invoicedAt=previousQuote.invoicedAt;for(const job of linkedJobs)job.invoiceId=invoiceId;return;}
+  toast('Invoice undone; quote returned to Draft');go('quotes');
 }

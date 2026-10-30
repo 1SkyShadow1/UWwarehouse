@@ -73,10 +73,17 @@ function saveEditedInvoice(id){
   if((nextId!==id||validInvoiceNo(id,invoice.date))&&!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
   if((fa('ef-date')!==invoice.date||fa('ef-due')!==(invoice.dueDate||''))&&!validQuoteExpiry(fa('ef-date'),fa('ef-due'))){toast('Invoice payment due date must be on or after its date');return;}
   if(nextId!==id&&DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
+  const collected=(Number(invoice.paid)||0)+(Number(invoice.deposit)||0),editedTotal=items.reduce((sum,item)=>sum+(Number(item.qty)||0)*(Number(item.price)||0),0);
+  if(Math.round(editedTotal*100)<Math.round(collected*100)){toast('Invoice total cannot be reduced below payments already recorded');return;}
+  const previousInvoice=JSON.parse(JSON.stringify(invoice)),previousPresets=DB.meta?.savedItemPresets,linkedRows=[...(DB.receipts||[]),...(DB.jobs||[]),...(DB.quotes||[])].filter(row=>row.invoiceId===id);
   registerDocumentItemPresets(items);
   Object.assign(invoice,{id:nextId,date:fa('ef-date'),dueDate:fa('ef-due'),orderNo:fa('ef-order-no'),vatNo:fa('ef-vat-no'),customer:fa('ef-cust'),contact:fa('ef-contact'),phone:fa('ef-phone'),billingAddress:fa('ef-billing-address'),email:fa('ef-email'),project:fa('ef-project'),items});
-  if(nextId!==id){
-    for(const row of [...(DB.receipts||[]),...(DB.jobs||[]),...(DB.quotes||[])])if(row.invoiceId===id)row.invoiceId=nextId;
+  if(nextId!==id)for(const row of linkedRows)row.invoiceId=nextId;
+  if(!save()){
+    for(const key of Object.keys(invoice))delete invoice[key];Object.assign(invoice,previousInvoice);
+    if(DB.meta){if(previousPresets===undefined)delete DB.meta.savedItemPresets;else DB.meta.savedItemPresets=previousPresets;}
+    for(const row of linkedRows)row.invoiceId=id;
+    return;
   }
-  save();closeModal();toast('Invoice updated');render();
+  closeModal();toast('Invoice updated');render();
 }

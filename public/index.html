@@ -358,15 +358,15 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="js/fabric-picker.js?v=64"></script>
 <script src="js/pricing.js?v=64"></script>
 <script src="js/quote-history.js?v=65"></script>
-<script src="js/job-production.js?v=65"></script>
+<script src="js/job-production.js?v=72"></script>
 <script src="js/document-numbers.js?v=64"></script>
 <script src="js/imported-quotes.js?v=64"></script>
 <script src="js/scan-duplicates.js?v=64"></script>
 <script src="js/scan-cleanup.js?v=64"></script>
-<script src="js/document-editor.js?v=71"></script>
+<script src="js/document-editor.js?v=72"></script>
 <script src="js/document-format.js?v=71"></script>
 <script src="js/document-views.js?v=71"></script>
-<script src="js/quotes.js?v=71"></script>
+<script src="js/quotes.js?v=72"></script>
 <script src="js/dashboard.js?v=64"></script>
 <script src="js/suppliers.js?v=64"></script>
 <script src="js/app-version.js?v=64"></script>
@@ -1786,7 +1786,7 @@ function setFnbTransactionCategory(statementId,rowId,category){
   save();render();
 }
 function recordPayment(id){
-  const inv=DB.invoices.find(i=>i.id===id);const bal=invBalance(inv);
+  const inv=DB.invoices.find(i=>i.id===id);if(!inv){toast('This invoice is no longer available');return;}const bal=invBalance(inv);
   modal(`<h3>Record Payment — ${id}</h3>
   <div class="frm">
     <div class="fld"><label>Date</label><input id="p-date" type="date" value="${today()}"></div>
@@ -1799,13 +1799,19 @@ function recordPayment(id){
 }
 function savePay(id){
   const inv=DB.invoices.find(i=>i.id===id);
-  const amt=+document.getElementById('p-amt').value||0;
+  if(!inv){toast('This invoice is no longer available');return;}
+  const amt=Number(document.getElementById('p-amt').value);
   const date=document.getElementById('p-date').value;
+  const balance=invBalance(inv);
+  if(!Number.isFinite(amt)||amt<=0||Math.round(amt*100)>Math.round(balance*100)){toast('Enter a payment greater than zero and no more than the invoice balance');return;}
+  if(!date){toast('Enter the payment date');return;}
   const receiptNo=nextReceiptNo(date,document.getElementById('p-prefix').value);
-  inv.paid=(inv.paid||0)+amt; inv.deposit=0;
+  const previousPaid=inv.paid,previousStatus=inv.status,previousReceiptCounter=DB.counters.receipt;
+  inv.paid=(inv.paid||0)+amt;
   inv.status=invBalance(inv)<=0.005?'Paid':'Pending';
   DB.receipts.push({id:++DB.counters.receipt,receiptNo,date,customer:inv.customer,invoiceId:id,amount:amt,method:document.getElementById('p-m').value,fy:DB.meta.fy});
-  save();closeModal();toast('Payment recorded');render();
+  if(!save()){if(previousPaid===undefined)delete inv.paid;else inv.paid=previousPaid;if(previousStatus===undefined)delete inv.status;else inv.status=previousStatus;DB.receipts.pop();DB.counters.receipt=previousReceiptCounter;return;}
+  closeModal();toast('Payment recorded');render();
 }
 function viewInvoiceLegacy(id){
   const i=DB.invoices.find(x=>x.id===id);const m=DB.meta;const t=invTotal(i);
@@ -1831,7 +1837,60 @@ function viewInvoiceLegacy(id){
     <button class="btn gold" onclick="window.print()">🖨 Print / Save PDF</button>
   </div>`,'');
 }
-function del(coll,id){if(!confirm('Delete this record?'))return;if(coll==='quotes'){const linkedJobs=(DB.jobs||[]).filter(job=>job.createdFromQuote&&String(job.quoteId)===String(id));if(linkedJobs.some(job=>job.stage!=='Quoted'||job.invoiceId)){toast('This quote has an active or invoiced job. Keep the quote or resolve the job first.');return;}DB.jobs=(DB.jobs||[]).filter(job=>!linkedJobs.includes(job));}DB[coll]=DB[coll].filter(x=>x.id!==id);save();render();toast('Deleted');}
+function quoteDeletionLinks(id){
+  const key=String(id),quote=(DB.quotes||[]).find(item=>String(item.id)===key);
+  const invoices=(DB.invoices||[]).filter(invoice=>String(invoice.generatedFromQuote||'')===key||String(quote?.invoiceId||'')===String(invoice.id));
+  const invoiceIds=new Set(invoices.map(invoice=>String(invoice.id)));
+  const jobs=(DB.jobs||[]).filter(job=>String(job.quoteId||'')===key||(job.invoiceId&&invoiceIds.has(String(job.invoiceId))));
+  for(const job of jobs)if(job.invoiceId)invoiceIds.add(String(job.invoiceId));
+  for(const invoice of DB.invoices||[])if(invoiceIds.has(String(invoice.id))&&!invoices.includes(invoice))invoices.push(invoice);
+  return {quote,invoices,jobs};
+}
+function quoteDeletionBlockReason(links){
+  if(links.invoices.some(invoice=>invoiceCollectedAmount(invoice)>0.005||(DB.receipts||[]).some(receipt=>String(receipt.invoiceId)===String(invoice.id))))return 'This quote has a linked invoice with payment or receipt history. Keep it to preserve the financial record.';
+  if(links.jobs.some(job=>job.stage&&job.stage!=='Quoted'&&job.stage!=='Quote'||Number(job.productionElapsedMs||0)>0||job.productionStartedAt||(job.stageHistory||[]).some(entry=>entry.from!=='Quoted'&&entry.from!=='Quote'||entry.to!=='Quoted'&&entry.to!=='Quote')))return 'This quote has a job with production history. Keep it to preserve the work record.';
+  return '';
+}
+function deleteQuoteCascade(id){
+  const links=quoteDeletionLinks(id);
+  if(!links.quote){toast('This quote is no longer available');return;}
+  const blocked=quoteDeletionBlockReason(links);
+  if(blocked){toast(blocked);return;}
+  const summary=`Delete quote ${id}${links.invoices.length?`, ${links.invoices.length} linked invoice(s)`:''}${links.jobs.length?` and ${links.jobs.length} linked job(s)`:''}? This cannot be undone.`;
+  if(!confirm(summary))return;
+  const invoiceIds=new Set(links.invoices.map(invoice=>String(invoice.id))),jobSet=new Set(links.jobs),previousQuotes=DB.quotes,previousInvoices=DB.invoices,previousJobs=DB.jobs;
+  DB.quotes=DB.quotes.filter(quote=>String(quote.id)!==String(id));
+  DB.invoices=DB.invoices.filter(invoice=>!invoiceIds.has(String(invoice.id)));
+  DB.jobs=(DB.jobs||[]).filter(job=>!jobSet.has(job));
+  if(!save()){DB.quotes=previousQuotes;DB.invoices=previousInvoices;DB.jobs=previousJobs;return;}
+  render();toast('Quote and linked records deleted');
+}
+function deleteReceipt(id){
+  const matches=(DB.receipts||[]).filter(receipt=>String(receipt.id)===String(id));
+  if(matches.length!==1){toast(matches.length?'Receipt ID is ambiguous; reconcile it before deleting':'Receipt is no longer available');return;}
+  const receipt=matches[0],invoice=(DB.invoices||[]).find(item=>String(item.id)===String(receipt.invoiceId)),amount=Number(receipt.amount)||0;
+  if(invoice&&amount>Number(invoice.paid||0)+0.005){toast('Receipt amount exceeds the invoice payment total; reconcile the ledger before deleting');return;}
+  if(!confirm(`Delete receipt ${receipt.receiptNo||receipt.id} and reverse its ${R(amount)} payment from the linked invoice?`))return;
+  const previousPaid=invoice?.paid,previousStatus=invoice?.status,previousReceipts=DB.receipts;
+  if(invoice){invoice.paid=Math.max(0,Number(invoice.paid||0)-amount);invoice.status=invBalance(invoice)<=0.005?'Paid':(invoice.status==='Overdue'?'Overdue':'Pending');}
+  DB.receipts=DB.receipts.filter(item=>item!==receipt);
+  if(!save()){if(invoice){if(previousPaid===undefined)delete invoice.paid;else invoice.paid=previousPaid;if(previousStatus===undefined)delete invoice.status;else invoice.status=previousStatus;}DB.receipts=previousReceipts;return;}
+  render();toast('Receipt deleted and payment reversed');
+}
+function del(coll,id){
+  if(coll==='quotes'){deleteQuoteCascade(id);return;}
+  if(coll==='invoices'){
+    const invoice=(DB.invoices||[]).find(item=>String(item.id)===String(id));
+    if(!invoice){toast('This invoice is no longer available');return;}
+    if(invoiceCollectedAmount(invoice)>0.005||(DB.receipts||[]).some(receipt=>String(receipt.invoiceId)===String(id))){toast('Cannot delete an invoice with payment or receipt history');return;}
+    if((DB.jobs||[]).some(job=>String(job.invoiceId||'')===String(id))){toast('Unlink this invoice from its job before deleting it');return;}
+    if(invoice.generatedFromQuote||(DB.quotes||[]).some(quote=>String(quote.invoiceId||'')===String(id))){toast('Delete the linked quote to safely remove its invoice and job');return;}
+  }
+  if(!confirm('Delete this record?'))return;
+  const previous=DB[coll];DB[coll]=previous.filter(item=>String(item.id)!==String(id));
+  if(!save()){DB[coll]=previous;return;}
+  render();toast('Deleted');
+}
 
 /* ---------- RECEIPTS ---------- */
 function vReceipts(c){
@@ -1844,7 +1903,7 @@ function vReceipts(c){
   ${invoices.map(i=>{const isPaid=invBalance(i)<=0.005;return `<tr style="${isPaid?'background:rgba(34,197,94,.14);':''}"><td style="color:var(--gold2)">${i.id}</td><td>${i.date}</td><td>${i.customer}</td><td class="num">${R(invTotal(i))}</td><td class="num">${R((i.paid||0)+(i.deposit||0))}</td><td class="num">${R(invBalance(i))}</td><td><span class="tag ${isPaid?'paid':'quote'}">${isPaid?'Paid':'Outstanding'}</span></td><td><button class="btn sm" onclick="recordPayment('${i.id}')">Pay</button></td></tr>`}).join('')||'<tr><td colspan="8" class="empty">No invoices match the current filters</td></tr>'}
   </table></div>
   <div class="panel"><h3>Issued receipts</h3><table><tr><th>Receipt No</th><th>Date</th><th>Customer</th><th>Invoice</th><th class="num">Amount</th><th>Method</th><th></th></tr>
-  ${rows.map(r=>`<tr><td style="color:var(--gold2)">${r.receiptNo||r.id}</td><td>${r.date}</td><td>${r.customer}</td><td>${r.invoiceId}</td><td class="num">${R(r.amount)}</td><td>${r.method}</td><td><button class="btn sm" onclick="viewReceipt('${r.receiptNo||r.id}')">View / Print</button><button class="btn sm danger" onclick="DB.receipts=DB.receipts.filter(x=>x.id!==${typeof r.id==='number'?r.id:`'${r.id}'`});save();render()">✕</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No receipts logged</td></tr>'}
+  ${rows.map(r=>`<tr><td style="color:var(--gold2)">${r.receiptNo||r.id}</td><td>${r.date}</td><td>${r.customer}</td><td>${r.invoiceId}</td><td class="num">${R(r.amount)}</td><td>${r.method}</td><td><button class="btn sm" onclick="viewReceipt('${r.receiptNo||r.id}')">View / Print</button><button class="btn sm danger" onclick="deleteReceipt(${JSON.stringify(r.id)})">✕</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No receipts logged</td></tr>'}
   </table></div>`;
 }
 function newReceipt(){
@@ -1853,7 +1912,7 @@ function newReceipt(){
     <div class="fld"><label>Receipt initials</label><select id="r-prefix" onchange="document.getElementById('r-no').value=nextReceiptNo(document.getElementById('r-date').value,this.value)"><option value="BB">BB</option><option value="SS">SS</option></select></div>
     <div class="fld"><label>Receipt No</label><input id="r-no" value="${nextReceiptNo(today(),'BB')}" readonly></div>
     <div class="fld"><label>Customer</label><input id="r-cust"></div>
-    <div class="fld"><label>Invoice</label><select id="r-inv">${DB.invoices.map(i=>`<option>${i.id}</option>`).join('')}</select></div>
+    <div class="fld"><label>Invoice</label><select id="r-inv" onchange="document.getElementById('r-cust').value=DB.invoices.find(i=>String(i.id)===String(this.value))?.customer||''">${DB.invoices.map(i=>`<option>${i.id}</option>`).join('')}</select></div>
     <div class="fld"><label>Amount</label><input id="r-amt" type="number"></div>
     <div class="fld"><label>Method</label><select id="r-m"><option>EFT</option><option>Cash</option><option>Card</option></select></div>
   </div>
@@ -1862,13 +1921,19 @@ function newReceipt(){
 }
 function saveReceipt(){
   const date=document.getElementById('r-date').value,receiptNo=document.getElementById('r-no').value;
-  const r={id:++DB.counters.receipt,receiptNo,date,customer:document.getElementById('r-cust').value,invoiceId:document.getElementById('r-inv').value,amount:+document.getElementById('r-amt').value||0,method:document.getElementById('r-m').value,fy:DB.meta.fy};
+  const invoiceId=document.getElementById('r-inv').value,invoice=(DB.invoices||[]).find(item=>String(item.id)===String(invoiceId)),amount=Number(document.getElementById('r-amt').value);
+  const r={receiptNo,date,customer:document.getElementById('r-cust').value,invoiceId,amount,method:document.getElementById('r-m').value,fy:DB.meta.fy};
   if(!validReceiptNo(receiptNo,date)){toast('Receipt number must use BB or SS + YYYY/MM/DD + two-digit sequence');return;}
-  if(!r.customer||!r.invoiceId||r.amount<=0){toast('Enter customer, invoice and a receipt amount');return;}
+  if(!r.customer||!r.invoiceId||!Number.isFinite(r.amount)||r.amount<=0){toast('Enter customer, invoice and a receipt amount');return;}
+  if(!invoice){toast('Select an existing invoice');return;}
+  if(invoice.customer&&String(invoice.customer).trim()!==String(r.customer).trim()){toast('Receipt customer must match the selected invoice');return;}
+  if(Math.round(r.amount*100)>Math.round(invBalance(invoice)*100)){toast('Receipt amount cannot exceed the invoice balance');return;}
+  const previousCounter=DB.counters.receipt,previousPaid=invoice.paid,previousStatus=invoice.status;
+  r.id=++DB.counters.receipt;
   DB.receipts.push(r);
-  const inv=DB.invoices.find(i=>i.id===r.invoiceId);
-  if(inv){inv.paid=(inv.paid||0)+r.amount;inv.deposit=0;inv.status=invBalance(inv)<=0.005?'Paid':'Pending';}
-  save();closeModal();toast('Receipt logged');render();
+  invoice.paid=(invoice.paid||0)+r.amount;invoice.status=invBalance(invoice)<=0.005?'Paid':'Pending';
+  if(!save()){DB.receipts.pop();DB.counters.receipt=previousCounter;if(previousPaid===undefined)delete invoice.paid;else invoice.paid=previousPaid;if(previousStatus===undefined)delete invoice.status;else invoice.status=previousStatus;return;}
+  closeModal();toast('Receipt logged');render();
 }
 function viewReceipt(receiptNo){
   const r=DB.receipts.find(x=>(x.receiptNo||String(x.id))===receiptNo);if(!r)return;
@@ -2032,15 +2097,94 @@ function vJobs(c){
   <div class="cards">${stages.slice(1).map(s=>`<div class="card"><div class="lbl">${s}</div><div class="val">${jobs.filter(j=>j.stage===s).length}</div></div>`).join('')}</div>
   <section class="production-jobs"><div class="production-jobs-heading"><h2>Production job cards</h2><p>Job cards follow their quote and invoice. Production time starts when the stage is changed to In production; quote date is kept separately as the arrival date.</p></div>${cards||'<div class="panel production-empty"><h3>No jobs in this stage</h3><p>Create a quote to open its job card automatically, or add a job manually.</p></div>'}</section>`;
 }
-function updateJobStage(id,stage,index=-1){let job=Number.isInteger(index)&&index>=0?DB.jobs[index]:null;if(!job){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before editing.');render();return;}job=matches[0];}if(!job){const quote=(DB.quotes||[]).find(item=>String(item.id)===String(id));if(quote)job=syncQuoteJob(quote);}if(!job){toast('This job is no longer available. Refresh the job register.');return;}if(!setJobProductionStage(job,stage))return;save();render();}
+function jobHasAdvancedProduction(job){
+  return Boolean(job&&(job.stage&&job.stage!=='Quoted'&&job.stage!=='Quote'||Number(job.productionElapsedMs||0)>0||job.productionStartedAt||(job.stageHistory||[]).some(entry=>entry.from!=='Quoted'&&entry.from!=='Quote'||entry.to!=='Quoted'&&entry.to!=='Quote')));
+}
+function updateJobStage(id,stage,index=-1){
+  let job=Number.isInteger(index)&&index>=0?DB.jobs[index]:null;
+  if(!job){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before editing.');render();return;}job=matches[0];}
+  const quote=!job?(DB.quotes||[]).find(item=>String(item.id)===String(id)):null;
+  if(!job&&!quote){toast('This job is no longer available. Refresh the job register.');return;}
+  const stages=['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'];
+  const rawCurrent=String(job?.stage||'Quoted').trim(),current=({'In Production':'In production','In progress':'In production','Quote':'Quoted'})[rawCurrent]||rawCurrent;
+  const currentIndex=stages.indexOf(current),nextIndex=stages.indexOf(stage);
+  if(nextIndex<0){toast('Select a valid production stage');render();return;}
+  if((nextIndex<currentIndex||nextIndex-currentIndex>1)&&!confirm(`Move job ${job?.id||quote.id} from ${current} to ${stage}, reversing or skipping stages? This change will be recorded in the job history.`)){render();return;}
+  const previousJobs=Array.isArray(DB.jobs)?DB.jobs.slice():DB.jobs,createdForQuote=!job;
+  if(!job)job=syncQuoteJob(quote);
+  const previous={stage:job.stage,productionStartedAt:job.productionStartedAt,productionElapsedMs:job.productionElapsedMs,stageHistory:Array.isArray(job.stageHistory)?job.stageHistory.slice():job.stageHistory};
+  if(!setJobProductionStage(job,stage))return;
+  if(!save()){for(const key of Object.keys(previous))if(previous[key]===undefined)delete job[key];else job[key]=previous[key];if(createdForQuote)DB.jobs=previousJobs;return;}
+  render();
+}
 function linkJobInvoice(id,invoiceId,index=-1){
-  let job=Number.isInteger(index)&&index>=0?DB.jobs[index]:null;if(!job){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before linking an invoice.');render();return;}job=matches[0];}if(!job){const quote=(DB.quotes||[]).find(item=>String(item.id)===String(id));if(quote)job=syncQuoteJob(quote);}if(!job){toast('This job is no longer available. Refresh the job register.');return;}
-  const invoice=DB.invoices.find(item=>item.id===invoiceId);
+  let job=Number.isInteger(index)&&index>=0?DB.jobs[index]:null;if(!job){const matches=DB.jobs.filter(item=>String(item.id)===String(id));if(matches.length>1){toast('This imported job ID is shared by several jobs. Reconcile its identity before linking an invoice.');render();return;}job=matches[0];}
+  const quote=!job?(DB.quotes||[]).find(item=>String(item.id)===String(id)):null;
+  if(!job&&!quote){toast('This job is no longer available. Refresh the job register.');return;}
+  const invoice=DB.invoices.find(item=>String(item.id)===String(invoiceId));
+  if(invoiceId&&!invoice){toast('Select an existing invoice');render();return;}
+  const previousInvoice=job?.invoiceId&&DB.invoices.find(item=>String(item.id)===String(job.invoiceId));
+  if(!invoiceId&&previousInvoice&&(invoiceCollectedAmount(previousInvoice)>0.005||(DB.receipts||[]).some(receipt=>String(receipt.invoiceId)===String(previousInvoice.id)))){toast('Cannot unlink an invoice with payment or receipt history');render();return;}
+  if(!invoiceId&&job&&jobHasAdvancedProduction(job)){toast('Cannot unlink the invoice after production has advanced');render();return;}
+  if(invoice&&DB.jobs.some(item=>item!==job&&String(item.invoiceId||'')===String(invoice.id))){toast('This invoice is already linked to another job');render();return;}
+  const quoteId=job?.quoteId||quote?.id;
+  if(invoice?.generatedFromQuote&&quoteId&&String(invoice.generatedFromQuote)!==String(quoteId)){toast('This invoice belongs to a different quote');render();return;}
+  if(invoice&&quote?.invoiceId&&String(quote.invoiceId)!==String(invoice.id)){toast('This quote is already linked to a different invoice');render();return;}
+  if(!job&&!invoiceId)return;
+  const previousJobs=Array.isArray(DB.jobs)?DB.jobs.slice():DB.jobs,createdForQuote=!job;
+  if(!job)job=syncQuoteJob(quote);
+  const previous={invoiceId:job.invoiceId,customer:job.customer,project:job.project,balance:job.balance};
   job.invoiceId=invoiceId||'';
   if(invoice){job.customer=job.customer||invoice.customer||'';job.project=job.project||invoice.project||'';job.balance=invBalance(invoice);}
-  save();render();toast(invoice?`Job ${id} linked to ${invoice.id}`:`Invoice unlinked from job ${id}`);
+  if(!save()){for(const key of Object.keys(previous))if(previous[key]===undefined)delete job[key];else job[key]=previous[key];if(createdForQuote)DB.jobs=previousJobs;return;}
+  render();toast(invoice?`Job ${id} linked to ${invoice.id}`:`Invoice unlinked from job ${id}`);
 }
-function newJob(){modal(`<h3>New Job Card</h3><div class="frm"><div class="fld"><label>Job No</label><input id="j-id" value="JOB-${Date.now()}"></div><div class="fld"><label>Invoice</label><select id="j-invoice"><option value="">Not linked</option>${DB.invoices.map(i=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.id)} — ${escapeHtml(i.customer||'')}</option>`).join('')}</select></div><div class="fld"><label>Customer</label><input id="j-cust"></div><div class="fld"><label>Project</label><input id="j-project"></div><div class="fld"><label>Intake date</label><input id="j-date" type="date" value="${today()}"></div><div class="fld"><label>Stage</label><select id="j-stage">${['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'].map(s=>`<option>${s}</option>`).join('')}</select></div><div class="fld"><label>Notes / work to complete</label><input id="j-notes"></div></div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="const inv=DB.invoices.find(i=>i.id===fa('j-invoice'));const job={id:fa('j-id').trim(),invoiceId:fa('j-invoice'),customer:fa('j-cust')||(inv?.customer||''),project:fa('j-project')||(inv?.project||''),stage:'Quoted',startDate:fa('j-date'),intakeDate:fa('j-date'),createdAt:new Date().toISOString(),productionElapsedMs:0,balance:inv?invBalance(inv):0,notes:fa('j-notes')};if(!job.id||!job.customer||!job.intakeDate){toast('Enter a job number, customer and intake date');return;}if(DB.jobs.some(item=>String(item.id)===job.id)){toast('This job number already exists');return;}setJobProductionStage(job,fa('j-stage'));DB.jobs.push(job);save();closeModal();render()">Save Job</button></div>`)}
+function populateNewJobFromSource(){
+  const quoteSelect=document.getElementById('j-quote'),invoiceSelect=document.getElementById('j-invoice');
+  let quote=(DB.quotes||[]).find(item=>String(item.id)===String(quoteSelect.value)),invoice=(DB.invoices||[]).find(item=>String(item.id)===String(invoiceSelect.value));
+  if(invoice?.generatedFromQuote&&!quote){quote=(DB.quotes||[]).find(item=>String(item.id)===String(invoice.generatedFromQuote));if(quote)quoteSelect.value=quote.id;}
+  if(quote?.invoiceId&&!invoice){invoice=(DB.invoices||[]).find(item=>String(item.id)===String(quote.invoiceId));if(invoice)invoiceSelect.value=invoice.id;}
+  const source=quote||invoice;if(!source)return;
+  document.getElementById('j-cust').value=source.customer||'';
+  document.getElementById('j-project').value=source.projectReference||source.project||'';
+  document.getElementById('j-date').value=source.date||today();
+  document.getElementById('j-notes').value=source.introduction||source.notes||'';
+  document.getElementById('j-work-type').value=source.workType||'';
+  document.getElementById('j-colour').value=source.colour||'';
+}
+function saveNewJob(){
+  const id=document.getElementById('j-id').value.trim(),quoteId=document.getElementById('j-quote').value,invoiceId=document.getElementById('j-invoice').value;
+  const quote=(DB.quotes||[]).find(item=>String(item.id)===String(quoteId)),invoice=(DB.invoices||[]).find(item=>String(item.id)===String(invoiceId));
+  if(!id||!document.getElementById('j-cust').value.trim()||!document.getElementById('j-date').value){toast('Enter a job number, customer and intake date');return;}
+  if(DB.jobs.some(item=>String(item.id)===id)){toast('This job number already exists');return;}
+  if(quoteId&&!quote){toast('Select an existing quote');return;}
+  if(invoiceId&&!invoice){toast('Select an existing invoice');return;}
+  if(quote&&DB.jobs.some(item=>String(item.quoteId||'')===String(quote.id))){toast('This quote already has a job card');return;}
+  if(invoice&&DB.jobs.some(item=>String(item.invoiceId||'')===String(invoice.id))){toast('This invoice is already linked to another job');return;}
+  if(quote&&invoice?.generatedFromQuote&&String(invoice.generatedFromQuote)!==String(quote.id)){toast('The selected invoice belongs to a different quote');return;}
+  const stage=document.getElementById('j-stage').value;
+  if(stage!=='Quoted'&&!confirm(`Create this job directly at ${stage}? The stage change will be recorded in the job history.`))return;
+  const job={id,quoteId:quote?.id||'',invoiceId:invoice?.id||'',customer:document.getElementById('j-cust').value.trim(),project:document.getElementById('j-project').value.trim(),stage:'Quoted',startDate:document.getElementById('j-date').value,intakeDate:document.getElementById('j-date').value,workType:document.getElementById('j-work-type').value,colour:document.getElementById('j-colour').value,createdAt:new Date().toISOString(),productionElapsedMs:0,balance:invoice?invBalance(invoice):0,notes:document.getElementById('j-notes').value.trim()};
+  if(quote?.status==='Accepted'){
+    const snapshot=quote.acceptedVersion?.snapshot||quote;
+    job.acceptedQuoteSnapshot=JSON.parse(JSON.stringify(snapshot));delete job.acceptedQuoteSnapshot.revisions;delete job.acceptedQuoteSnapshot.acceptedVersion;
+  }
+  setJobProductionStage(job,stage);const previousJobs=DB.jobs.slice();DB.jobs.push(job);
+  if(!save()){DB.jobs=previousJobs;return;}
+  closeModal();render();toast('Job card created');
+}
+function newJob(){
+  modal(`<h3>New Job Card</h3><div class="frm">
+    <div class="fld"><label>Job No</label><input id="j-id" value="JOB-${Date.now()}"></div>
+    <div class="fld"><label>Quote</label><select id="j-quote" onchange="populateNewJobFromSource()"><option value="">Not linked</option>${uniqueQuotes().map(q=>`<option value="${escapeHtml(q.id)}">${escapeHtml(q.id)} — ${escapeHtml(q.customer||'')}</option>`).join('')}</select></div>
+    <div class="fld"><label>Invoice</label><select id="j-invoice" onchange="populateNewJobFromSource()"><option value="">Not linked</option>${uniqueInvoices().map(i=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.id)} — ${escapeHtml(i.customer||'')}</option>`).join('')}</select></div>
+    <div class="fld"><label>Customer</label><input id="j-cust"></div><div class="fld"><label>Project</label><input id="j-project"></div>
+    <div class="fld"><label>Intake date</label><input id="j-date" type="date" value="${today()}"></div>
+    <div class="fld"><label>Work type</label><input id="j-work-type"></div><div class="fld"><label>Colour</label><input id="j-colour"></div>
+    <div class="fld"><label>Stage</label><select id="j-stage">${['Quoted','Deposit received','Materials ordered','In production','Quality check','Ready for collection','Delivered','Closed'].map(s=>`<option>${s}</option>`).join('')}</select></div>
+    <div class="fld"><label>Notes / work to complete</label><textarea id="j-notes"></textarea></div>
+  </div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveNewJob()">Save Job</button></div>`);
+}
 function viewJob(id,index=-1,printAfterOpen=false){
   const record=Number.isInteger(index)&&index>=0?DB.jobs[index]:(DB.jobs||[]).find(x=>String(x.id)===String(id));
   const quote=record?quoteForJob(record):uniqueQuotes().find(q=>String(q.id)===String(id));

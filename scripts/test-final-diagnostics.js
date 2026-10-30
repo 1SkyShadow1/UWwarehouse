@@ -28,7 +28,7 @@ test('document export failures survive a successful shared save and Global Save 
 });
 test('editing dates enforces current document numbers while keeping historical identifiers',()=>{
   const fields={},messages=[],invoice={id:'BB26100701',date:'2026-10-07',customer:'Customer',items:[{desc:'Work',qty:1,price:10}]};let saves=0;
-  const c=load({DB:{invoices:[invoice],quotes:[]},today:()=> '2026-10-07',fa:id=>fields[id]||'',toast:s=>messages.push(s),collectDocumentItems:()=>invoice.items,registerDocumentItemPresets:items=>items,save:()=>saves++,closeModal:()=>{},render:()=>{}},['quote-history','document-numbers','document-editor','quotes']);
+  const c=load({DB:{invoices:[invoice],quotes:[],receipts:[],jobs:[],meta:{}},today:()=> '2026-10-07',fa:id=>fields[id]||'',toast:s=>messages.push(s),collectDocumentItems:()=>invoice.items,registerDocumentItemPresets:items=>items,save:()=>{saves++;return true;},closeModal:()=>{},render:()=>{}},['quote-history','document-numbers','document-editor','quotes']);
   Object.assign(fields,{'ef-no':invoice.id,'ef-date':'2026-10-08','ef-cust':'Customer'});c.saveEditedInvoice(invoice.id);assert.equal(saves,0);assert.equal(invoice.date,'2026-10-07');
   fields['ef-no']='BB26100801';fields['ef-due']='2026-10-07';c.saveEditedInvoice(invoice.id);assert.equal(saves,0);assert.match(messages.at(-1),/payment due date/);
   fields['ef-due']='2026-10-10';c.saveEditedInvoice(invoice.id);assert.equal(saves,1);assert.equal(invoice.id,'BB26100801');
@@ -81,4 +81,76 @@ test('document register renders managed scans without source paths and approves 
   vm.runInContext(html.slice(html.indexOf('function approveDocument('),html.indexOf('function scannedRows(')),c);
   c.approveDocument('', 'scan-b');assert.equal(scans[1].reviewStatus,'Approved');assert.equal(scans[0].reviewStatus,undefined);assert.equal(saves,1);
   c.approveDocument('');assert.equal(saves,1,'Missing identifiers must never match another pathless record');
+});
+
+test('payments and receipts reject overpayment and preserve prior deposits',()=>{
+  const invoice={id:'INV',customer:'Client',items:[{qty:1,price:100}],paid:10,deposit:20,status:'Pending'};
+  const inputs={'p-amt':{value:'70.01'},'p-date':{value:'2026-10-23'},'p-prefix':{value:'BB'},'p-m':{value:'EFT'},'r-date':{value:'2026-10-23'},'r-no':{value:'BB2026/10/2301'},'r-cust':{value:'Client'},'r-inv':{value:'INV'},'r-amt':{value:'70.01'},'r-m':{value:'EFT'}};
+  const messages=[];let saves=0;
+  const c=vm.createContext({DB:{invoices:[invoice],receipts:[],counters:{receipt:0},meta:{fy:'2026'}},document:{getElementById:id=>inputs[id]},invTotal:item=>item.items.reduce((sum,line)=>sum+line.qty*line.price,0),invBalance:item=>item.items.reduce((sum,line)=>sum+line.qty*line.price,0)-(item.paid||0)-(item.deposit||0),nextReceiptNo:()=> 'BB2026/10/2302',validReceiptNo:()=>true,save:()=>{saves++;return true;},closeModal:()=>{},toast:message=>messages.push(message),render:()=>{}});
+  vm.runInContext(html.slice(html.indexOf('function savePay('),html.indexOf('function viewInvoiceLegacy(')),c);
+  vm.runInContext(html.slice(html.indexOf('function saveReceipt('),html.indexOf('function viewReceipt(')),c);
+  c.savePay('INV');assert.equal(invoice.paid,10);assert.equal(c.DB.receipts.length,0);assert.match(messages.at(-1),/no more than the invoice balance/);
+  inputs['p-amt'].value='70';c.savePay('INV');assert.equal(invoice.paid,80);assert.equal(invoice.deposit,20);assert.equal(c.DB.receipts.length,1);assert.equal(saves,1);
+  invoice.paid=10;invoice.deposit=20;inputs['r-amt'].value='70.01';c.saveReceipt();assert.equal(invoice.paid,10);assert.equal(c.DB.receipts.length,1);
+  inputs['r-amt'].value='70';c.saveReceipt();assert.equal(invoice.paid,80);assert.equal(invoice.deposit,20);assert.equal(c.DB.receipts.length,2);
+  invoice.paid=10;invoice.deposit=20;invoice.status='Pending';c.DB.receipts=[];c.DB.counters.receipt=0;c.save=()=>false;inputs['p-amt'].value='70';c.savePay('INV');
+  assert.equal(invoice.paid,10);assert.equal(invoice.status,'Pending');assert.equal(c.DB.receipts.length,0);assert.equal(c.DB.counters.receipt,0);
+  inputs['r-amt'].value='70';c.saveReceipt();assert.equal(invoice.paid,10);assert.equal(c.DB.receipts.length,0);assert.equal(c.DB.counters.receipt,0);
+});
+
+test('quote deletion cascades atomically only for unpaid quotes with unstarted jobs',()=>{
+  const quote={id:'Q1',invoiceId:'I1'},invoice={id:'I1',generatedFromQuote:'Q1',items:[{qty:1,price:50}]},job={id:'J1',quoteId:'Q1',invoiceId:'I1',stage:'Quoted'};
+  const makeContext=(receiptRows=[],stageJob=job)=>{const messages=[];let saves=0;const context=vm.createContext({DB:{quotes:[quote],invoices:[invoice],jobs:[stageJob],receipts:receiptRows},invoiceCollectedAmount:item=>(item.paid||0)+(item.deposit||0),invBalance:()=>0,R:String,confirm:()=>true,save:()=>{saves++;return true;},render:()=>{},toast:message=>messages.push(message)});vm.runInContext(html.slice(html.indexOf('function quoteDeletionLinks('),html.indexOf('/* ---------- RECEIPTS ---------- */')),context);return {context,messages,get saves(){return saves;}};};
+  const safe=makeContext();safe.context.del('quotes','Q1');assert.equal(safe.context.DB.quotes.length,0);assert.equal(safe.context.DB.invoices.length,0);assert.equal(safe.context.DB.jobs.length,0);assert.equal(safe.saves,1);
+  const failed=makeContext();failed.context.save=()=>false;failed.context.del('quotes','Q1');assert.equal(failed.context.DB.quotes.length,1);assert.equal(failed.context.DB.invoices.length,1);assert.equal(failed.context.DB.jobs.length,1);
+  const paid=makeContext([{invoiceId:'I1',amount:1}]);paid.context.del('quotes','Q1');assert.equal(paid.context.DB.quotes.length,1);assert.equal(paid.context.DB.invoices.length,1);assert.equal(paid.context.DB.jobs.length,1);assert.equal(paid.saves,0);assert.match(paid.messages.at(-1),/payment or receipt history/);
+  const active=makeContext([],{...job,stage:'In production',productionStartedAt:'2026-10-23T09:00:00.000Z'});active.context.del('quotes','Q1');assert.equal(active.context.DB.quotes.length,1);assert.equal(active.saves,0);assert.match(active.messages.at(-1),/production history/);
+});
+
+test('invoice deletion guards linked financial records and receipt deletion reverses payment',()=>{
+  const invoice={id:'I1',items:[{qty:1,price:100}],paid:30,deposit:10,status:'Pending'},receipt={id:1,receiptNo:'R1',invoiceId:'I1',amount:20};
+  let confirms=0,saves=0;const messages=[];
+  const c=vm.createContext({DB:{quotes:[],invoices:[invoice],jobs:[],receipts:[receipt]},invoiceCollectedAmount:item=>(item.paid||0)+(item.deposit||0),invBalance:item=>item.items[0].qty*item.items[0].price-(item.paid||0)-(item.deposit||0),R:value=>String(value),confirm:()=>{confirms++;return true;},save:()=>{saves++;return true;},render:()=>{},toast:message=>messages.push(message)});
+  vm.runInContext(html.slice(html.indexOf('function quoteDeletionLinks('),html.indexOf('/* ---------- RECEIPTS ---------- */')),c);
+  c.del('invoices','I1');assert.equal(c.DB.invoices.length,1);assert.equal(confirms,0);assert.equal(saves,0);assert.match(messages.at(-1),/payment or receipt history/);
+  c.deleteReceipt(1);assert.equal(c.DB.receipts.length,0);assert.equal(invoice.paid,10);assert.equal(invoice.deposit,10);assert.equal(c.invBalance(invoice),80);assert.equal(saves,1);
+});
+
+test('skipping production stages requires confirmation and every change is audited',()=>{
+  const job={id:'J1',stage:'Quoted'},db={jobs:[job],quotes:[],invoices:[]},messages=[];let saves=0,confirmResult=false,renders=0;
+  const c=vm.createContext({DB:db,toast:message=>messages.push(message),save:()=>{saves++;return true;},render:()=>renders++,confirm:()=>confirmResult});
+  vm.runInContext(fs.readFileSync(path.join(root,'public/js/job-production.js'),'utf8'),c);
+  vm.runInContext(html.slice(html.indexOf('function jobHasAdvancedProduction('),html.indexOf('function populateNewJobFromSource(')),c);
+  c.updateJobStage('J1','Ready for collection',0);assert.equal(job.stage,'Quoted');assert.equal(saves,0);assert.equal(renders,1);
+  confirmResult=true;c.updateJobStage('J1','Ready for collection',0);assert.equal(job.stage,'Ready for collection');assert.deepEqual(Array.from(job.stageHistory).map(entry=>entry.to),['Ready for collection']);assert.equal(saves,1);
+});
+
+test('virtual quote jobs do not persist when a skipped-stage change is cancelled',()=>{
+  const quote={id:'Q1',status:'Draft'},db={jobs:[],quotes:[quote],invoices:[]};let confirmResult=false,saves=0;
+  const c=vm.createContext({DB:db,toast:()=>{},save:()=>{saves++;return true;},render:()=>{},confirm:()=>confirmResult});
+  vm.runInContext(fs.readFileSync(path.join(root,'public/js/job-production.js'),'utf8'),c);
+  vm.runInContext(html.slice(html.indexOf('function jobHasAdvancedProduction('),html.indexOf('function populateNewJobFromSource(')),c);
+  c.updateJobStage('Q1','In production',-1);assert.equal(db.jobs.length,0);assert.equal(saves,0);
+});
+
+test('manual jobs can be populated from quotes and linked without duplicating an existing job',()=>{
+  const quote={id:'Q1',customer:'Client',projectReference:'Lounge',date:'2026-10-23',workType:'Reupholster',colour:'Navy',introduction:'Recover cushions.',items:[]};
+  const fields={};for(const id of ['j-id','j-quote','j-invoice','j-cust','j-project','j-date','j-work-type','j-colour','j-stage','j-notes'])fields[id]={value:id==='j-id'?'JOB-1':id==='j-quote'?'Q1':id==='j-stage'?'Quoted':''};
+  const db={quotes:[quote],invoices:[],jobs:[]};let saves=0,modalHtml='';
+  const c=vm.createContext({DB:db,document:{getElementById:id=>fields[id]},uniqueQuotes:()=>db.quotes,uniqueInvoices:()=>db.invoices,escapeHtml:String,today:()=> '2026-10-23',modal:html=>{modalHtml=html;},save:()=>{saves++;return true;},closeModal:()=>{},render:()=>{},toast:()=>{},confirm:()=>true,invBalance:()=>0});
+  vm.runInContext(fs.readFileSync(path.join(root,'public/js/job-production.js'),'utf8'),c);
+  vm.runInContext(html.slice(html.indexOf('function jobHasAdvancedProduction('),html.indexOf('function viewJob(')),c);
+  c.newJob();assert.match(modalHtml,/id="j-quote"/);assert.match(modalHtml,/id="j-invoice"/);
+  c.populateNewJobFromSource();assert.equal(fields['j-cust'].value,'Client');assert.equal(fields['j-project'].value,'Lounge');assert.equal(fields['j-date'].value,'2026-10-23');assert.equal(fields['j-notes'].value,'Recover cushions.');
+  c.saveNewJob();assert.equal(db.jobs.length,1);assert.equal(db.jobs[0].quoteId,'Q1');assert.equal(db.jobs[0].customer,'Client');assert.equal(saves,1);
+  c.saveNewJob();assert.equal(db.jobs.length,1);assert.equal(saves,1);
+});
+
+test('invoice edits cannot reduce the total below payment already recorded',()=>{
+  const invoice={id:'INV',date:'2026-10-23',customer:'Client',paid:70,deposit:10,items:[{qty:1,price:100}]},messages=[];let saves=0;
+  const fields={'ef-no':'INV','ef-date':'2026-10-23','ef-due':'','ef-cust':'Client'};
+  const c=vm.createContext({DB:{invoices:[invoice],receipts:[],jobs:[],quotes:[],meta:{}},fa:id=>fields[id]||'',collectDocumentItems:()=>[{qty:1,price:79}],validInvoiceNo:()=>true,validQuoteExpiry:()=>true,registerDocumentItemPresets:items=>items,toast:message=>messages.push(message),save:()=>{saves++;return true;},closeModal:()=>{},render:()=>{}});
+  vm.runInContext(fs.readFileSync(path.join(root,'public/js/document-editor.js'),'utf8'),c);
+  c.saveEditedInvoice('INV');assert.equal(invoice.items[0].price,100);assert.equal(saves,0);assert.match(messages.at(-1),/cannot be reduced below payments/);
 });
