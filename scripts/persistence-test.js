@@ -11,9 +11,18 @@ const invoicesRoot = path.join(dataRoot, 'saved-invoices');
 const quotesRoot = path.join(dataRoot, 'saved-quotes');
 const sourceRoot = path.join(dataRoot, 'reference-files');
 const referencePath = path.join(sourceRoot, 'finance-note.txt');
+const stateFile = path.join(dataRoot, 'state', 'uw-state.json');
 const apiKey = 'persistence-test-api-key';
 fs.mkdirSync(sourceRoot, { recursive: true });
 fs.writeFileSync(referencePath, 'Accessible through configured absolute source paths.');
+fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+const initialStateText = JSON.stringify({
+  version: 1,
+  revision: 0,
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  data: { invoices: [], quotes: [] },
+});
+fs.writeFileSync(stateFile, initialStateText);
 const env = {
   ...process.env,
   PORT: String(port),
@@ -41,15 +50,17 @@ let child;
 const startServer = () => {
   child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env,
-    stdio: ['ignore', 'ignore', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  let serverOutput = '';
   let serverError = '';
+  child.stdout.on('data', chunk => { serverOutput += chunk.toString(); });
   child.stderr.on('data', chunk => { serverError += chunk.toString(); });
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + 30000;
     const poll = async () => {
       if (child.exitCode !== null) {
-        reject(new Error(`Server exited during startup.${serverError ? `\n${serverError}` : ''}`));
+        reject(new Error(`Server exited during startup.${serverError ? `\n${serverError}` : ''}${serverOutput ? `\n${serverOutput}` : ''}`));
         return;
       }
       try {
@@ -60,7 +71,7 @@ const startServer = () => {
         }
       } catch {}
       if (Date.now() >= deadline) {
-        reject(new Error(`Server did not become ready.${serverError ? `\n${serverError}` : ''}`));
+        reject(new Error(`Server did not become ready.${serverError ? `\n${serverError}` : ''}${serverOutput ? `\n${serverOutput}` : ''}`));
         return;
       }
       setTimeout(poll, 100);
@@ -91,6 +102,13 @@ const run = async () => {
 
   try {
     await startServer();
+    assert.equal(fs.readFileSync(stateFile, 'utf8'), initialStateText, 'A healthy existing ledger must not be rewritten during startup.');
+    const oversizedProbe = await request('/api/__large-body-probe__', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ padding: 'x'.repeat(16 * 1024 * 1024) }),
+    });
+    assert.equal(oversizedProbe.status, 404, 'Valid local state-sized JSON payloads larger than 15 MB must reach routing.');
     const response = await request('/api/state', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },

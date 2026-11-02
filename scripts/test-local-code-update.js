@@ -31,3 +31,11 @@ test('updated service worker precaches every local module and stylesheet',()=>{
   assert(cacheVersion);assert.equal(cacheVersion,assetVersion,'App assets and the service-worker cache must use the same version.');
   assert(sw.includes("'uw-accounting-documents-v2'"));
 });
+test('Windows server watchdog restarts failed boots and waits for API readiness before opening the browser',()=>{
+  const launcher=fs.readFileSync(path.join(repo,'scripts','start-local-server.ps1'),'utf8');
+  assert.match(launcher,/FromSeconds\(90\)/);
+  assert.match(launcher,/healthUrl/);assert.match(launcher,/profileUrl/);
+  assert.match(launcher,/Stop-LocalServerProcess \$commandProcess/);
+  assert.match(launcher,/failedChecks -ge \$unhealthyLimit/);
+  assert(launcher.indexOf('Write-ServerLog "Health and profile endpoints are ready."')<launcher.indexOf('Start-Process -FilePath \'powershell.exe\''),'The browser must not launch before both APIs report ready.');
+});

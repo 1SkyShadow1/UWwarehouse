@@ -219,11 +219,14 @@ test('npm launcher starts the real server and waits for configured profiles',asy
   try{
     await Promise.race([
       new Promise((resolve,reject)=>{
-        const check=()=>{if(stdout.includes('UW Accounting is ready'))resolve();else if(child.exitCode!==null)reject(new Error(`Launcher exited with ${child.exitCode}: ${stderr||stdout}`));};
+        const check=()=>{if(stdout.includes('UW Accounting is ready'))resolve();else if(child.exitCode!==null){const output=[stderr,stdout].filter(Boolean).join('\n');reject(new Error(`Launcher exited with ${child.exitCode}${output?`:\n${output}`:''}`));}};
         child.stdout.on('data',check);child.on('exit',check);
       }),
       new Promise((_,reject)=>{deadlineTimer=setTimeout(()=>reject(new Error('Real local server did not start in time')),25000);}),
     ]);
+    const startup=stdout.match(/Server became available in (\d+) ms/);
+    assert(startup,'Server startup diagnostics should report when the listener is available.');
+    assert(Number(startup[1])<15000,`Local server startup exceeded 15 seconds (${startup[1]} ms).`);
     const configResponse=await fetch(`http://127.0.0.1:${port}/api/auth/config`),config=await configResponse.json();
     assert.equal(configResponse.status,200);assert.equal(config.configured,true);assert.deepEqual(config.users.map(user=>user.name),['Brian','Evans']);
   }finally{

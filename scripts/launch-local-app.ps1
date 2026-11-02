@@ -8,7 +8,7 @@ $taskName = "UW Accounting Local Server"
 $url = "http://127.0.0.1:8080/"
 $healthUrl = "http://127.0.0.1:8080/api/health"
 $profileUrl = "http://127.0.0.1:8080/api/auth/config"
-$deadline = (Get-Date).AddSeconds(90)
+$deadline = (Get-Date).AddSeconds(180)
 $ready = $false
 
 try {
@@ -47,7 +47,7 @@ try {
   } while ((Get-Date) -lt $deadline)
 
   if (-not $ready) {
-    throw "The UW Accounting server and profile service did not become ready at $url within 90 seconds. Check data\logs\server.log."
+    throw "The UW Accounting server and profile service did not become ready at $url within 180 seconds. Check data\logs\server.log and data\logs\server.log.1."
   }
 }
 

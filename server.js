@@ -1,9 +1,15 @@
+const startupOutput = require('node:fs');
+const startupStartedAt = Date.now();
+const startupLog = message => startupOutput.writeSync(1, `[startup] ${message}\n`);
+startupLog('Initializing UW Accounting server.');
 require('dotenv').config();
+startupLog('Environment loaded.');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+startupLog('Core Node modules loaded.');
 const localStorageConfigPath = path.join(__dirname, 'local-storage.json');
 if (fs.existsSync(localStorageConfigPath)) {
   const config = JSON.parse(fs.readFileSync(localStorageConfigPath, 'utf8'));
@@ -14,14 +20,20 @@ if (fs.existsSync(localStorageConfigPath)) {
     }
   }
 }
+startupLog('Local storage configuration loaded.');
 const localOnly = process.env.UW_LOCAL_ONLY === '1';
 // Local mode controls storage integrations. Receipt review still uses the
 // explicitly configured Gemini key; it never changes the local datastore.
 if (localOnly) for (const key of ['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET']) process.env[key] = '';
-const { google } = require('googleapis');
 const multer = require('multer');
+startupLog('Upload middleware loaded.');
 const PDFDocument = require('pdfkit');
+startupLog('PDF renderer loaded.');
 const { PDFDocument: PDFLibDocument } = require('pdf-lib');
+startupLog('PDF processing library loaded.');
+const getGoogleApi = () => require('googleapis').google;
+const getAssistantSourceSearch = () => require('./lib/assistant-source-search');
+const getAssistantSourceReconciliation = () => require('./lib/assistant-source-reconciliation');
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -31,10 +43,10 @@ const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const {recoverImportedQuotes}=require('./public/js/imported-quotes');
 const scanDuplicates=require('./public/js/scan-duplicates');
-const { searchSourceFiles, extractDocumentText, queryTerms } = require('./lib/assistant-source-search');
-const { FIELD_ALLOWLIST, validateAssistantProposals } = require('./lib/assistant-source-reconciliation');
+startupLog(`Core server dependencies loaded in ${Date.now() - startupStartedAt} ms.`);
 const historicalBundleText=fs.readFileSync(path.join(publicDir,'imported-data.js'),'utf8');
 const historicalQuotes=JSON.parse(historicalBundleText.slice(historicalBundleText.indexOf('=')+1).trim().replace(/;$/,'')).quotes||[];
+startupLog(`Imported quote catalog loaded in ${Date.now() - startupStartedAt} ms.`);
 const sourceRoot = process.env.UW_SOURCE_DIR || 'D:\\UW';
 const additionalSourceRoots = String(process.env.UW_SOURCE_DIRS || '')
   .split(';')
@@ -250,7 +262,8 @@ const ensureStorage = () => {
   fs.mkdirSync(dataRoot, { recursive: true });
   fs.mkdirSync(documentsRoot, { recursive: true });
   if (!stateSnapshot) {
-    if (fs.existsSync(stateFile)) {
+    let persistSnapshot = !fs.existsSync(stateFile);
+    if (!persistSnapshot) {
       try {
         const parsed = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
         if (!parsed || parsed.version !== stateVersion || typeof parsed.revision !== 'number' || !parsed.data || typeof parsed.data !== 'object') throw new Error('Unsupported datastore format');
@@ -259,6 +272,7 @@ const ensureStorage = () => {
         const corrupt = `${stateFile}.corrupt-${Date.now()}`;
         fs.renameSync(stateFile, corrupt);
         console.warn(`Datastore was invalid and was moved to ${corrupt}: ${error.message}`);
+        persistSnapshot = true;
       }
     }
     stateSnapshot = stateSnapshot || { version: stateVersion, revision: 0, updatedAt: new Date().toISOString(), data: {} };
@@ -273,11 +287,11 @@ const ensureStorage = () => {
         canonical:true,duplicateCount:1,existingMatch:false,scanDate:'',category:'Scanned receipt',reviewStatus:'Needs review',includedInTotals:false});
       scanIds.add(doc.id);recoveredScans++;
     }
-    if(recoveredScans){stateSnapshot.revision++;stateSnapshot.updatedAt=new Date().toISOString();console.log(`Recovered ${recoveredScans} managed scans into the shared register.`);}
+    if(recoveredScans){stateSnapshot.revision++;stateSnapshot.updatedAt=new Date().toISOString();persistSnapshot=true;console.log(`Recovered ${recoveredScans} managed scans into the shared register.`);}
     const repairedQuotes=recoverImportedQuotes(stateSnapshot.data,historicalQuotes);
-    if(repairedQuotes){stateSnapshot.revision++;stateSnapshot.updatedAt=new Date().toISOString();console.log(`Recovered source content for ${repairedQuotes} historical quotes.`);}
+    if(repairedQuotes){stateSnapshot.revision++;stateSnapshot.updatedAt=new Date().toISOString();persistSnapshot=true;console.log(`Recovered source content for ${repairedQuotes} historical quotes.`);}
     if((recoveredScans||repairedQuotes)&&fs.existsSync(stateFile))fs.copyFileSync(stateFile,`${stateFile}.bak`);
-    atomicWrite(stateSnapshot);
+    if (persistSnapshot) atomicWrite(stateSnapshot);
   }
   return stateSnapshot;
 };
@@ -944,7 +958,7 @@ const makeOAuthClient = (req) => {
   if (!clientId || !clientSecret) {
     throw new Error('Google OAuth credentials are not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
   }
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  return new (getGoogleApi().auth.OAuth2)(clientId, clientSecret, redirectUri);
 };
 
 const escapeDriveQueryValue = (value = '') => String(value).replace(/'/g, "\\'");
@@ -955,7 +969,7 @@ const getDriveClient = (tokens = driveState.tokens, req) => {
   }
   const client = makeOAuthClient(req);
   client.setCredentials(tokens);
-  return google.drive({ version: 'v3', auth: client });
+  return getGoogleApi().drive({ version: 'v3', auth: client });
 };
 
 const getDriveFileQuery = (fileName = driveState.fileName, folderId = driveState.folderId) => {
@@ -1007,7 +1021,7 @@ const normalizeBackupData = (payload) => {
   return payload && typeof payload === 'object' ? payload : {};
 };
 
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '32mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.disable('x-powered-by');
 app.use('/api', requireCsrf);
@@ -1028,7 +1042,10 @@ app.use('/api', (_, res, next) => {
   next();
 });
 
+const stateInitializationStartedAt = Date.now();
+startupLog('Loading local accounting state.');
 ensureStorage();
+startupLog(`Local accounting state loaded in ${Date.now() - stateInitializationStartedAt} ms at revision ${stateSnapshot.revision}.`);
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_, __, callback) => callback(null, uploadTempRoot),
@@ -1555,6 +1572,7 @@ const assistantSourceRecordFields = Object.freeze({
 });
 
 const assistantSourceRecordCandidates = (data, sourceText) => {
+  const { queryTerms } = getAssistantSourceSearch();
   const terms = [...new Set(queryTerms(sourceText).filter(term => term.length >= 3))].slice(0, 60);
   const output = {};
   for (const [collection, fields] of Object.entries(assistantSourceRecordFields)) {
@@ -1848,6 +1866,7 @@ app.post('/api/ai/source-search', requireApiKey, async (req, res) => {
   if (!roots.length) return res.status(503).json({ error: 'The configured D:\\UW source library is unavailable. Connect the source drive and restart the local app.' });
 
   try {
+    const { searchSourceFiles } = getAssistantSourceSearch();
     const result = await searchSourceFiles({ roots, query });
     expireAssistantSourceSearches();
     const searchId = crypto.randomUUID();
@@ -1887,6 +1906,7 @@ app.post('/api/ai/source-verify', requireApiKey, async (req, res) => {
   const collection = String(req.body?.collection || '');
   const recordId = String(req.body?.recordId || '');
   const field = String(req.body?.field || '');
+  const { FIELD_ALLOWLIST } = getAssistantSourceReconciliation();
   if (!FIELD_ALLOWLIST[collection]?.has(field) || !recordId || typeof req.body?.currentValuePresent !== 'boolean') {
     return res.status(400).json({ error: 'A valid existing record and approved field are required for source verification.' });
   }
@@ -1988,6 +2008,7 @@ app.post('/api/ai/source-reconcile', requireApiKey, async (req, res) => {
       const isMedia = MEDIA_EXTENSIONS_FOR_ASSISTANT.has(file.extension);
       let text = '';
       try {
+        const { extractDocumentText } = getAssistantSourceSearch();
         text = String(await extractDocumentText(realPath, buffer) || '').replace(/\s+/g, ' ').trim().slice(0, 12000);
       } catch (error) {
         if (!isMedia) throw error;
@@ -2069,6 +2090,7 @@ app.post('/api/ai/source-reconcile', requireApiKey, async (req, res) => {
       ...source,
       text: source.text || transcriptionById.get(source.id) || '',
     }));
+    const { validateAssistantProposals } = getAssistantSourceReconciliation();
     const proposals = validateAssistantProposals(parsed.updates, snapshot.data || {}, evidenceSources);
     return res.json({
       summary: String(parsed.summary || 'Review the evidence and proposed changes below.').slice(0, 1000),
@@ -2220,7 +2242,7 @@ app.get('/api/google-drive/callback', async (req, res) => {
     driveState.connected = true;
     driveState.lastSync = new Date().toISOString();
 
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const drive = getGoogleApi().drive({ version: 'v3', auth: oauth2Client });
     const response = await drive.about.get({ fields: 'user' });
     driveState.accountEmail = response.data.user?.emailAddress || '';
     await persistDriveTokens();
@@ -2478,6 +2500,7 @@ app.use((error, req, res, next) => {
   return res.status(status).send('The server could not complete that request.');
 });
 
+startupLog(`API routes configured in ${Date.now() - startupStartedAt} ms.`);
 if (supabaseConfigured()) {
   bootstrapComplete = false;
   bootstrapReady = Promise.all([restoreSnapshotFromSupabase(), restoreDriveTokens()]).then(() => {
@@ -2491,6 +2514,7 @@ if (supabaseConfigured()) {
 
 const server = isVercel ? null : app.listen(PORT, HOST, () => {
   console.log(`UW Accounting app and API running at http://${HOST}:${PORT}`);
+  startupLog(`Server became available in ${Date.now() - startupStartedAt} ms.`);
   console.log('Google OAuth backend status:', getGoogleConfig().clientId && getGoogleConfig().clientSecret ? 'configured' : 'missing env vars');
   console.log(`Supabase state sync: ${supabaseConfigured() ? 'configured' : 'not configured'}`);
 });
