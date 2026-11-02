@@ -35,6 +35,10 @@ test('Windows server watchdog restarts failed boots and waits for API readiness 
   const launcher=fs.readFileSync(path.join(repo,'scripts','start-local-server.ps1'),'utf8');
   assert.match(launcher,/FromSeconds\(90\)/);
   assert.match(launcher,/healthUrl/);assert.match(launcher,/profileUrl/);
+  assert.match(launcher,/Start-Process -FilePath \$nodePath/);
+  assert.match(launcher,/RedirectStandardOutput \$serverOutputLog/);
+  assert.match(launcher,/RedirectStandardError \$serverErrorLog/);
+  assert.doesNotMatch(launcher,/FileName = \$env:ComSpec/);
   assert.match(launcher,/Stop-LocalServerProcess \$commandProcess/);
   assert.match(launcher,/failedChecks -ge \$unhealthyLimit/);
   assert(launcher.indexOf('Write-ServerLog "Health and profile endpoints are ready."')<launcher.indexOf('Start-Process -FilePath \'powershell.exe\''),'The browser must not launch before both APIs report ready.');

@@ -14,6 +14,8 @@ if (Test-Path -LiteralPath $storageConfig) {
 }
 $logRoot = Join-Path $dataRoot "logs"
 $logFile = Join-Path $logRoot "server.log"
+$serverOutputLog = Join-Path $logRoot "server-output.log"
+$serverErrorLog = Join-Path $logRoot "server-error.log"
 $maxLogBytes = 5MB
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -26,6 +28,11 @@ $script:lastReadinessError = "No response from the local API."
 function Rotate-ServerLog {
   if ((Test-Path -LiteralPath $logFile) -and (Get-Item -LiteralPath $logFile).Length -ge $maxLogBytes) {
     Move-Item -LiteralPath $logFile -Destination "$logFile.1" -Force
+  }
+  foreach ($path in @($serverOutputLog, $serverErrorLog)) {
+    if (Test-Path -LiteralPath $path) {
+      Move-Item -LiteralPath $path -Destination "$path.1" -Force
+    }
   }
 }
 
@@ -91,14 +98,20 @@ while ($true) {
   } else {
     Rotate-ServerLog
     Write-ServerLog "Starting UW Accounting server."
-    $command = '"{0}" "{1}" >> "{2}" 2>&1' -f $nodePath, $serverScript, $logFile
-    $startInfo = New-Object Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $env:ComSpec
-    $startInfo.Arguments = "/d /c $command"
-    $startInfo.WorkingDirectory = $root
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $commandProcess = [Diagnostics.Process]::Start($startInfo)
+    Write-ServerLog "Node output: $serverOutputLog; errors: $serverErrorLog."
+    try {
+      $commandProcess = Start-Process -FilePath $nodePath `
+        -ArgumentList ('"{0}"' -f $serverScript) `
+        -WorkingDirectory $root `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $serverOutputLog `
+        -RedirectStandardError $serverErrorLog `
+        -PassThru
+    } catch {
+      Write-ServerLog "Could not start the Node server process: $($_.Exception.Message)"
+      Start-Sleep -Seconds 5
+      continue
+    }
     $startupDeadline = [DateTime]::UtcNow.Add($startupTimeout)
     while ([DateTime]::UtcNow -lt $startupDeadline) {
       if ($commandProcess.HasExited) {
