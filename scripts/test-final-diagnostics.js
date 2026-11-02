@@ -154,3 +154,81 @@ test('invoice edits cannot reduce the total below payment already recorded',()=>
   vm.runInContext(fs.readFileSync(path.join(root,'public/js/document-editor.js'),'utf8'),c);
   c.saveEditedInvoice('INV');assert.equal(invoice.items[0].price,100);assert.equal(saves,0);assert.match(messages.at(-1),/cannot be reduced below payments/);
 });
+
+test('login retries transient profile-service 503s and does not enable sign-in on fallback profiles',async()=>{
+  const options=[],timers=[];let fetchCall=0,retryHandler;
+  const submitButton={disabled:true,textContent:'Launch system'};
+  const loginError={textContent:'',classList:{toggle(){}}};
+  const userField={value:'',disabled:true,replaceChildren(...items){options.splice(0,options.length,...items);},add(option){options.push(option);}};
+  const retryButton={hidden:true,disabled:false,textContent:'Retry profile connection',addEventListener(name,handler){if(name==='click')retryHandler=handler;}};
+  const loginForm={querySelector:()=>submitButton,addEventListener(){}};
+  const elements={'boot-screen':{classList:{add(){}},style:{}},'login-screen':{classList:{remove(){}}},'login-form':loginForm,'login-user':userField,'login-pass':{value:''},'login-error':loginError,'retry-profile-load':retryButton};
+  const c=vm.createContext({
+    document:{getElementById:id=>elements[id]},performance:{now:()=>0},localStorage:{getItem:()=>null},Option:class{constructor(text,value){this.text=text;this.value=value;}},
+    AbortSignal,fetch:async()=>{fetchCall++;return fetchCall===1?{ok:false,status:503}:{ok:true,json:async()=>({configured:true,users:[{email:'brian',name:'Brian',role:'Owner'},{email:'evans',name:'Evans',role:'Manager'}]})};},
+    setTimeout:callback=>{timers.push(callback);return timers.length;},clearTimeout:()=>{},
+  });
+  vm.runInContext(html.slice(html.indexOf('function initializeAccessFlow(){'),html.indexOf('async function startApplication(user){')),c);
+  c.initializeAccessFlow();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(options.slice(1).map(option=>option.text),['Brian · Owner','Evans · Manager']);
+  assert.equal(submitButton.disabled,true,'Fallback profile labels must not allow a sign-in request');
+  assert.equal(retryButton.hidden,false);assert.match(loginError.textContent,/retry automatically/);
+  await retryHandler();
+  assert.equal(fetchCall,2);assert.equal(submitButton.disabled,false);assert.equal(retryButton.hidden,true);assert.equal(loginError.textContent,'');
+});
+
+test('npm launcher waits for the profile endpoint after local health succeeds',async()=>{
+  const http=require('node:http'),{spawn}=require('node:child_process');
+  let profileCalls=0;
+  const mock=http.createServer((request,response)=>{
+    response.setHeader('content-type','application/json');
+    if(request.url==='/api/health')return response.end(JSON.stringify({ok:true,message:'UW Accounting server is running'}));
+    if(request.url==='/api/auth/config'){
+      profileCalls++;
+      if(profileCalls<3){response.statusCode=503;return response.end(JSON.stringify({error:'server warming'}));}
+      return response.end(JSON.stringify({configured:true,users:[{email:'brian',name:'Brian',role:'Owner'}]}));
+    }
+    response.statusCode=404;response.end('{}');
+  });
+  await new Promise(resolve=>mock.listen(0,'127.0.0.1',resolve));
+  const port=mock.address().port,child=spawn(process.execPath,[path.join(root,'scripts/run-local-app.js')],{env:{...process.env,PORT:String(port),UW_NO_BROWSER:'1',UW_STARTUP_TIMEOUT_MS:'5000'},stdio:['ignore','pipe','pipe']});
+  let stdout='',stderr='';child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
+  let deadlineTimer;
+  try{
+    const code=await Promise.race([new Promise(resolve=>child.once('exit',resolve)),new Promise((_,reject)=>{deadlineTimer=setTimeout(()=>reject(new Error('Launcher did not finish in time')),8000);})]);
+    assert.equal(code,0,stderr||stdout);assert(profileCalls>=3);assert.match(stdout,/UW Accounting is ready/);
+  }finally{
+    clearTimeout(deadlineTimer);
+    if(child.exitCode===null)child.kill();
+    await new Promise(resolve=>mock.close(resolve));
+  }
+});
+
+test('npm launcher starts the real server and waits for configured profiles',async()=>{
+  const {spawn}=require('node:child_process'),crypto=require('node:crypto'),os=require('node:os'),http=require('node:http');
+  const dataRoot=fs.mkdtempSync(path.join(os.tmpdir(),'uw-launch-start-')),probe=http.createServer();
+  await new Promise(resolve=>probe.listen(0,'127.0.0.1',resolve));
+  const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
+  const salt=crypto.randomBytes(16).toString('hex'),passwordHash=`scrypt$16384$8$1$${salt}$${crypto.scryptSync('LaunchTestPass',salt,64,{N:16384,r:8,p:1}).toString('hex')}`;
+  const users={brian:{name:'Brian',role:'Owner',passwordHash},evans:{name:'Evans',role:'Manager',passwordHash}};
+  const child=spawn(process.execPath,[path.join(root,'scripts/run-local-app.js')],{env:{...process.env,NODE_ENV:'test',HOST:'127.0.0.1',PORT:String(port),UW_NO_BROWSER:'1',UW_STARTUP_TIMEOUT_MS:'20000',UW_DATA_DIR:dataRoot,UW_DOCUMENTS_DIR:path.join(dataRoot,'documents'),UW_INVOICES_DIR:path.join(dataRoot,'invoices'),UW_QUOTES_DIR:path.join(dataRoot,'quotes'),UW_API_KEY:'',UW_AUTH_USERS_JSON:JSON.stringify(users),SUPABASE_URL:'',SUPABASE_SERVICE_ROLE_KEY:''},stdio:['ignore','pipe','pipe']});
+  let stdout='',stderr='',deadlineTimer;
+  child.stdout.on('data',chunk=>{stdout+=chunk;});
+  child.stderr.on('data',chunk=>{stderr+=chunk;});
+  try{
+    await Promise.race([
+      new Promise((resolve,reject)=>{
+        const check=()=>{if(stdout.includes('UW Accounting is ready'))resolve();else if(child.exitCode!==null)reject(new Error(`Launcher exited with ${child.exitCode}: ${stderr||stdout}`));};
+        child.stdout.on('data',check);child.on('exit',check);
+      }),
+      new Promise((_,reject)=>{deadlineTimer=setTimeout(()=>reject(new Error('Real local server did not start in time')),25000);}),
+    ]);
+    const configResponse=await fetch(`http://127.0.0.1:${port}/api/auth/config`),config=await configResponse.json();
+    assert.equal(configResponse.status,200);assert.equal(config.configured,true);assert.deepEqual(config.users.map(user=>user.name),['Brian','Evans']);
+  }finally{
+    clearTimeout(deadlineTimer);
+    if(child.exitCode===null){child.kill();await Promise.race([new Promise(resolve=>child.once('exit',resolve)),new Promise(resolve=>setTimeout(resolve,3000))]);}
+    fs.rmSync(dataRoot,{recursive:true,force:true});
+  }
+});

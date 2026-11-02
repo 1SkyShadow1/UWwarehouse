@@ -99,6 +99,8 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);colo
 .login-note{font-size:11.5px;color:var(--muted);text-align:center;max-width:240px;line-height:1.5}
 .login-error{display:none;width:100%;padding:10px 12px;border:1px solid rgba(217,83,79,.42);border-radius:10px;background:rgba(217,83,79,.1);color:#ffb0a8;font-size:12px;line-height:1.45}
 .login-error.visible{display:block}
+.login-profile-retry{width:100%;font-size:12px}
+.login-profile-retry[hidden]{display:none}
 .welcome-modal{position:relative;overflow:hidden;padding:0!important;background:linear-gradient(145deg,#181818 0%,#101010 68%,#211b0e 100%);border-color:rgba(212,175,55,.42);box-shadow:0 30px 100px rgba(0,0,0,.62)}
 .welcome-modal::before{content:'';position:absolute;width:280px;height:280px;right:-130px;top:-140px;border:1px solid rgba(212,175,55,.22);border-radius:50%;box-shadow:0 0 0 22px rgba(212,175,55,.04),0 0 0 44px rgba(212,175,55,.025);pointer-events:none}
 .welcome-hero{display:grid;grid-template-columns:112px 1fr;gap:20px;align-items:center;padding:30px 30px 26px;border-bottom:1px solid rgba(212,175,55,.16);background:radial-gradient(circle at 10% 0%,rgba(212,175,55,.22),transparent 46%)}
@@ -315,6 +317,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       </label>
       <button type="submit" class="btn gold login-submit" disabled>Launch system</button>
       <div id="login-error" class="login-error" role="alert" aria-live="polite"></div>
+      <button id="retry-profile-load" type="button" class="btn login-profile-retry" hidden>Retry profile connection</button>
     </form>
     <p class="login-note">Choose Brian or Evans, then enter the matching passphrase. Sessions are protected by a server-side login.</p>
   </div>
@@ -2871,15 +2874,17 @@ function initializeAccessFlow(){
   const passField = document.getElementById('login-pass');
   const submitButton = loginForm.querySelector('button[type="submit"]');
   const loginError = document.getElementById('login-error');
+  const retryProfileButton = document.getElementById('retry-profile-load');
   const fallbackProfiles = [
     {email:'brian', name:'Brian', role:'Owner'},
     {email:'evans', name:'Evans', role:'Manager'}
   ];
+  let profilesReady=false,profileRequest=null,profileRetryTimer=null,profileRetryDelay=2000;
   const showLoginError = message => {
     loginError.textContent = message;
     loginError.classList.toggle('visible', Boolean(message));
   };
-  const populateProfiles = profiles => {
+  const populateProfiles = (profiles,canSignIn=false) => {
     const available = Array.isArray(profiles) && profiles.length ? profiles : fallbackProfiles;
     userField.replaceChildren(new Option('Choose your profile…', ''));
     available.forEach(profile => {
@@ -2889,8 +2894,52 @@ function initializeAccessFlow(){
     const storedUser = localStorage.getItem('UW_ACCESS_USER');
     if (storedUser && available.some(profile => profile.email === storedUser)) userField.value = storedUser;
     userField.disabled = false;
-    submitButton.disabled = false;
+    profilesReady=canSignIn;
+    submitButton.disabled = !profilesReady;
   };
+  const scheduleProfileRetry = () => {
+    clearTimeout(profileRetryTimer);
+    profileRetryTimer=setTimeout(()=>{profileRetryTimer=null;loadProfiles();},profileRetryDelay);
+    profileRetryDelay=Math.min(profileRetryDelay*2,10000);
+  };
+  const loadProfiles = () => {
+    if(profileRequest)return profileRequest;
+    retryProfileButton.disabled=true;
+    retryProfileButton.textContent='Checking profile service…';
+    profileRequest=(async()=>{
+      try{
+        const response=await fetch('/api/auth/config',{headers:{Accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(8000)});
+        if(!response.ok)throw new Error(`Profile service returned ${response.status}`);
+        const config=await response.json();
+        if(typeof config.configured!=='boolean'||!Array.isArray(config.users))throw new Error('Profile service returned an invalid response');
+        const profiles=config.users.filter(profile=>profile&&typeof profile.email==='string'&&typeof profile.name==='string');
+        if(config.configured&&profiles.length){
+          populateProfiles(profiles,true);
+          showLoginError('');
+          retryProfileButton.hidden=true;
+          profileRetryDelay=2000;
+          clearTimeout(profileRetryTimer);profileRetryTimer=null;
+          return;
+        }
+        populateProfiles(fallbackProfiles,false);
+        showLoginError('Authorized profiles are not configured on the local server. The Brian and Evans profiles remain visible, but sign-in is unavailable until server authentication is configured.');
+        retryProfileButton.hidden=false;
+      }catch(error){
+        populateProfiles(fallbackProfiles,false);
+        showLoginError(`The local server/profile service is not ready (${error.message}). Brian and Evans remain visible. The page will retry automatically; you can also retry now.`);
+        retryProfileButton.hidden=false;
+        scheduleProfileRetry();
+      }finally{
+        profileRequest=null;
+        retryProfileButton.disabled=false;
+        retryProfileButton.textContent='Retry profile connection';
+      }
+    })();
+    return profileRequest;
+  };
+  retryProfileButton.addEventListener('click',()=>{
+    clearTimeout(profileRetryTimer);profileRetryTimer=null;profileRetryDelay=2000;return loadProfiles();
+  });
 
   const finishLaunch = () => {
     bootScreen.classList.add('exit');
@@ -2902,23 +2951,12 @@ function initializeAccessFlow(){
 
   setTimeout(finishLaunch, Math.max(0, minimumLaunchMs-(performance.now()-launchStartedAt)));
 
-  fetch('/api/auth/config',{headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)}).then(response=>{
-    if(!response.ok) throw new Error(`Profile service returned ${response.status}`);
-    return response.json();
-  }).then(config=>{
-    populateProfiles(config.users);
-    showLoginError('');
-    if(!config.configured){
-      showLoginError('Authorized accounts are not configured on the server. Set UW_AUTH_USERS_JSON, then reload.');
-    }
-  }).catch(error=>{
-    populateProfiles(fallbackProfiles);
-    showLoginError(`Could not load the profile list (${error.message}). The Brian and Evans profiles are shown; if sign-in fails, reload once the server is online.`);
-  });
+  loadProfiles();
 
   loginForm.addEventListener('submit', async event => {
     event.preventDefault();
     showLoginError('');
+    if(!profilesReady){showLoginError('Wait until the local profile service is ready, then retry profile loading before signing in.');retryProfileButton.hidden=false;return;}
     const userValue = userField.value.trim().toLowerCase();
     const passValue = passField.value;
     if(!userValue){showLoginError('Choose Brian or Evans before entering a password.');userField.focus();return;}
