@@ -24,6 +24,7 @@ test('source search extracts text from supported local documents and reports bou
   fs.mkdirSync(path.join(root, '2026', 'Invoices'), { recursive: true });
   fs.mkdirSync(path.join(root, 'Local Backups'), { recursive: true });
   fs.writeFileSync(path.join(root, '2026', 'Invoices', 'INV-1001.txt'), 'Invoice INV-1001\nCustomer: Acme Upholstery\nTotal: 1250.00');
+  fs.writeFileSync(path.join(root, '2026', 'Invoices', 'long-register.txt'), `LONG-REGISTER ${'detail '.repeat(1900)}`);
   fs.writeFileSync(path.join(root, '2026', 'Invoices', 'notes.csv'), 'Reference,Details\nINV-1001,Acme Upholstery total 1250.00');
   fs.writeFileSync(path.join(root, '2026', 'Invoices', 'credentials.txt'), 'INV-1001 secret credential content');
   fs.writeFileSync(path.join(root, '.hidden.txt'), 'INV-1001 hidden content');
@@ -48,6 +49,8 @@ test('source search extracts text from supported local documents and reports bou
   assert(!names.includes('.hidden.txt'));
   assert(!names.includes('old.txt'));
   assert(result.matches.find(file => file.name === 'INV-1001.txt').excerpt.includes('1250.00'));
+  const longRegister = await searchSourceFiles({ roots: [root], query: 'LONG-REGISTER' });
+  assert.equal(longRegister.matches[0].textTruncated, true, 'Search must disclose when a matching source document exceeds the extracted text limit.');
   assert(result.matches.find(file => file.name === 'INV-1001.png').filenameOnly);
   assert(result.matches.find(file => file.name === 'INV-1001.png').canReview);
   assert.match(result.matches.find(file => file.name === 'INV-1001.txt').sourceHash, /^[a-f0-9]{64}$/);

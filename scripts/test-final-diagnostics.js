@@ -39,7 +39,7 @@ test('editing dates enforces current document numbers while keeping historical i
 test('month-end export counts each invoice once and includes deposits in collected income',()=>{
   let output;
   const original={id:'A',date:'2026-10-07',paid:30,deposit:20,items:[{qty:2,price:100}]};
-  const c=vm.createContext({DB:{invoices:[original,{...original,sourceWorkbook:'second source'}],expenses:[{date:'2026-10-07',amount:10}]},monthOf:d=>d.slice(0,7),uniqueExpenses:e=>e,today:()=> '2026-10-07',toast:()=>{},Blob:class{constructor(parts){output=parts.join('');}},URL:{createObjectURL:()=> 'fixture'},document:{createElement:()=>({click:()=>{}})}});
+  const c=vm.createContext({DB:{invoices:[original,{...original,sourceWorkbook:'second source'}],expenses:[{date:'2026-10-07',amount:10}]},UW_FINANCIAL_COLLECTIONS:require('../public/js/financial-collections.js'),monthOf:d=>d.slice(0,7),uniqueExpenses:e=>e,today:()=> '2026-10-07',toast:()=>{},Blob:class{constructor(parts){output=parts.join('');}},URL:{createObjectURL:()=> 'fixture'},document:{createElement:()=>({click:()=>{}})}});
   vm.runInContext(html.slice(html.indexOf('const invTotal ='),html.indexOf('function toast(msg)')),c);
   vm.runInContext(html.slice(html.indexOf('function exportMonthSummary(){'),html.indexOf('/* ---------- GALLERY ---------- */')),c);
   c.exportMonthSummary();assert.equal(output,'Month,Invoiced,Collected,Expenses,Net\n2026-10,200,50,10,40\n');assert.equal(c.DB.invoices.length,2,'Read-only reporting must preserve source records');

@@ -48,8 +48,9 @@ function financialAuditWarningHtml(){
   const unpriced=uniqueInvoices().filter(invoice=>!(invoice.items||[]).length||(invoice.items||[]).some(line=>line.price==null||Number(line.price)<=0)).length;
   const ids=new Set(uniqueInvoices().map(invoice=>String(invoice.id)));
   const brokenJobs=(DB.jobs||[]).filter(job=>job.invoiceId&&!ids.has(String(job.invoiceId))).length;
-  if(!pendingPosted&&!unpriced&&!brokenJobs)return '';
-  return `<p role="status" style="color:var(--amber)"><b>Financial totals remain provisional.</b> ${pendingPosted} previously posted scan expense(s) lack explicit approval; ${unpriced} invoice(s) have missing or zero line prices; ${brokenJobs} job(s) have unresolved invoice links. Existing records are retained for source reconciliation. New scan expenses require approval before posting.</p>`;
+  const unlinked=UW_FINANCIAL_COLLECTIONS.summarize(DB,'',today());
+  if(!pendingPosted&&!unpriced&&!brokenJobs&&!unlinked.unlinkedReceiptCount)return '';
+  return `<p role="status" style="color:var(--amber)"><b>Financial totals remain provisional.</b> ${pendingPosted} previously posted scan expense(s) lack explicit approval; ${unpriced} invoice(s) have missing or zero line prices; ${brokenJobs} job(s) have unresolved invoice links; ${unlinked.unlinkedReceiptCount} receipt(s) totaling ${R(unlinked.unlinkedReceiptAmount)} are not linked to an invoice and are excluded from collected-income totals. Existing records are retained for source reconciliation. New scan expenses require approval before posting.</p>`;
 }
 function vDashboard(c){
   const mf=state.mfilter;
@@ -61,7 +62,8 @@ function vDashboard(c){
   const fnbAllocatedTotal=fnbSummary.unposted;
   const fnbExpenseOverlaps=crossRef.fnbExpenseMatchCount;
   const fnbExpenseOverlapTotal=crossRef.fnbExpenseMatchAmount;
-  const inc=inv.reduce((s,i)=>s+invoiceCollectedAmount(i),0);
+  const collections=UW_FINANCIAL_COLLECTIONS.summarize(DB,mf,today());
+  const inc=collections.total;
   const wageT=mf?0:employeeWagesTotal();
   const expT=exp.reduce((s,e)=>s+e.amount,0)+wageT;
   const out=inv.filter(i=>invBalance(i)>0.005);
@@ -74,11 +76,11 @@ function vDashboard(c){
   ${dailyActionsHtml()}
   <div class="toolbar">${monthFilterHtml('mf')}</div>
   <div class="cards">
-    <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${inv.length} unique invoice(s)${mf?' · '+mf:''} · paid + deposits</div></div>
+    <div class="card"><div class="lbl">Total Income (collected)</div><div class="val gold">${R(inc)}</div><div class="sub">${R(collections.receiptAmount)} from ${collections.receiptCount} linked receipt(s) by payment date · ${R(collections.invoiceFallbackAmount)} legacy/undated collection(s) by invoice date${mf?' · '+mf:''}</div></div>
     <div class="card"><div class="lbl">${mf?'Recorded expenses':'Recorded costs + payroll estimate'}</div><div class="val red">${R(expT)}</div><div class="sub">${exp.length} unique entries${mf?' · wages not date-scoped':''}${!mf?' + undated payroll obligation':''}</div></div>
     <div class="card"><div class="lbl">FNB reconciled spend</div><div class="val amber">${R(fnbSummary.total)}</div><div class="sub">${R(fnbSummary.posted)} posted once · ${R(fnbAllocatedTotal)} still unposted</div></div>
     <div class="card"><div class="lbl">Receipt/card cross-reference</div><div class="val">${crossRef.matchedScanCount}</div><div class="sub">${R(crossRef.matchedScanAmount)} receipt evidence matched · ${crossRef.reviewedScanCount} reviewed</div></div>
-    <div class="card"><div class="lbl">Income less recorded costs</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">${mf?'Invoice-date income − dated expenses':'Collected income − expenses − undated payroll estimate'}</div></div>
+    <div class="card"><div class="lbl">Income less recorded costs</div><div class="val ${inc-expT>=0?'green':'red'}">${R(inc-expT)}</div><div class="sub">${mf?'Receipt-date income + legacy collections − dated expenses':'Collected receipts + legacy collections − expenses − undated payroll estimate'}</div></div>
     <div class="card"><div class="lbl">Outstanding Invoices</div><div class="val" style="color:var(--amber)">${R(outT)}</div><div class="sub">${out.length} unpaid</div></div>
     <div class="card"><div class="lbl">Pending Quotes</div><div class="val">${qPend}</div><div class="sub">${uniqueQuotes().length} unique total quotes · ${DB.meta.importVersion?'historical data loaded locally':'local data'}</div></div>
     <div class="card"><div class="lbl">Scanned documents awaiting Gemini</div><div class="val">${(DB.scannedDocuments||[]).filter(d=>!isLegacyBulkScan(d)&&d.canonical&&!d.existingMatch&&!geminiReviewComplete(d)).length}</div><div class="sub">Failed and pending scans can be retried</div></div>

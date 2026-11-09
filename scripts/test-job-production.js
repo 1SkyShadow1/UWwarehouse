@@ -47,8 +47,8 @@ test('jobs resolve the quote through linked invoices and report quote arrival ag
   assert.equal(c.jobDaysSince('2026-10-22',new Date('2026-10-23T12:00:00.000Z')),1);
   assert.equal(c.jobDaysSince('unknown'),null);
 });
-test('production cards expose customer, intake, work lines, fabric, stage and invoice controls',()=>{
-  const quote={id:'BB26102301',date:'2026-10-23',customer:'A Customer',projectReference:'Lounge suite',workType:'Reupholster',colour:'Navy',status:'Draft',introduction:'Recover the two seat cushions.',items:[{item:'Fabric',fabricId:'fabric-1',desc:'Fabric - Harbour weave',qty:5,unit:'m'}]};
+test('production cards expose customer, intake, work lines, fabric, stage and invoice controls',async()=>{
+  const quote={id:'BB26102301',date:'2026-10-23',customer:'A Customer',contact:'A Contact',phone:'0770000000',projectReference:'Lounge suite',workType:'Reupholster',colour:'Navy',status:'Draft',introduction:'Recover the two seat cushions.',items:[{item:'Fabric',fabricId:'fabric-1',desc:'Fabric - Harbour weave',qty:5,unit:'m'}]};
   const db={quotes:[quote],invoices:[{id:'INV-1',generatedFromQuote:quote.id}],jobs:[{id:'JOB-BB26102301',quoteId:quote.id,invoiceId:'INV-1',customer:quote.customer,project:quote.projectReference,intakeDate:quote.date,stage:'Quoted',workType:quote.workType}]};
   const c=load(db);c.state={jobStage:'All'};c.uniqueQuotes=()=>db.quotes;c.R=value=>String(value);c.escapeHtml=value=>String(value).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');c.invBalance=()=>0;c.invTotal=()=>10;
   const html=fs.readFileSync(path.join(root,'public/index.html'),'utf8'),start=html.indexOf('function populateJobInvoiceOptions('),end=html.indexOf('function vPayables(',start);
@@ -57,11 +57,39 @@ test('production cards expose customer, intake, work lines, fabric, stage and in
   for(const text of ['A Customer','2026-10-23','Recover the two seat cushions.','Harbour weave','Time in production','Invoice link','Full job card','>Print</button>'])assert(target.innerHTML.includes(text),`missing job card detail: ${text}`);
   assert.match(target.innerHTML,/onchange="updateJobStage\(&quot;JOB-BB26102301&quot;/);
   assert.equal((target.innerHTML.match(/class="job-card"/g)||[]).length,1);
-  c.invTotal=()=>10;c.invBalance=()=>0;c.modal=markup=>{c.modalHtml=markup;};c.window={print(){c.printCount=(c.printCount||0)+1;}};
+  c.invTotal=()=>10;c.invBalance=()=>0;c.modal=markup=>{c.modalHtml=markup;};
+  let finishLogoDecode;const logoDecode=new Promise(resolve=>{finishLogoDecode=resolve;});
+  let currentLogo={complete:true,naturalWidth:859,decode:()=>logoDecode};
+  c.document={querySelector:selector=>selector==='#job-print-area .job-print-logo'?currentLogo:null};
+  c.window={print(){c.printCount=(c.printCount||0)+1;}};c.toast=message=>{c.lastToast=message;};c.console={warn(){}};c.setTimeout=setTimeout;c.clearTimeout=clearTimeout;
   c.viewJob('JOB-BB26102301',0,true);
-  assert.match(c.modalHtml,/<img class="job-print-logo" src="uw-document-logo\.png"/);
+  for(const text of ['A Contact','0770000000','Lounge suite','Recover the two seat cushions.','Harbour weave','Qty 5 m','Invoice total 10'])assert(c.modalHtml.includes(text),`printed job card is missing ${text}`);
+  assert.match(c.modalHtml,/<img class="job-print-logo" src="uw-document-logo\.png" alt="Upholstery Warehouse">/);
   assert.match(c.modalHtml,/Print \/ Save PDF/);
-  assert.equal(c.printCount,1,'The job-card print action should open the browser print dialog');
+  assert.match(c.modalHtml,/onclick="printJobCard\(\)"/);
+  assert.equal(c.printCount,undefined,'Quick print should wait for the logo to decode');
+  finishLogoDecode();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(c.printCount,1,'The job-card print action should open the browser print dialog after logo decoding');
+  const imageHandlers={};
+  currentLogo={complete:false,naturalWidth:0,addEventListener:(type,handler)=>{imageHandlers[type]=handler;},removeEventListener:(type,handler)=>{if(imageHandlers[type]===handler)delete imageHandlers[type];}};
+  const fallbackPrint=c.printJobCard();
+  assert.equal(c.printCount,1,'The fallback print path should wait for the logo load event');
+  currentLogo.complete=true;currentLogo.naturalWidth=859;imageHandlers.load();
+  await fallbackPrint;
+  assert.equal(c.printCount,2,'Browsers without image.decode should print after the logo loads');
+  currentLogo={complete:true,naturalWidth:0};
+  await c.printJobCard();
+  assert.equal(c.printCount,2,'A missing logo must not be sent to print as though the card were complete');
+  assert.match(c.lastToast,/logo could not be loaded/i);
+  const jobPrintCss=fs.readFileSync(path.join(root,'public/css/jobs.css'),'utf8'),documentCss=fs.readFileSync(path.join(root,'public/index.html'),'utf8'),documentStyles=fs.readFileSync(path.join(root,'public/css/documents.css'),'utf8'),serviceWorker=fs.readFileSync(path.join(root,'public/sw.js'),'utf8');
+  assert.match(jobPrintCss,/@media print\s*\{[\s\S]*?\.job-print-logo\{display:block/);
+  assert.match(documentCss,/#job-print-area,#job-print-area \*\{visibility:visible!important\}/);
+  assert.match(documentStyles,/\:not\(#print-area\)\:not\(#job-print-area\)\{display:none!important\}/,'The shared print rule must not hide the job-card print target');
+  assert.match(documentCss,/<link rel="stylesheet" href="css\/documents\.css\?v=65">/);
+  assert.match(serviceWorker,/const CACHE_NAME = 'uw-accounting-v79'/);
+  assert.match(serviceWorker,/\.\/css\/documents\.css\?v=65/);
+  assert(fs.statSync(path.join(root,'public/uw-document-logo.png')).size>0,'The company logo asset must exist');
 });
 test('new quote saving and quote lifecycle paths create or refresh a job',()=>{
   const editor=fs.readFileSync(path.join(root,'public/js/document-editor.js'),'utf8');

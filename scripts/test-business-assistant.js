@@ -30,6 +30,32 @@ test('evidence retrieval is bounded, does not expose secrets or binaries and inc
  const serialized=JSON.stringify(e);assert(!/SECRET|PRIVATE-CONTACT/.test(serialized));assert.equal(e.revision,7);assert(e.relevantRecords.some(v=>v.id==='I1'));assert(e.coverage.detailListsAreLimited);
  assert.equal(assistant.validDate('2026-02-30'),false);
 });
+test('local record search includes records outside the selected reporting period and answers from the full local ledger',()=>{
+ const db=fixture();db.invoices.push({id:'OLD-991',date:'2024-01-03',customer:'Northwind',items:[{qty:1,price:450}],paid:50});
+ const report=assistant.analyze(db,{asOf:'2026-10-12',period:'ytd:2026'});
+ assert(!report.invoices.some(row=>row.id==='OLD-991'),'period totals stay scoped to the selected year');
+ assert(assistant.search(report,'OLD-991').some(row=>row.id==='OLD-991'),'record lookup must search across the complete ledger');
+ assert.match(assistant.answer(report,'Show invoice OLD-991',money).text,/OLD-991/);
+});
+test('local assistant explains saved ledger changes with revision, actor, and before/after details',()=>{
+ const db=fixture();db.ledgerActivity=[{id:'change-1',revision:12,at:'2026-10-10T12:00:00.000Z',actor:'brian@example.test',changeCount:1,complete:true,changes:[{collection:'invoices',id:'I1',action:'updated',fields:[{field:'paid',before:30,after:80}]}]}];
+ db.ledgerActivityCoverage={trackingStartedAt:'2026-10-01T00:00:00.000Z',retainedFromRevision:8,retainedThroughRevision:12,retainedEvents:5,discardedEvents:7,discardedThroughRevision:7};
+ const report=assistant.analyze(db,{asOf:'2026-10-12',revision:12});
+ const response=assistant.answer(report,'What changed in the ledger?',money);
+ assert.match(response.text,/Revision 12/);assert.match(response.text,/brian@example\.test/);assert.match(response.text,/paid: 30 → 80/);assert.match(response.text,/7 older event\(s\) discarded through revision 7/);
+ assert.equal(report.ledgerActivity.length,1);
+ assert.equal(assistant.evidence(report,'What changed?').coverage.activityCoverage.discardedEvents,7);
+ const noMatch=assistant.answer(report,'Show changes to receipts',money);
+ assert.match(noMatch.text,/No matching saved change events were found in the retained history/);
+});
+test('ledger history view reports when older activity has been discarded',()=>{
+ const context=vm.createContext({escapeHtml:value=>String(value??'')});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/js/assistant.js'),'utf8'),context);
+ vm.runInContext("assistantState.tab='history'",context);
+ const html=context.assistantTabContent({ledgerActivity:[],ledgerActivityCoverage:{trackingStartedAt:'2026-10-01T00:00:00.000Z',retainedEvents:500,retainedFromRevision:12,retainedThroughRevision:511,discardedEvents:11,discardedThroughRevision:11}});
+ assert.match(html,/11 older event\(s\) discarded through revision 11/);
+ assert.match(html,/from revision 12 through revision 511/);
+});
 test('local answers cite evidence and disclose cash/profit limits and the 30% markup rule',()=>{
  const r=assistant.analyze(fixture(),{asOf:'2026-10-12',revision:3});
  assert.match(assistant.answer(r,'Who owes money?',money).text,/I1/);

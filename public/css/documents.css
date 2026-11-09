@@ -42,7 +42,7 @@
   html,body{background:#fff!important;color:#111!important;height:auto!important;min-height:0!important}
   body>:not(#modal-root){display:none!important}
   #modal-root,.modal-bg,.modal{position:static!important;display:block!important;overflow:visible!important;height:auto!important;max-height:none!important;min-height:0!important;max-width:none!important;width:auto!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important;background:#fff!important}
-  .modal>:not(.doc-viewer):not(#print-area){display:none!important}
+  .modal>:not(.doc-viewer):not(#print-area):not(#job-print-area){display:none!important}
   .doc-viewer{overflow:visible!important;height:auto!important;max-height:none!important;min-height:0!important;padding:0!important;border:0!important;background:#fff!important}
   #invoice-preview,#quote-preview,#print-area{position:static!important;inset:auto!important;transform:none!important}
   .quote-template{page:quote;padding:10mm}

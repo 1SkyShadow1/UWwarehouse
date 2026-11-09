@@ -277,8 +277,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .g-item .cap{padding:7px 9px;font-size:11px;color:var(--muted)}
 .doc-preview{background:#fff;color:#111;border-radius:8px;padding:28px;font-size:12.5px}
 </style>
-<link rel="stylesheet" href="css/documents.css?v=64">
-<link rel="stylesheet" href="css/assistant.css?v=64">
+<link rel="stylesheet" href="css/documents.css?v=65">
+<link rel="stylesheet" href="css/assistant.css?v=65">
 </head>
 <body>
 
@@ -370,12 +370,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="js/document-format.js?v=71"></script>
 <script src="js/document-views.js?v=71"></script>
 <script src="js/quotes.js?v=72"></script>
-<script src="js/dashboard.js?v=64"></script>
+<script src="js/financial-collections.js?v=1"></script>
+<script src="js/dashboard.js?v=65"></script>
 <script src="js/suppliers.js?v=64"></script>
-<script src="js/app-version.js?v=64"></script>
+<script src="js/app-version.js?v=66"></script>
 <script src="js/shared-sync.js?v=64"></script>
-<script src="js/assistant-core.js?v=64"></script>
-<script src="js/assistant.js?v=74"></script>
+<script src="js/assistant-core.js?v=66"></script>
+<script src="js/assistant.js?v=79"></script>
 <script src="js/local-recovery.js?v=64"></script>
 
 <script>
@@ -922,7 +923,9 @@ async function syncServerState(force=false,silent=false){
       }else if(!response.ok) throw await stateRequestError(response,'Server save failed');
       else {
         serverRevision=payload.revision;
-        sharedSyncBase=submitted;cacheSharedBaseline();DB.meta=DB.meta||{};DB.meta.syncRevision=serverRevision;DB.meta.syncPending=serverSyncPending;
+        if(Array.isArray(payload.data?.ledgerActivity))DB.ledgerActivity=payload.data.ledgerActivity;
+        if(payload.data?.ledgerActivityCoverage&&typeof payload.data.ledgerActivityCoverage==='object')DB.ledgerActivityCoverage=payload.data.ledgerActivityCoverage;
+        sharedSyncBase=JSON.parse(JSON.stringify({...submitted,...(Array.isArray(payload.data?.ledgerActivity)?{ledgerActivity:payload.data.ledgerActivity}:{}),...(payload.data?.ledgerActivityCoverage&&typeof payload.data.ledgerActivityCoverage==='object'?{ledgerActivityCoverage:payload.data.ledgerActivityCoverage}:{})}));cacheSharedBaseline();DB.meta=DB.meta||{};DB.meta.syncRevision=serverRevision;DB.meta.syncPending=serverSyncPending;
         writeLocalSnapshot(JSON.stringify(DB));sharedSyncStatus(serverSyncPending?'Saving shared workspace…':'Shared workspace up to date');
         serverSyncAvailable=true;
         serverSyncError=null;
@@ -2188,14 +2191,38 @@ function newJob(){
     <div class="fld"><label>Notes / work to complete</label><textarea id="j-notes"></textarea></div>
   </div><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveNewJob()">Save Job</button></div>`);
 }
+let jobPrintPending=false;
+async function printJobCard(){
+  if(jobPrintPending)return;
+  const logo=document.querySelector('#job-print-area .job-print-logo');
+  if(!logo){toast('Open a job card before printing.');return;}
+  jobPrintPending=true;
+  try{
+    if(!logo.complete)await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>finish(new Error('Logo loading timed out')),10000);
+      const finish=error=>{clearTimeout(timeout);logo.removeEventListener('load',loaded);logo.removeEventListener('error',failed);error?reject(error):resolve();};
+      const loaded=()=>finish();
+      const failed=()=>finish(new Error('Job-card logo could not be loaded'));
+      logo.addEventListener('load',loaded,{once:true});logo.addEventListener('error',failed,{once:true});
+      if(logo.complete)logo.naturalWidth?loaded():failed();
+    });
+    if(!logo.naturalWidth)throw new Error('Job-card logo could not be loaded');
+    if(typeof logo.decode==='function')await logo.decode();
+  }catch(error){
+    console.warn('Job-card print preparation failed',error);
+    toast('The job-card logo could not be loaded. Check the connection and try printing again.');
+    return;
+  }finally{jobPrintPending=false;}
+  window.print();
+}
 function viewJob(id,index=-1,printAfterOpen=false){
   const record=Number.isInteger(index)&&index>=0?DB.jobs[index]:(DB.jobs||[]).find(x=>String(x.id)===String(id));
   const quote=record?quoteForJob(record):uniqueQuotes().find(q=>String(q.id)===String(id));
   const job=record||(quote?{id:quote.id,quoteId:quote.id,customer:quote.customer,project:quote.projectReference||quote.project,stage:'Quoted',intakeDate:quote.date,workType:quote.workType,colour:quote.colour,notes:quote.introduction||quote.notes}:null);
   if(!job){toast('Job is no longer available. Refresh the job register.');return;}
   const inv=job.invoiceId?DB.invoices.find(item=>String(item.id)===String(job.invoiceId)):null,items=quote?.items||[],received=job.intakeDate||job.startDate||quote?.date||'',work=quote?.introduction||quote?.notes||job.notes||'No work specification recorded.',fabrics=jobFabricItems(quote);
-  modal(`<article class="job-detail" id="job-print-area"><img class="job-print-logo" src="uw-document-logo.png" alt="Upholstery Warehouse"><header><div><h2>${escapeHtml(job.id)}</h2><p>${escapeHtml(job.customer||quote?.customer||'Customer not recorded')}${job.project||quote?.projectReference?` · ${escapeHtml(job.project||quote.projectReference)}`:''}</p></div><span class="tag ${job.stage==='In production'?'quote':''}">${escapeHtml(job.stage||'Quoted')}</span></header><div class="job-detail-summary"><div><span>Quote / intake date</span><strong>${escapeHtml(received||'Not recorded')}</strong></div><div><span>Time in production</span><strong>${escapeHtml(formatJobProductionElapsed(job))}</strong></div><div><span>Production started</span><strong>${escapeHtml(job.productionStartedAt?.slice(0,10)||'Not started')}</strong></div><div><span>Work type</span><strong>${escapeHtml(job.workType||quote?.workType||'Not specified')}</strong></div></div><section><h3>Work to complete</h3><p>${escapeHtml(work)}</p>${items.length?`<div class="job-detail-lines">${items.map(item=>`<div class="job-detail-line"><div><strong>${escapeHtml(item.desc||'Work item')}</strong><small>${escapeHtml(item.item||'Work')} · Qty ${escapeHtml(item.qty??'—')} ${escapeHtml(item.unit||'')}</small></div>${item.item==='Fabric'||item.fabricId?`<div><span>Fabric</span><strong>${escapeHtml(jobFabricName(item))}</strong><small>${escapeHtml(item.colour||quote?.colour||'Colour not specified')}</small></div>`:''}</div>`).join('')}</div>`:'<p class="job-detail-empty">No quote line items are available for this job.</p>'}</section><section><h3>Customer and materials</h3><div class="job-detail-fields"><div><span>Customer</span><strong>${escapeHtml(job.customer||quote?.customer||'Not recorded')}</strong></div><div><span>Contact</span><strong>${escapeHtml(quote?.contact||'Not recorded')}</strong></div><div><span>Telephone</span><strong>${escapeHtml(quote?.phone||'Not recorded')}</strong></div><div><span>Fabric / colour</span><strong>${escapeHtml(fabrics.length?fabrics.map(item=>`${jobFabricName(item)}${item.colour||quote?.colour?' · '+(item.colour||quote.colour):''}`).join('; '):job.colour||quote?.colour||'Not specified')}</strong></div><div><span>Quote</span><strong>${escapeHtml(quote?.id||job.quoteId||'No linked quote')}</strong></div><div><span>Invoice</span><strong>${escapeHtml(inv?.id||'Not linked')}</strong></div></div></section><section><h3>Current production status</h3><p>${job.stage==='In production'?'Production is active':'Production time is tracked only while the stage is In production.'} ${job.productionStartedAt?`Started ${escapeHtml(job.productionStartedAt.slice(0,10))}.`:''}</p>${inv?`<p>Invoice total ${R(invTotal(inv))} · balance ${R(Math.max(0,invBalance(inv)))}</p>`:''}</section></article><div class="toolbar job-detail-actions" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close job card</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
-  if(printAfterOpen)window.print();
+  modal(`<article class="job-detail" id="job-print-area"><img class="job-print-logo" src="uw-document-logo.png" alt="Upholstery Warehouse"><header><div><h2>${escapeHtml(job.id)}</h2><p>${escapeHtml(job.customer||quote?.customer||'Customer not recorded')}${job.project||quote?.projectReference?` · ${escapeHtml(job.project||quote.projectReference)}`:''}</p></div><span class="tag ${job.stage==='In production'?'quote':''}">${escapeHtml(job.stage||'Quoted')}</span></header><div class="job-detail-summary"><div><span>Quote / intake date</span><strong>${escapeHtml(received||'Not recorded')}</strong></div><div><span>Time in production</span><strong>${escapeHtml(formatJobProductionElapsed(job))}</strong></div><div><span>Production started</span><strong>${escapeHtml(job.productionStartedAt?.slice(0,10)||'Not started')}</strong></div><div><span>Work type</span><strong>${escapeHtml(job.workType||quote?.workType||'Not specified')}</strong></div></div><section><h3>Work to complete</h3><p>${escapeHtml(work)}</p>${items.length?`<div class="job-detail-lines">${items.map(item=>`<div class="job-detail-line"><div><strong>${escapeHtml(item.desc||'Work item')}</strong><small>${escapeHtml(item.item||'Work')} · Qty ${escapeHtml(item.qty??'—')} ${escapeHtml(item.unit||'')}</small></div>${item.item==='Fabric'||item.fabricId?`<div><span>Fabric</span><strong>${escapeHtml(jobFabricName(item))}</strong><small>${escapeHtml(item.colour||quote?.colour||'Colour not specified')}</small></div>`:''}</div>`).join('')}</div>`:'<p class="job-detail-empty">No quote line items are available for this job.</p>'}</section><section><h3>Customer and materials</h3><div class="job-detail-fields"><div><span>Customer</span><strong>${escapeHtml(job.customer||quote?.customer||'Not recorded')}</strong></div><div><span>Contact</span><strong>${escapeHtml(quote?.contact||'Not recorded')}</strong></div><div><span>Telephone</span><strong>${escapeHtml(quote?.phone||'Not recorded')}</strong></div><div><span>Fabric / colour</span><strong>${escapeHtml(fabrics.length?fabrics.map(item=>`${jobFabricName(item)}${item.colour||quote?.colour?' · '+(item.colour||quote.colour):''}`).join('; '):job.colour||quote?.colour||'Not specified')}</strong></div><div><span>Quote</span><strong>${escapeHtml(quote?.id||job.quoteId||'No linked quote')}</strong></div><div><span>Invoice</span><strong>${escapeHtml(inv?.id||'Not linked')}</strong></div></div></section><section><h3>Current production status</h3><p>${job.stage==='In production'?'Production is active':'Production time is tracked only while the stage is In production.'} ${job.productionStartedAt?`Started ${escapeHtml(job.productionStartedAt.slice(0,10))}.`:''}</p>${inv?`<p>Invoice total ${R(invTotal(inv))} · balance ${R(Math.max(0,invBalance(inv)))}</p>`:''}</section></article><div class="toolbar job-detail-actions" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Close job card</button><button class="btn gold" onclick="printJobCard()">Print / Save PDF</button></div>`);
+  if(printAfterOpen)printJobCard();
 }
 function vPayables(c){
   normalizePayables(DB);
@@ -2690,7 +2717,7 @@ function buildAiContext(){
       receiptCount:(DB.receipts||[]).length,
       expenseCount:uniqueExpenses(DB.expenses).length,
       expenses:uniqueExpenses(DB.expenses).reduce((sum,e)=>sum+Number(e.amount||0),0),
-      income:uniqueInvoices().reduce((sum,i)=>sum+invoiceCollectedAmount(i),0),
+      income:UW_FINANCIAL_COLLECTIONS.summarize(DB,'',today()).total,
       outstanding:uniqueInvoices().reduce((sum,i)=>sum+Math.max(0,invBalance(i)),0)
     }
   };
@@ -2702,13 +2729,16 @@ function vReports(c){
   const invoices=uniqueInvoices();
   const start=new Date(2024,0,1), end=new Date(); end.setDate(1); const months=[];
   for(let d=new Date(start);d<=end;d.setMonth(d.getMonth()+1)) months.push(localCalendarDate(d).slice(0,7));
-  const rows=months.map(m=>{
-    const inc=invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invoiceCollectedAmount(i),0);
+  const reportThrough=localCalendarDate(end).slice(0,7);
+  const observedMonths=[...invoices.map(i=>monthOf(i.date)),...uniqueRecords(DB.receipts||[]).map(r=>monthOf(r.date)),...uniqueExpenses(DB.expenses).map(e=>monthOf(e.date))].filter(m=>/^\d{4}-\d{2}$/.test(m)&&m<=reportThrough);
+  const reportMonths=[...new Set([...months,...observedMonths])].sort();
+  const rows=reportMonths.map(m=>{
+    const inc=UW_FINANCIAL_COLLECTIONS.summarize(DB,m,today()).total;
     const qtot=invoices.filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
     const exp=uniqueExpenses(DB.expenses).filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
     return {m,inc,qtot,exp,net:inc-exp};
   });
-  const tI=invoices.reduce((s,i)=>s+invoiceCollectedAmount(i),0),tE=uniqueExpenses(DB.expenses).reduce((s,e)=>s+Number(e.amount||0),0)+employeeWagesTotal();
+  const tI=UW_FINANCIAL_COLLECTIONS.summarize(DB,'',today()).total,tE=uniqueExpenses(DB.expenses).reduce((s,e)=>s+Number(e.amount||0),0)+employeeWagesTotal();
   const y25=invoices.filter(i=>i.fy==='2025').reduce((s,i)=>s+invoiceCollectedAmount(i),0);
   const y26=invoices.filter(i=>i.fy==='2026').reduce((s,i)=>s+invoiceCollectedAmount(i),0);
   const maxN=Math.max(1,...rows.map(r=>Math.abs(r.net)));
@@ -2719,7 +2749,7 @@ function vReports(c){
     <div class="card"><div class="lbl">FY 2026 Collected</div><div class="val gold">${R(y26)}</div></div>
   </div>
   ${financialAuditWarningHtml()}
-  <p style="font-size:11px;color:var(--muted)">Collected income is grouped by invoice date, not the date each payment reached the bank. FY figures retain the imported financial-year labels. Monthly expense rows include dated salary payments. The undated payroll estimate is included once in the all-data costs and is not assigned to an arbitrary month. These figures do not certify cash flow or accounting profit.</p>
+  <p style="font-size:11px;color:var(--muted)">Receipt-backed collections are grouped by payment date. Paid/deposit amounts without matching receipts and receipts without dates fall back to invoice date; receipts without an invoice link are excluded and flagged. FY figures retain the imported financial-year labels. Monthly expense rows include dated salary payments. The undated payroll estimate is included once in the all-data costs and is not assigned to an arbitrary month. These figures do not certify cash flow or accounting profit.</p>
   <div class="panel"><h3>Monthly Income & Recorded Costs</h3><div style="overflow-x:auto"><table>
     <tr><th>Month</th><th class="num">Invoiced</th><th class="num">Collected</th><th class="num">Expenses</th><th class="num">Net</th><th>Trend</th></tr>
     ${rows.map(r=>`<tr><td>${r.m}</td><td class="num">${R(r.qtot)}</td><td class="num" style="color:var(--gold2)">${R(r.inc)}</td><td class="num" style="color:var(--red)">${R(r.exp)}</td>
@@ -2731,8 +2761,8 @@ function vReports(c){
 }
 function exportMonthSummary(){
   let csv='Month,Invoiced,Collected,Expenses,Net\n';
-  [...new Set(uniqueInvoices().map(i=>monthOf(i.date)).concat(uniqueExpenses(DB.expenses).map(e=>monthOf(e.date))))].sort().forEach(m=>{
-    const inc=uniqueInvoices().filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invoiceCollectedAmount(i),0);
+  [...new Set(uniqueInvoices().map(i=>monthOf(i.date)).concat(uniqueRecords(DB.receipts||[]).map(r=>monthOf(r.date)),uniqueExpenses(DB.expenses).map(e=>monthOf(e.date))))].filter(m=>/^\d{4}-\d{2}$/.test(m)).sort().forEach(m=>{
+    const inc=UW_FINANCIAL_COLLECTIONS.summarize(DB,m,today()).total;
     const q=uniqueInvoices().filter(i=>monthOf(i.date)===m).reduce((s,i)=>s+invTotal(i),0);
     const exp=uniqueExpenses(DB.expenses).filter(e=>monthOf(e.date)===m).reduce((s,e)=>s+e.amount,0);
     csv+=`${m},${q},${inc},${exp},${inc-exp}\n`;});

@@ -3,11 +3,15 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { PDFDocument } = require('pdf-lib');
 
 const startServer = async localOnly => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'uw-assistant-api-'));
   const sourceRoot = path.join(tempRoot, 'UW');
   fs.mkdirSync(sourceRoot, { recursive: true });
+  const additionalSourceRoot = path.join(tempRoot, 'UW-archive');
+  fs.mkdirSync(additionalSourceRoot, { recursive: true });
+  fs.writeFileSync(path.join(additionalSourceRoot, 'archived-ledger.txt'), 'Archived source UW-ARCHIVE-77 for Acme Upholstery.');
   const sourcePath = path.join(sourceRoot, 'invoice.txt');
   fs.writeFileSync(sourcePath, 'Acme Upholstery reference INV-1 Amount 125.00');
   const imagePath = path.join(sourceRoot, 'Receipt-INV-2.jpg');
@@ -51,7 +55,7 @@ const startServer = async localOnly => {
       UW_DATA_DIR: path.join(tempRoot, 'data'),
       UW_DOCUMENTS_DIR: path.join(tempRoot, 'data', 'documents'),
       UW_SOURCE_DIR: sourceRoot,
-      UW_SOURCE_DIRS: '',
+      UW_SOURCE_DIRS: additionalSourceRoot,
       UW_API_KEY: apiKey,
       UW_AUTH_USERS_JSON: '{}',
       SUPABASE_URL: '',
@@ -114,11 +118,82 @@ async function runLocalReviewFlow() {
     const state = await readJson(stateResponse);
     const initialData = {
       ...state.data,
-      expenses: [{ id: 'E-1', vendor: 'Acme Upholstery', amount: 100, date: '2026-01-01' }],
+      meta: { ...(state.data.meta || {}), privateApiKey: 'fixture-ledger-secret' },
+      expenses: [{ id: 'E-1', vendor: 'Acme Upholstery', amount: 100, date: '2026-01-01', apiKey: 'fixture-record-secret' }],
       invoices: [{ id: 'I-1', customer: 'Acme Upholstery', paid: 0 }],
+      scannedDocuments: [{ id: 'SCAN-1', merchant: 'Acme Upholstery', data: 'fixture-base64-document' }],
     };
     const saveResponse = await server.request('/api/state', { revision: state.revision, data: initialData }, 'PUT');
     assert.equal(saveResponse.status, 200, await saveResponse.text());
+    const savedSnapshot = await readJson(await server.request('/api/state', undefined, 'GET'));
+    assert.equal(savedSnapshot.data.ledgerActivity.length, 1, 'State writes must persist a server-generated ledger activity entry.');
+    assert.equal(savedSnapshot.data.ledgerActivity[0].actor, 'API key');
+    assert(savedSnapshot.data.ledgerActivity[0].changes.some(change => change.collection === 'expenses' && change.id === 'E-1'));
+    assert.equal(savedSnapshot.data.ledgerActivityCoverage.retainedEvents, 1, 'State writes expose server-generated retained-history coverage.');
+
+    const geminiChatResponse = await server.request('/api/ai/generate', {
+      provider: 'gemini',
+      prompt: 'What is the current state of expense E-1?',
+      sourceQuery: 'INV-1',
+      context: { relevantRecords: [], source: 'client context intentionally omits ledger rows' },
+    });
+    assert.equal(geminiChatResponse.status, 200);
+    const geminiChat = await readJson(geminiChatResponse);
+    assert.equal(geminiChat.ledgerRevision, savedSnapshot.revision);
+    const geminiBody = JSON.parse(fs.readFileSync(server.requestLogPath, 'utf8'));
+    const geminiSystemText = geminiBody.system_instruction.parts.map(part => part.text || '').join(' ');
+    assert(geminiSystemText.includes('"id":"E-1"') && geminiSystemText.includes('"amount":100'), 'Gemini must receive current server ledger rows even when the client sends only a summary.');
+    assert(geminiSystemText.includes('"actor":"API key"'), 'Gemini should receive the saved change history with its operator.');
+    assert(geminiSystemText.includes('client context intentionally omits ledger rows'), 'Question-specific app evidence remains supplemental context.');
+    assert(!geminiSystemText.includes('fixture-ledger-secret') && !geminiSystemText.includes('fixture-record-secret') && !geminiSystemText.includes('fixture-base64-document'), 'Gemini context must omit credentials and document binaries.');
+    assert(geminiSystemText.includes('Acme Upholstery reference INV-1 Amount 125.00'), 'Gemini chat should retrieve matching text from the configured source library without a separate compare flow.');
+    assert.equal(geminiChat.sourceCoverage.status, 'partial', 'Image-only sources that cannot be text-indexed must be disclosed as incomplete coverage.');
+    assert.equal(geminiChat.sourceCoverage.rootsSearched, 2, 'Chat search must cover every configured source root.');
+
+    const archivedSource = await server.request('/api/ai/generate', {
+      provider: 'gemini',
+      prompt: 'Find archived source UW-ARCHIVE-77.',
+      sourceQuery: 'UW-ARCHIVE-77',
+    });
+    assert.equal(archivedSource.status, 200);
+    const archivedSourceText = JSON.parse(fs.readFileSync(server.requestLogPath, 'utf8')).system_instruction.parts.map(part => part.text || '').join(' ');
+    assert(archivedSourceText.includes('Archived source UW-ARCHIVE-77 for Acme Upholstery.'), 'The assistant must search additional configured source roots, not only the primary folder.');
+
+    const imageChat = await server.request('/api/ai/generate', {
+      provider: 'gemini',
+      prompt: 'Read the matching receipt image INV-2.',
+      sourceQuery: 'INV-2',
+    });
+    assert.equal(imageChat.status, 200);
+    const imageChatPayload = await readJson(imageChat);
+    const imageChatBody = JSON.parse(fs.readFileSync(server.requestLogPath, 'utf8'));
+    const imagePart = imageChatBody.contents[0].parts.find(part => part.inline_data);
+    assert.equal(imagePart.inline_data.mime_type, 'image/jpeg');
+    assert.equal(imagePart.inline_data.data, server.imageBytes.toString('base64'));
+    assert.equal(imageChatPayload.sourceCoverage.inlineDocumentsIncluded[0], 'Receipt-INV-2.jpg');
+
+    const managedPdf = await PDFDocument.create();
+    managedPdf.addPage().drawText('Managed source INV-3 Acme Upholstery amount 245.00');
+    const managedPdfBytes = await managedPdf.save();
+    const uploadForm = new FormData();
+    uploadForm.append('file', new Blob([managedPdfBytes], { type: 'application/pdf' }), 'Managed-INV-3.pdf');
+    const uploadResponse = await fetch(`${server.base}/api/documents`, {
+      method: 'POST',
+      headers: { 'x-api-key': 'assistant-source-test-key' },
+      body: uploadForm,
+    });
+    assert.equal(uploadResponse.status, 201, await uploadResponse.text());
+    const managedChatResponse = await server.request('/api/ai/generate', {
+      provider: 'gemini',
+      prompt: 'Find the managed upload INV-3.',
+      sourceQuery: 'INV-3',
+    });
+    assert.equal(managedChatResponse.status, 200);
+    const managedChat = await readJson(managedChatResponse);
+    const managedPrompt = JSON.parse(fs.readFileSync(server.requestLogPath, 'utf8')).system_instruction.parts.map(part => part.text || '').join(' ');
+    assert(managedPrompt.includes('Managed source INV-3 Acme Upholstery amount 245.00'), 'Gemini chat should search text in uploaded managed documents.');
+    assert.equal(managedChat.sourceCoverage.managedFilesFound, 1);
+    assert.equal(managedChat.sourceCoverage.managedFilesSearched, 1);
 
     const searchResponse = await server.request('/api/ai/source-search', { query: 'INV-1' });
     assert.equal(searchResponse.status, 200);
@@ -210,6 +285,52 @@ async function runLocalReviewFlow() {
     assert.equal(staleResponse.status, 409, 'Hash verification must catch same-size edits even when the timestamp is restored.');
     const stillUnchanged = await readJson(await server.request('/api/state', undefined, 'GET'));
     assert.equal(stillUnchanged.data.expenses[0].amount, 101);
+
+    const secondUpdateData = {
+      ...stillUnchanged.data,
+      ledgerActivity: [{ id: 'client-forged-activity' }],
+      expenses: stillUnchanged.data.expenses.map(record => record.id === 'E-1' ? { ...record, amount: 102 } : record),
+    };
+    const secondUpdate = await server.request('/api/state', { revision: stillUnchanged.revision, data: secondUpdateData }, 'PUT');
+    assert.equal(secondUpdate.status, 200);
+    const secondSnapshot = await readJson(secondUpdate);
+    assert.equal(secondSnapshot.data.ledgerActivity.length, stillUnchanged.data.ledgerActivity.length + 1, 'Client snapshots cannot replace or clear server-owned activity history.');
+    assert.deepEqual(secondSnapshot.data.ledgerActivity.slice(0, -1), stillUnchanged.data.ledgerActivity, 'All prior server-owned activity must be preserved.');
+    assert.equal(secondSnapshot.data.ledgerActivity.at(-1).revision, secondSnapshot.revision);
+    assert.equal(secondSnapshot.data.ledgerActivityCoverage.retainedEvents, secondSnapshot.data.ledgerActivity.length);
+    const expenseChange = secondSnapshot.data.ledgerActivity.at(-1).changes.find(change => change.collection === 'expenses' && change.id === 'E-1');
+    assert(expenseChange.fields.some(field => field.field === 'amount' && field.before === 101 && field.after === 102));
+    const updatedGemini = await server.request('/api/ai/generate', {
+      provider: 'gemini',
+      prompt: 'What changed since the prior save?',
+      context: { relevantRecords: [] },
+    });
+    assert.equal(updatedGemini.status, 200);
+    const updatedGeminiBody = JSON.parse(fs.readFileSync(server.requestLogPath, 'utf8'));
+    const updatedGeminiSystem = updatedGeminiBody.system_instruction.parts.map(part => part.text || '').join(' ');
+    assert(updatedGeminiSystem.includes('"amount":102') && updatedGeminiSystem.includes('"before":101') && updatedGeminiSystem.includes('"after":102'));
+
+    const beforeLargeSave = await readJson(await server.request('/api/state', undefined, 'GET'));
+    const largeData = {
+      ...beforeLargeSave.data,
+      archiveRecords: Array.from({ length: 4 }, (_, index) => ({
+        id: `ARCHIVE-${index + 1}`,
+        description: 'large archival record '.repeat(23000),
+      })),
+    };
+    const largeSave = await server.request('/api/state', { revision: beforeLargeSave.revision, data: largeData }, 'PUT');
+    assert.equal(largeSave.status, 200, await largeSave.text());
+    const oversizedLedgerChat = await readJson(await server.request('/api/ai/generate', {
+      provider: 'gemini',
+      prompt: 'Find the exact archival record ARCHIVE-3.',
+      sourceQuery: 'ARCHIVE-3',
+    }));
+    assert.equal(oversizedLedgerChat.ledgerCoverage.mode, 'query-scoped');
+    assert.equal(oversizedLedgerChat.ledgerCoverage.recordsReturned, 1);
+    assert(oversizedLedgerChat.ledgerCoverage.totalRecords >= 4);
+    const oversizedSystem = JSON.parse(fs.readFileSync(server.requestLogPath, 'utf8')).system_instruction.parts.map(part => part.text || '').join(' ');
+    assert(oversizedSystem.includes('"mode":"query-scoped"') && oversizedSystem.includes('"id":"ARCHIVE-3"'));
+    assert(!oversizedSystem.includes('"id":"ARCHIVE-1"'), 'Large ledgers should send matching rows rather than unrelated full records.');
   } finally {
     await stopServer(server);
   }
@@ -228,7 +349,7 @@ async function runHostedGuard() {
 (async () => {
   await runLocalReviewFlow();
   await runHostedGuard();
-  console.log('Assistant source review forwards selected evidence only, validates suggestions, and rejects stale sources without writing state.');
+  console.log('Assistant chat searches all configured local source roots, retrieves matching scans and ledger records, and retains review-first source updates.');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
