@@ -23,6 +23,7 @@ test('PDF quote omits internal revision numbers and prints only selling amounts'
   await loadRenderer(CapturedPdf)({kind:'quote',record});
   const output=rendered.join('\n');
   assert.match(output,/Quote number: QA-QUOTE/);assert.doesNotMatch(output,/Revision\s*3|\br3\b/);assert.match(output,/valid until 2026-11-19/);
+  assert.match(output,/collection and delivery within a 5km radius/);assert.doesNotMatch(output,/10km radius/);
   assert(!output.includes('valid for 30 days'));
   assert(!output.includes('987654321')&&!output.includes('54321')&&!/unitCost|markupPercent/.test(output));
   assert(output.includes(Number(318.75).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})));
@@ -39,6 +40,7 @@ test('quote revisions stay visible in the system but are absent from the print p
   context.viewQuote(record.id);
   const previewHtml=html;
   assert.doesNotMatch(previewHtml,/Revision\s*3|\br3\b/);
+  assert.match(previewHtml,/collection and delivery within a 5km radius/);assert.doesNotMatch(previewHtml,/10km radius/);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'..','public','js','quotes.js'),'utf8'),context);
   const listPane={innerHTML:''};
   context.vQuotes(listPane);
