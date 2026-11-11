@@ -85,16 +85,24 @@ test('document register renders managed scans without source paths and approves 
 
 test('payments and receipts reject overpayment and preserve prior deposits',()=>{
   const invoice={id:'INV',customer:'Client',items:[{qty:1,price:100}],paid:10,deposit:20,status:'Pending'};
-  const inputs={'p-amt':{value:'70.01'},'p-date':{value:'2026-10-23'},'p-prefix':{value:'BB'},'p-m':{value:'EFT'},'r-date':{value:'2026-10-23'},'r-no':{value:'BB2026/10/2301'},'r-cust':{value:'Client'},'r-inv':{value:'INV'},'r-amt':{value:'70.01'},'r-m':{value:'EFT'}};
-  const messages=[];let saves=0;
-  const c=vm.createContext({DB:{invoices:[invoice],receipts:[],counters:{receipt:0},meta:{fy:'2026'}},document:{getElementById:id=>inputs[id]},invTotal:item=>item.items.reduce((sum,line)=>sum+line.qty*line.price,0),invBalance:item=>item.items.reduce((sum,line)=>sum+line.qty*line.price,0)-(item.paid||0)-(item.deposit||0),nextReceiptNo:()=> 'BB2026/10/2302',validReceiptNo:()=>true,save:()=>{saves++;return true;},closeModal:()=>{},toast:message=>messages.push(message),render:()=>{}});
-  vm.runInContext(html.slice(html.indexOf('function savePay('),html.indexOf('function viewInvoiceLegacy(')),c);
-  vm.runInContext(html.slice(html.indexOf('function saveReceipt('),html.indexOf('function viewReceipt(')),c);
+  const inputs={'p-amt':{value:'70.01'},'p-basis':{value:'exclusive',dataset:{basis:'exclusive'}},'p-vat-summary':{textContent:''},'p-date':{value:'2026-10-23'},'p-prefix':{value:'BB'},'p-m':{value:'EFT'},'r-date':{value:'2026-10-23'},'r-no':{value:'BB2026/10/2301'},'r-cust':{value:'Client'},'r-inv':{value:'INV'},'r-amt':{value:'70.01'},'r-m':{value:'EFT'}};
+  const messages=[];let saves=0,modalMarkup='',receiptNoCalls=0;
+  const c=vm.createContext({DB:{invoices:[invoice],receipts:[],counters:{receipt:0},meta:{fy:'2026'}},document:{getElementById:id=>inputs[id]},invTotal:item=>item.items.reduce((sum,line)=>sum+line.qty*line.price,0),invBalance:item=>item.items.reduce((sum,line)=>sum+line.qty*line.price,0)-(item.paid||0)-(item.deposit||0),nextReceiptNo:()=>`BB2026/10/${String(++receiptNoCalls+1).padStart(2,'0')}`,validReceiptNo:()=>true,R:value=>`R ${Number(value||0).toFixed(2)}`,today:()=> '2026-10-23',modal:markup=>{modalMarkup=markup;},save:()=>{saves++;return true;},closeModal:()=>{},toast:message=>messages.push(message),render:()=>{}});
+  vm.runInContext(html.slice(html.indexOf('function paymentAmountDetails('),html.indexOf('function viewInvoiceLegacy(')),c);
+  vm.runInContext(html.slice(html.indexOf('function saveReceipt('),html.indexOf('/* ---------- EXPENSES ---------- */')),c);
+  c.recordPayment('INV');assert.match(modalMarkup,/Incl VAT \(\+15%\)/);assert.match(modalMarkup,/Amount basis/);
   c.savePay('INV');assert.equal(invoice.paid,10);assert.equal(c.DB.receipts.length,0);assert.match(messages.at(-1),/no more than the invoice balance/);
-  inputs['p-amt'].value='70';c.savePay('INV');assert.equal(invoice.paid,80);assert.equal(invoice.deposit,20);assert.equal(c.DB.receipts.length,1);assert.equal(saves,1);
-  invoice.paid=10;invoice.deposit=20;inputs['r-amt'].value='70.01';c.saveReceipt();assert.equal(invoice.paid,10);assert.equal(c.DB.receipts.length,1);
-  inputs['r-amt'].value='70';c.saveReceipt();assert.equal(invoice.paid,80);assert.equal(invoice.deposit,20);assert.equal(c.DB.receipts.length,2);
-  invoice.paid=10;invoice.deposit=20;invoice.status='Pending';c.DB.receipts=[];c.DB.counters.receipt=0;c.save=()=>false;inputs['p-amt'].value='70';c.savePay('INV');
+  inputs['p-amt'].value='70';c.savePay('INV');assert.equal(invoice.paid,80);assert.equal(invoice.deposit,20);assert.equal(c.DB.receipts.length,1);assert.equal(c.DB.receipts[0].invoiceAmount,70);assert.equal(c.DB.receipts[0].vatAmount,0);assert.equal(saves,1);
+  const inclusive={id:'INC',customer:'Client',items:[{qty:1,price:100}],paid:0,deposit:0,status:'Pending'};c.DB.invoices.push(inclusive);
+  c.recordPayment('INC');inputs['p-amt'].value='100';inputs['p-basis'].value='inclusive';c.updatePaymentAmount('INC',true);
+  assert.equal(inputs['p-amt'].value,'115.00');assert.match(inputs['p-vat-summary'].textContent,/VAT on this payment: R 15\.00/);
+  inputs['p-amt'].value='115.01';c.savePay('INC');assert.equal(inclusive.paid,0);assert.equal(c.DB.receipts.length,1);
+  inputs['p-amt'].value='115.00';c.savePay('INC');assert.equal(inclusive.paid,100);assert.equal(inclusive.status,'Paid');
+  assert.equal(c.DB.receipts[1].amount,115);assert.equal(c.DB.receipts[1].invoiceAmount,100);assert.equal(c.DB.receipts[1].vatAmount,15);assert.equal(c.DB.receipts[1].paymentBasis,'inclusive');
+  c.viewReceipt(c.DB.receipts[1].receiptNo);assert.match(modalMarkup,/VAT included \(15%\): R 15\.00/);
+  invoice.paid=10;invoice.deposit=20;inputs['r-amt'].value='70.01';c.saveReceipt();assert.equal(invoice.paid,10);assert.equal(c.DB.receipts.length,2);
+  inputs['r-amt'].value='70';c.saveReceipt();assert.equal(invoice.paid,80);assert.equal(invoice.deposit,20);assert.equal(c.DB.receipts.length,3);
+  invoice.paid=10;invoice.deposit=20;invoice.status='Pending';c.DB.receipts=[];c.DB.counters.receipt=0;c.save=()=>false;inputs['p-basis'].value='exclusive';inputs['p-basis'].dataset.basis='exclusive';inputs['p-amt'].value='70';c.savePay('INV');
   assert.equal(invoice.paid,10);assert.equal(invoice.status,'Pending');assert.equal(c.DB.receipts.length,0);assert.equal(c.DB.counters.receipt,0);
   inputs['r-amt'].value='70';c.saveReceipt();assert.equal(invoice.paid,10);assert.equal(c.DB.receipts.length,0);assert.equal(c.DB.counters.receipt,0);
 });
@@ -109,12 +117,14 @@ test('quote deletion cascades atomically only for unpaid quotes with unstarted j
 });
 
 test('invoice deletion guards linked financial records and receipt deletion reverses payment',()=>{
-  const invoice={id:'I1',items:[{qty:1,price:100}],paid:30,deposit:10,status:'Pending'},receipt={id:1,receiptNo:'R1',invoiceId:'I1',amount:20};
+  const invoice={id:'I1',items:[{qty:1,price:100}],paid:30,deposit:10,status:'Pending'},receipt={id:1,receiptNo:'R1',invoiceId:'I1',amount:23,invoiceAmount:20,vatAmount:3,paymentBasis:'inclusive'};
   let confirms=0,saves=0;const messages=[];
   const c=vm.createContext({DB:{quotes:[],invoices:[invoice],jobs:[],receipts:[receipt]},invoiceCollectedAmount:item=>(item.paid||0)+(item.deposit||0),invBalance:item=>item.items[0].qty*item.items[0].price-(item.paid||0)-(item.deposit||0),R:value=>String(value),confirm:()=>{confirms++;return true;},save:()=>{saves++;return true;},render:()=>{},toast:message=>messages.push(message)});
   vm.runInContext(html.slice(html.indexOf('function quoteDeletionLinks('),html.indexOf('/* ---------- RECEIPTS ---------- */')),c);
   c.del('invoices','I1');assert.equal(c.DB.invoices.length,1);assert.equal(confirms,0);assert.equal(saves,0);assert.match(messages.at(-1),/payment or receipt history/);
   c.deleteReceipt(1);assert.equal(c.DB.receipts.length,0);assert.equal(invoice.paid,10);assert.equal(invoice.deposit,10);assert.equal(c.invBalance(invoice),80);assert.equal(saves,1);
+  invoice.paid=15;c.DB.receipts.push({id:2,receiptNo:'R2',invoiceId:'I1',amount:5});c.deleteReceipt(2);
+  assert.equal(invoice.paid,10);assert.equal(c.invBalance(invoice),80);assert.equal(saves,2);
 });
 
 test('skipping production stages requires confirmation and every change is audited',()=>{

@@ -55,6 +55,18 @@ test('receipt amounts above invoice aggregates are counted once on payment date'
   assert.equal(collections.summarize(db,'2026-10','2026-11-03').total,0);
 });
 
+test('VAT-inclusive receipts reconcile against ex-VAT invoice payments and preserve gross collections',()=>{
+  const db={
+    invoices:[{id:'VAT',date:'2026-10-30',paid:80,deposit:20}],
+    receipts:[{id:1,invoiceId:'VAT',date:'2026-11-01',amount:92,invoiceAmount:80,vatAmount:12,paymentBasis:'inclusive'}],
+  };
+  const october=collections.summarize(db,'2026-10','2026-11-03');
+  const november=collections.summarize(db,'2026-11','2026-11-03');
+  assert.equal(october.total,20);
+  assert.equal(november.total,92);
+  assert.equal(collections.summarize(db,'','2026-11-03').total,112);
+});
+
 test('YTD excludes future receipts and duplicate invoice/receipt IDs',()=>{
   const duplicateInvoice={id:'I',date:'2026-01-01',paid:200};
   const db={

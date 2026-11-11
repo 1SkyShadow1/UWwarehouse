@@ -32,11 +32,12 @@
     for(const receipt of receipts){
       const amount=number(receipt.amount);
       if(amount<=0)continue;
+      const appliedAmount=Math.max(0,number(receipt.invoiceAmount??receipt.amount));
       const invoiceId=String(receipt.invoiceId??''),invoice=invoiceById.get(invoiceId);
       if(!invoice){
         unlinkedReceiptAmount+=amount;unlinkedReceiptCount++;continue;
       }
-      receiptTotals.set(invoiceId,(receiptTotals.get(invoiceId)||0)+amount);
+      receiptTotals.set(invoiceId,(receiptTotals.get(invoiceId)||0)+appliedAmount);
       const date=String(receipt.date||'').slice(0,10);
       if(validDate(date)){
         if(matchesPeriod(date,period,asOf)){receiptAmount+=amount;receiptCount++;}

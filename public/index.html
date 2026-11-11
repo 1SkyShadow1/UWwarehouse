@@ -370,7 +370,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <script src="js/document-format.js?v=71"></script>
 <script src="js/document-views.js?v=73"></script>
 <script src="js/quotes.js?v=73"></script>
-<script src="js/financial-collections.js?v=1"></script>
+<script src="js/financial-collections.js?v=2"></script>
 <script src="js/dashboard.js?v=65"></script>
 <script src="js/suppliers.js?v=64"></script>
 <script src="js/app-version.js?v=66"></script>
@@ -1791,31 +1791,69 @@ function setFnbTransactionCategory(statementId,rowId,category){
   transaction.allocationNeedsReview=!category;
   save();render();
 }
+function paymentAmountDetails(amount,basis){
+  const received=Number(amount),rate=basis==='inclusive'?1.15:1;
+  const invoiceAmount=Math.round((received/rate+Number.EPSILON)*100)/100;
+  return {invoiceAmount,vatAmount:Math.max(0,Math.round((received-invoiceAmount+Number.EPSILON)*100)/100)};
+}
+function paymentAmountForInvoiceAmount(amount,basis){
+  const rate=basis==='inclusive'?1.15:1;
+  return Math.round((Number(amount)*rate+Number.EPSILON)*100)/100;
+}
+function updatePaymentAmount(id,convertBasis=false){
+  const invoice=(DB.invoices||[]).find(item=>String(item.id)===String(id));
+  const amount=document.getElementById('p-amt'),basis=document.getElementById('p-basis');
+  if(!invoice||!amount||!basis)return;
+  const previousBasis=basis.dataset.basis||basis.value;
+  if(convertBasis&&previousBasis!==basis.value){
+    const current=Number(amount.value);
+    if(Number.isFinite(current)&&current>=0){
+      const applied=paymentAmountDetails(current,previousBasis).invoiceAmount;
+      amount.value=paymentAmountForInvoiceAmount(applied,basis.value).toFixed(2);
+    }
+  }
+  basis.dataset.basis=basis.value;
+  const summary=document.getElementById('p-vat-summary');
+  if(!summary)return;
+  const received=Number(amount.value);
+  const details=paymentAmountDetails(received,basis.value);
+  const balance=Math.max(0,invBalance(invoice));
+  const expected=paymentAmountForInvoiceAmount(balance,basis.value);
+  summary.textContent=basis.value==='inclusive'
+    ? `Ex-VAT balance: ${R(balance)}. Amount due including 15% VAT: ${R(expected)}. VAT on this payment: ${Number.isFinite(received)?R(details.vatAmount):R(0)}.`
+    : `Ex-VAT balance: ${R(balance)}. Amount due: ${R(expected)}.`;
+}
 function recordPayment(id){
   const inv=DB.invoices.find(i=>i.id===id);if(!inv){toast('This invoice is no longer available');return;}const bal=invBalance(inv);
   modal(`<h3>Record Payment — ${id}</h3>
   <div class="frm">
     <div class="fld"><label>Date</label><input id="p-date" type="date" value="${today()}"></div>
     <div class="fld"><label>Receipt initials</label><select id="p-prefix"><option value="BB">BB</option><option value="SS">SS</option></select></div>
-    <div class="fld"><label>Amount (balance ${R(bal)})</label><input id="p-amt" type="number" value="${bal.toFixed(2)}"></div>
+    <div class="fld"><label for="p-basis">Amount basis</label><select id="p-basis" data-basis="exclusive" onchange="updatePaymentAmount('${id}',true)" aria-describedby="p-vat-summary"><option value="exclusive">Ex VAT</option><option value="inclusive">Incl VAT (+15%)</option></select></div>
+    <div class="fld"><label for="p-amt">Amount received</label><input id="p-amt" type="number" min="0.01" step="0.01" value="${Math.max(0,bal).toFixed(2)}" oninput="updatePaymentAmount('${id}')"></div>
     <div class="fld"><label>Method</label><select id="p-m"><option>EFT</option><option>Cash</option><option>Card</option></select></div>
   </div>
+  <p id="p-vat-summary" role="status" style="font-size:11px;color:var(--muted)">Ex-VAT balance: ${R(Math.max(0,bal))}. Amount due: ${R(Math.max(0,bal))}.</p>
   <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>
   <button class="btn gold" onclick="savePay('${id}')">Save Payment</button></div>`);
+  updatePaymentAmount(id);
 }
 function savePay(id){
   const inv=DB.invoices.find(i=>i.id===id);
   if(!inv){toast('This invoice is no longer available');return;}
   const amt=Number(document.getElementById('p-amt').value);
   const date=document.getElementById('p-date').value;
+  const basis=document.getElementById('p-basis').value;
   const balance=invBalance(inv);
-  if(!Number.isFinite(amt)||amt<=0||Math.round(amt*100)>Math.round(balance*100)){toast('Enter a payment greater than zero and no more than the invoice balance');return;}
+  if(!['exclusive','inclusive'].includes(basis)){toast('Choose Ex VAT or Incl VAT for this payment');return;}
+  const payment=paymentAmountDetails(amt,basis);
+  if(!Number.isFinite(amt)||amt<=0||!Number.isFinite(payment.invoiceAmount)||Math.round(payment.invoiceAmount*100)>Math.round(balance*100)){toast('Enter a payment greater than zero and no more than the invoice balance for the selected VAT basis');return;}
   if(!date){toast('Enter the payment date');return;}
   const receiptNo=nextReceiptNo(date,document.getElementById('p-prefix').value);
   const previousPaid=inv.paid,previousStatus=inv.status,previousReceiptCounter=DB.counters.receipt;
-  inv.paid=(inv.paid||0)+amt;
+  inv.paid=(inv.paid||0)+payment.invoiceAmount;
   inv.status=invBalance(inv)<=0.005?'Paid':'Pending';
-  DB.receipts.push({id:++DB.counters.receipt,receiptNo,date,customer:inv.customer,invoiceId:id,amount:amt,method:document.getElementById('p-m').value,fy:DB.meta.fy});
+  DB.receipts.push({id:++DB.counters.receipt,receiptNo,date,customer:inv.customer,invoiceId:id,amount:amt,invoiceAmount:payment.invoiceAmount,vatAmount:payment.vatAmount,paymentBasis:basis,method:document.getElementById('p-m').value,fy:DB.meta.fy});
   if(!save()){if(previousPaid===undefined)delete inv.paid;else inv.paid=previousPaid;if(previousStatus===undefined)delete inv.status;else inv.status=previousStatus;DB.receipts.pop();DB.counters.receipt=previousReceiptCounter;return;}
   closeModal();toast('Payment recorded');render();
 }
@@ -1874,11 +1912,11 @@ function deleteQuoteCascade(id){
 function deleteReceipt(id){
   const matches=(DB.receipts||[]).filter(receipt=>String(receipt.id)===String(id));
   if(matches.length!==1){toast(matches.length?'Receipt ID is ambiguous; reconcile it before deleting':'Receipt is no longer available');return;}
-  const receipt=matches[0],invoice=(DB.invoices||[]).find(item=>String(item.id)===String(receipt.invoiceId)),amount=Number(receipt.amount)||0;
-  if(invoice&&amount>Number(invoice.paid||0)+0.005){toast('Receipt amount exceeds the invoice payment total; reconcile the ledger before deleting');return;}
-  if(!confirm(`Delete receipt ${receipt.receiptNo||receipt.id} and reverse its ${R(amount)} payment from the linked invoice?`))return;
+  const receipt=matches[0],invoice=(DB.invoices||[]).find(item=>String(item.id)===String(receipt.invoiceId)),amount=Number(receipt.amount)||0,invoiceAmount=Number(receipt.invoiceAmount??receipt.amount)||0;
+  if(invoice&&invoiceAmount>Number(invoice.paid||0)+0.005){toast('Receipt invoice amount exceeds the recorded invoice payments; reconcile the ledger before deleting');return;}
+  if(!confirm(`Delete receipt ${receipt.receiptNo||receipt.id} for ${R(amount)} and reverse its ${R(invoiceAmount)} invoice-balance application?`))return;
   const previousPaid=invoice?.paid,previousStatus=invoice?.status,previousReceipts=DB.receipts;
-  if(invoice){invoice.paid=Math.max(0,Number(invoice.paid||0)-amount);invoice.status=invBalance(invoice)<=0.005?'Paid':(invoice.status==='Overdue'?'Overdue':'Pending');}
+  if(invoice){invoice.paid=Math.max(0,Number(invoice.paid||0)-invoiceAmount);invoice.status=invBalance(invoice)<=0.005?'Paid':(invoice.status==='Overdue'?'Overdue':'Pending');}
   DB.receipts=DB.receipts.filter(item=>item!==receipt);
   if(!save()){if(invoice){if(previousPaid===undefined)delete invoice.paid;else invoice.paid=previousPaid;if(previousStatus===undefined)delete invoice.status;else invoice.status=previousStatus;}DB.receipts=previousReceipts;return;}
   render();toast('Receipt deleted and payment reversed');
@@ -1944,7 +1982,14 @@ function saveReceipt(){
 function viewReceipt(receiptNo){
   const r=DB.receipts.find(x=>(x.receiptNo||String(x.id))===receiptNo);if(!r)return;
   const inv=DB.invoices.find(i=>i.id===r.invoiceId),m=DB.meta;
-  modal(`<h3>Receipt ${r.receiptNo||r.id}</h3><div class="doc-preview template-doc" id="print-area"><img class="template-logo" src="uw-document-logo.png" alt="Upholstery Warehouse"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px"><div><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address}<br>${m.phone} · ${m.email}</div><div style="text-align:right"><b class="document-title">RECEIPT</b><br>No: ${r.receiptNo||r.id}<br>Date: ${r.date}</div></div><p style="margin:18px 0"><b>Received from:</b> ${r.customer}<br><b>For invoice:</b> ${r.invoiceId}<br><b>Payment method:</b> ${r.method}</p><h2 style="text-align:right">Amount received: ${R(r.amount)}</h2><p>Thank you for your payment. This receipt confirms the amount recorded against the invoice above.</p><div class="document-end-note">E&amp;OE. Produced by UW</div></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
+  const vatDetail=Number(r.vatAmount)>0.005?`<p>VAT included (15%): ${R(r.vatAmount)}</p>`:'';
+  modal(`<h3>Receipt ${r.receiptNo||r.id}</h3><div class="doc-preview template-doc" id="print-area">
+    <img class="template-logo" src="uw-document-logo.png" alt="Upholstery Warehouse">
+    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #D4AF37;padding-bottom:10px"><div><b>Upholstery Warehouse (Pty) Ltd</b><br>${m.address}<br>${m.phone} · ${m.email}</div><div style="text-align:right"><b class="document-title">RECEIPT</b><br>No: ${r.receiptNo||r.id}<br>Date: ${r.date}</div></div>
+    <p style="margin:18px 0"><b>Received from:</b> ${r.customer}<br><b>For invoice:</b> ${r.invoiceId}<br><b>Payment method:</b> ${r.method}</p>
+    <h2 style="text-align:right">Amount received: ${R(r.amount)}</h2>${vatDetail}
+    <p>Thank you for your payment. This receipt confirms the amount recorded against the invoice above.</p><div class="document-end-note">E&amp;OE. Produced by UW</div></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Close</button><button class="btn gold" onclick="window.print()">Print / Save PDF</button></div>`);
 }
 
 /* ---------- EXPENSES ---------- */
