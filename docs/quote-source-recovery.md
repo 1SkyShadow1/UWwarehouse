@@ -1,8 +1,10 @@
-New invoices and quotes use BB or SS followed by YYMMDD and a daily sequence:
-`BB26100701` is the first BB invoice or quote for 7 October 2026. Each document
-type and prefix has its own sequence. Date or initials changes regenerate the
-number, and saves reject duplicate numbers within that document type. Existing
-historical identifiers and links remain unchanged.
+New invoice and quote numbers use BB or SS followed by DDMMYY and a daily
+sequence. For example, `BB11112601` is the first BB invoice or quote for
+11 November 2026. Each document type and prefix has its own sequence.
+Date or initials changes regenerate the number, and saves reject duplicate
+numbers within that document type. Existing historical identifiers and links
+remain unchanged. Quote revisions remain available in the system's history,
+but are not included in printed or exported quote documents.
 
 The 71 historical quote workbooks were read from their original source paths.
 The recovered bundle contains 240 original lines, introductions, customer/contact

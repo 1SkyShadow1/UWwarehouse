@@ -19,13 +19,32 @@ function loadRenderer(PDFDocument){
   return documentRenderer(PDFDocument,path.join(__dirname,'..','public'));
 }
 const record={id:'QA-QUOTE',revision:3,date:'2026-10-05',expiry:'2026-11-19',customer:'PDF review client',items:[{desc:'Helm fabric',item:'Fabric',qty:2.5,price:127.5,unitCost:987654321,markupPercent:54321}],introduction:'Reupholster the guest chairs.'};
-test('PDF quote uses actual revision and validity and prints only selling amounts',async()=>{
+test('PDF quote omits internal revision numbers and prints only selling amounts',async()=>{
   await loadRenderer(CapturedPdf)({kind:'quote',record});
   const output=rendered.join('\n');
-  assert.match(output,/Revision 3/);assert.match(output,/valid until 2026-11-19/);
+  assert.match(output,/Quote number: QA-QUOTE/);assert.doesNotMatch(output,/Revision\s*3|\br3\b/);assert.match(output,/valid until 2026-11-19/);
   assert(!output.includes('valid for 30 days'));
   assert(!output.includes('987654321')&&!output.includes('54321')&&!/unitCost|markupPercent/.test(output));
   assert(output.includes(Number(318.75).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})));
+});
+test('quote revisions stay visible in the system but are absent from the print preview',()=>{
+  let html='';
+  const context=vm.createContext({
+    DB:{meta:{},quotes:[record]},escapeHtml:String,viewerControls:()=>'',documentLineDescription:item=>item.desc,
+    documentVatNote:()=>'',R:value=>'R '+Number(value||0).toFixed(2),money:value=>Number(value||0).toFixed(2),
+    whatsappIcon:'',modal:value=>{html=value;},docMatches:()=>true,sortDocumentsByDate:rows=>rows,
+    docFilterHtml:()=>'',quoteValidity:()=> 'Valid',
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'..','public','js','document-views.js'),'utf8'),context);
+  context.viewQuote(record.id);
+  const previewHtml=html;
+  assert.doesNotMatch(previewHtml,/Revision\s*3|\br3\b/);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'..','public','js','quotes.js'),'utf8'),context);
+  const listPane={innerHTML:''};
+  context.vQuotes(listPane);
+  const listHtml=listPane.innerHTML;
+  assert.match(listHtml,/\bQA-QUOTE · r3\b/);
+  assert.match(listHtml,/>Revisions</);
 });
 test('historical quote without expiry does not invent a validity period',async()=>{
   await loadRenderer(CapturedPdf)({kind:'quote',record:{...record,expiry:''}});

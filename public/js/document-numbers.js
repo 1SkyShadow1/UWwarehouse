@@ -1,8 +1,8 @@
-// Daily sequences are independent for invoices and quotes. Historical IDs stay intact.
+// Both document types use DDMMYY; their daily sequences remain independent.
 function documentDateKey(date=today()){
   const value=String(date||'');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||dateAfterDays(value,0)!==value)return '';
-  return value.slice(2).replaceAll('-','');
+  return value.slice(8,10)+value.slice(5,7)+value.slice(2,4);
 }
 function nextDocumentNo(collection,date=today(),prefix='BB'){
   const initials=/^(BB|SS)$/.test(prefix)?prefix:'BB',key=documentDateKey(date);
@@ -13,6 +13,6 @@ function nextDocumentNo(collection,date=today(),prefix='BB'){
 }
 function nextInvoiceNo(date=today(),prefix='BB'){return nextDocumentNo('invoices',date,prefix);}
 function nextQuoteNo(date=today(),prefix='BB'){return nextDocumentNo('quotes',date,prefix);}
-function validDocumentNo(id,date){return /^(BB|SS)\d{6}\d{2,}$/.test(String(id||''))&&documentDateKey(date)!==''&&String(id).slice(2,8)===documentDateKey(date)&&Number(String(id).slice(8))>0;}
+function validDocumentNo(id,date){const key=documentDateKey(date);return /^(BB|SS)\d{6}\d{2,}$/.test(String(id||''))&&key!==''&&String(id).slice(2,8)===key&&Number(String(id).slice(8))>0;}
 function validInvoiceNo(id,date){return validDocumentNo(id,date);}
 function validQuoteNo(id,date){return validDocumentNo(id,date);}

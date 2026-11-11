@@ -62,9 +62,9 @@ async function run() {
     assert((await page.locator('#quote-preview').innerText()).includes('—'));
     await page.evaluate(()=>{DB.quotes=[];closeModal();newQuote();});
     await page.locator('#f-date').fill('2026-10-07');await page.locator('#f-date').dispatchEvent('change');
-    assert.equal(await page.locator('#f-no').inputValue(),'BB26100701');
-    await page.locator('#f-prefix').selectOption('SS');assert.equal(await page.locator('#f-no').inputValue(),'SS26100701');
-    await page.locator('#f-date').fill('2026-10-08');await page.locator('#f-date').dispatchEvent('change');assert.equal(await page.locator('#f-no').inputValue(),'SS26100801');
+    assert.equal(await page.locator('#f-no').inputValue(),'BB07102601');
+    await page.locator('#f-prefix').selectOption('SS');assert.equal(await page.locator('#f-no').inputValue(),'SS07102601');
+    await page.locator('#f-date').fill('2026-10-08');await page.locator('#f-date').dispatchEvent('change');assert.equal(await page.locator('#f-no').inputValue(),'SS08102601');
     await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
     assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside a quote must not close it');
     const closeBounds=await page.locator('#modal-root .modal-close').evaluate(button=>{const b=button.getBoundingClientRect(),m=button.closest('.modal').getBoundingClientRect();return {right:m.right-b.right,top:b.top-m.top};});
@@ -105,6 +105,7 @@ async function run() {
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#modal-root .modal').count(),0,'Escape must close the complete-item quote');
     await page.evaluate(()=>newInvoice('invoice'));
+    assert.equal(await page.evaluate(()=>validInvoiceNo(document.getElementById('f-no').value,document.getElementById('f-date').value)),true,'New invoice numbers must use the DDMMYY date format.');
     await page.locator('#modal-root .modal-bg').click({position:{x:1,y:1}});
     assert.equal(await page.locator('#modal-root .modal').count(),1,'Clicking outside an invoice must not close it');
     await page.getByRole('button',{name:'Close dialog'}).click();
@@ -387,7 +388,8 @@ async function run() {
     assert.equal(revisionQuote.items[0].unitCost,102);
     await page.evaluate(id=>{acceptQuote(id);viewQuote(id);},revisionQuote.id);
     const customerPreview=await page.locator('#quote-preview').innerText();
-    assert(customerPreview.includes('Revision 1'));
+    assert(customerPreview.includes('Quote number: '+revisionQuote.id));
+    assert(!customerPreview.includes('Revision 1'),'The in-app quote preview is also the print target and must not expose internal revisions.');
     assert(customerPreview.includes('valid until '+revisionQuote.expiry));
     assert(!customerPreview.includes('Markup')&&!customerPreview.includes('Cost / unit'));
     await page.evaluate(id=>{closeModal();convertQuote(id);},revisionQuote.id);
@@ -402,10 +404,11 @@ async function run() {
     assert.equal(await page.evaluate(id=>DB.invoices.find(i=>i.id===id).items[0].price,acceptedInvoice.id),127.5);
     await page.evaluate(id=>viewQuoteHistory(id),revisionQuote.id);
     assert((await page.locator('#modal-root').innerText()).includes('selling / unit: 127.5 → 150'));
+    assert((await page.locator('#modal-root').innerText()).includes('Revision 2'),'Revision history remains visible inside the system.');
     await page.evaluate(id=>viewQuoteRevision(id,1),revisionQuote.id);
-    assert((await page.locator('#quote-preview').innerText()).includes('Revision 1'));
+    assert(!(await page.locator('#quote-preview').innerText()).includes('Revision 1'));
     await page.evaluate(id=>viewAcceptedQuote(id),revisionQuote.id);
-    assert((await page.locator('#quote-preview').innerText()).includes('Revision 1'));
+    assert(!(await page.locator('#quote-preview').innerText()).includes('Revision 1'));
     await page.evaluate(()=>closeModal());
     await page.evaluate(id=>editQuote(id),revisionQuote.id);
     const revisionBefore=await page.evaluate(id=>DB.quotes.find(q=>q.id===id).revision,revisionQuote.id);

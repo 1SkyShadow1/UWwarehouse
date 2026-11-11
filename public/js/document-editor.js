@@ -39,14 +39,14 @@ function saveInvoice(){
   const collection=window.invoiceFormMode==='quote'?DB.quotes:DB.invoices;
   if(collection.some(doc=>doc.id===common.id)){toast('This document number already exists');return;}
   if(window.invoiceFormMode==='quote'){
-    if(!validQuoteNo(common.id,common.date)){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
+    if(!validQuoteNo(common.id,common.date)){toast('Quote number must use BB or SS + DDMMYY + daily sequence, for example BB07102601');return;}
     const expiry=fa('f-expiry');if(!validQuoteExpiry(common.date,expiry)){toast('Quote expiry must be on or after its date');return;}
     registerDocumentItemPresets(items);
     const quote=initializeQuoteHistory({...common,expiry,preparedBy:fa('f-prepared-by'),projectReference:document.getElementById('f-project').value,workType:document.getElementById('f-work-type')?.value||'Reupholster',colour:document.getElementById('f-colour')?.value||'',introduction:document.getElementById('f-introduction')?.value||'',notes:document.getElementById('f-introduction')?.value||'',status:'Draft',terms:true,reviewStatus:'Approved',includedInTotals:false});
     DB.quotes.unshift(quote);syncQuoteJob(quote);
     save();closeModal();toast('Quote '+common.id+' created');go('quotes');
   }else{
-    if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
+    if(!validInvoiceNo(common.id,common.date)){toast('Invoice number must use BB or SS + DDMMYY + daily sequence, for example BB07102601');return;}
     if(!validQuoteExpiry(common.date,fa('f-due'))){toast('Invoice payment due date must be on or after its date');return;}
     registerDocumentItemPresets(items);
     const inv={...common,dueDate:fa('f-due'),orderNo:fa('f-order-no'),vatNo:fa('f-vat-no'),project:document.getElementById('f-project').value,deposit:0,paid:0,status:'Pending',fy:DB.meta.fy};
@@ -70,7 +70,7 @@ function saveEditedInvoice(id){
   const items=collectDocumentItems('ef-items','ei');if(!items)return;
   const nextId=fa('ef-no').trim();
   if(!nextId||!fa('ef-date')||!fa('ef-cust')||!items.length){toast('Complete invoice number, date, customer and line items');return;}
-  if((nextId!==id||validInvoiceNo(id,invoice.date))&&!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or SS + YYMMDD + daily sequence, for example BB26100701');return;}
+  if((nextId!==id||validInvoiceNo(id,invoice.date))&&!validInvoiceNo(nextId,fa('ef-date'))){toast('Invoice number must use BB or SS + DDMMYY + daily sequence, for example BB07102601');return;}
   if((fa('ef-date')!==invoice.date||fa('ef-due')!==(invoice.dueDate||''))&&!validQuoteExpiry(fa('ef-date'),fa('ef-due'))){toast('Invoice payment due date must be on or after its date');return;}
   if(nextId!==id&&DB.invoices.some(other=>other!==invoice&&other.id===nextId)){toast('This invoice number already exists');return;}
   const collected=(Number(invoice.paid)||0)+(Number(invoice.deposit)||0),editedTotal=items.reduce((sum,item)=>sum+(Number(item.qty)||0)*(Number(item.price)||0),0);

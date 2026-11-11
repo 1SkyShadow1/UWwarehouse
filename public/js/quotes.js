@@ -35,7 +35,7 @@ function saveEditedQuote(id){
   const items=collectDocumentItems('eq-items','eq',true);if(!items)return;
   const nextId=fa('eq-no').trim();
   if(!nextId||!fa('eq-date')||!fa('eq-cust')||!items.length){toast('Complete quote number, date, customer and line items');return;}
-  if((nextId!==id||validQuoteNo(id,quote.date))&&!validQuoteNo(nextId,fa('eq-date'))){toast('Quote number must use BB or SS + YYMMDD + daily sequence, for example SS26100701');return;}
+  if((nextId!==id||validQuoteNo(id,quote.date))&&!validQuoteNo(nextId,fa('eq-date'))){toast('Quote number must use BB or SS + DDMMYY + daily sequence, for example SS07102601');return;}
   if(DB.quotes.some(other=>other!==quote&&other.id===nextId)){toast('This quote number already exists');return;}
   if(!validQuoteExpiry(fa('eq-date'),fa('eq-expiry'))){toast('Quote expiry must be on or after its date');return;}
   const quoteIndex=DB.quotes.indexOf(quote),previousQuote=JSON.parse(JSON.stringify(quote)),previousJobs=JSON.parse(JSON.stringify(DB.jobs||[])),previousInvoices=JSON.parse(JSON.stringify(DB.invoices||[])),previousPresets=DB.meta?.savedItemPresets;

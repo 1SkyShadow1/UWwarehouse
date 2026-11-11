@@ -3,12 +3,13 @@ const root=path.join(__dirname,'..');
 const {recoverImportedQuotes}=require('../public/js/imported-quotes');
 const bundle=JSON.parse(fs.readFileSync(path.join(root,'public/imported-data.js'),'utf8').split('window.UW_IMPORTED=')[1].trim().replace(/;$/,''));
 function numbers(){const c=vm.createContext({today:()=> '2026-10-07',DB:{invoices:[],quotes:[]}});for(const name of ['quote-history','document-numbers'])vm.runInContext(fs.readFileSync(path.join(root,'public/js',name+'.js'),'utf8'),c);return c;}
-test('compact BB/SS numbers use document date, independent daily sequences and collision detection',()=>{
-  const c=numbers();assert.equal(c.nextInvoiceNo(),'BB26100701');assert.equal(c.nextQuoteNo('2026-10-07','SS'),'SS26100701');
-  c.DB.invoices=[{id:'BB26100701'},{id:'BB26100703'},{id:'BB07102601'},{id:'SS26100705'}];
-  assert.equal(c.nextInvoiceNo(),'BB26100704');assert.equal(c.nextInvoiceNo('2026-10-07','SS'),'SS26100706');assert.equal(c.nextQuoteNo(),'BB26100701');assert.equal(c.nextInvoiceNo('2026-10-08'),'BB26100801');
-  assert.equal(c.nextInvoiceNo('2026-02-30'),'');assert.equal(c.validQuoteNo('BB26100701','2026-10-07'),true);assert.equal(c.validInvoiceNo('EE26100701','2026-10-07'),false);assert.equal(c.validInvoiceNo('BB26100801','2026-10-07'),false);assert.equal(c.validQuoteNo('BB26100700','2026-10-07'),false);
-  c.DB.quotes=[{id:'SS26100799'}];assert.equal(c.nextQuoteNo('2026-10-07','SS'),'SS261007100');
+test('invoice and quote numbers use DDMMYY with independent daily sequences',()=>{
+  const c=numbers();assert.equal(c.nextInvoiceNo(),'BB07102601');assert.equal(c.nextQuoteNo('2026-10-07','SS'),'SS07102601');
+  c.DB.invoices=[{id:'BB07102601'},{id:'BB07102603'},{id:'BB26100701'},{id:'SS07102605'}];
+  assert.equal(c.nextInvoiceNo(),'BB07102604');assert.equal(c.nextInvoiceNo('2026-10-07','SS'),'SS07102606');assert.equal(c.nextQuoteNo(),'BB07102601');assert.equal(c.nextInvoiceNo('2026-10-08'),'BB08102601');
+  assert.equal(c.nextInvoiceNo('2026-02-30'),'');assert.equal(c.validQuoteNo('BB07102601','2026-10-07'),true);assert.equal(c.validQuoteNo('BB26100701','2026-10-07'),false);assert.equal(c.validInvoiceNo('EE07102601','2026-10-07'),false);assert.equal(c.validInvoiceNo('BB08102601','2026-10-07'),false);assert.equal(c.validQuoteNo('BB07102600','2026-10-07'),false);
+  c.DB.quotes=[{id:'SS07102699'}];assert.equal(c.nextQuoteNo('2026-10-07','SS'),'SS071026100');
+  assert.equal(c.nextInvoiceNo('2026-11-11'),'BB11112601');assert.equal(c.nextQuoteNo('2026-11-11'),'BB11112601');
 });
 test('all 71 bundled quotes have real introductions and 240 source lines',()=>{
   assert.equal(bundle.quotes.length,71);assert.equal(bundle.quotes.reduce((n,q)=>n+q.items.length,0),240);
