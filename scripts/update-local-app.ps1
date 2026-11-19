@@ -94,7 +94,7 @@ try {
   if ($restartRequired) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $control Start
     if ($LASTEXITCODE -ne 0) { throw 'Could not restart the installed application.' }
-    $deadline = (Get-Date).AddSeconds(45)
+    $deadline = (Get-Date).AddSeconds(105)
     $healthy = $false
     do {
       try { $healthy = [bool](Invoke-RestMethod 'http://127.0.0.1:8080/api/health' -TimeoutSec 3).ok } catch {}

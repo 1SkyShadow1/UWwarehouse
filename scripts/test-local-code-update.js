@@ -33,7 +33,9 @@ test('updated service worker precaches every local module and stylesheet',()=>{
 });
 test('Windows server watchdog restarts failed boots and waits for API readiness before opening the browser',()=>{
   const launcher=fs.readFileSync(path.join(repo,'scripts','start-local-server.ps1'),'utf8');
+  const updater=fs.readFileSync(path.join(repo,'scripts','update-local-app.ps1'),'utf8');
   assert.match(launcher,/FromSeconds\(90\)/);
+  assert.match(updater,/AddSeconds\(105\)/);
   assert.match(launcher,/healthUrl/);assert.match(launcher,/profileUrl/);
   assert.match(launcher,/Start-Process -FilePath \$nodePath/);
   assert.match(launcher,/RedirectStandardOutput \$serverOutputLog/);

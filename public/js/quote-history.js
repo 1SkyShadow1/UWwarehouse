@@ -30,6 +30,7 @@ function reviseQuote(q,changes){
   return true;
 }
 function acceptQuoteVersion(q){
+  if(q.sourceDocumentId&&q.reviewStatus==='Needs review'){toast('Review this imported quote against its source workbook in Edit Quote before accepting it.');return false;}
   if(q.sourcePricingWarnings?.some(warning=>/alternative options|differs from/i.test(warning))){toast('Review the source pricing discrepancy or alternative options in Edit Quote before accepting.');return false;}
   const alreadyAccepted=q.status==='Accepted';
   if(!alreadyAccepted&&!q.expiry){toast('Set the quote expiry date before accepting it.');return false;}

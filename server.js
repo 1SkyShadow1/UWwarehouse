@@ -42,6 +42,7 @@ const isVercel = process.env.VERCEL === '1';
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const {recoverImportedQuotes}=require('./public/js/imported-quotes');
+const {MIME_TYPE:QUOTE_WORKBOOK_MIME,parseQuoteWorkbook}=require('./lib/quote-workbook-import');
 const scanDuplicates=require('./public/js/scan-duplicates');
 const {createLedgerActivity}=require('./lib/ledger-activity');
 startupLog(`Core server dependencies loaded in ${Date.now() - startupStartedAt} ms.`);
@@ -1318,6 +1319,99 @@ app.post('/api/documents', requireApiKey, (req, res) => {
       res.status(500).json({ error: 'Document could not be stored.' });
     } finally {
       await fs.promises.rm(req.file.path, { force: true }).catch(error => console.warn('Temporary upload cleanup failed:', error.message));
+    }
+  });
+});
+
+app.post('/api/quotes/import', requireApiKey, (req, res) => {
+  upload.single('file')(req, res, async error => {
+    if (error) {
+      const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return res.status(status).json({ error: status === 413 ? 'Quote workbook is too large.' : error.message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Choose an .xlsx quote workbook to import.' });
+    let documentId = '';
+    let storagePath = '';
+    try {
+      await bootstrapReady;
+      const extension = path.extname(req.file.originalname || '').toLowerCase();
+      if (extension !== '.xlsx') return res.status(415).json({ error: 'Only Excel .xlsx quote workbooks are supported. PDF imports are not supported.' });
+      const signature = await documentBufferPrefix(req.file.path).catch(() => null);
+      if (!hasDocumentSignature(signature, QUOTE_WORKBOOK_MIME)) {
+        return res.status(415).json({ error: 'The file is not a valid .xlsx workbook. Choose an Excel quote workbook and try again.' });
+      }
+      const buffer = await fs.promises.readFile(req.file.path);
+      const fileName = path.basename(req.file.originalname || 'quote.xlsx')
+        .replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').slice(0, 180) || 'quote.xlsx';
+      const importedQuote = await parseQuoteWorkbook(buffer, fileName);
+      const expectedRevision = Number(req.body?.revision);
+      const current = ensureStorage();
+      if (!Number.isInteger(expectedRevision) || expectedRevision !== current.revision) {
+        return res.status(409).json({ error: 'The shared workspace changed before this import. Refresh the workspace and try again.', snapshot: current });
+      }
+      if ((current.data.quotes || []).some(quote => String(quote.id || '') === importedQuote.id)) {
+        return res.status(409).json({ error: `Quote ${importedQuote.id} already exists. No record or source file was imported.` });
+      }
+      documentId = crypto.randomBytes(16).toString('hex');
+      const metadata = {
+        id: documentId,
+        name: fileName,
+        size: req.file.size,
+        mimeType: QUOTE_WORKBOOK_MIME,
+        createdAt: new Date().toISOString(),
+        url: `/api/documents/${documentId}`,
+        category: 'Imported quote source workbook',
+        reviewStatus: 'Needs review',
+        quoteId: importedQuote.id,
+      };
+      await fs.promises.copyFile(req.file.path, safeDocumentPath(documentId), fs.constants.COPYFILE_EXCL);
+      storagePath = await syncDocumentToSupabase(documentId, { ...req.file, originalname: fileName, mimetype: QUOTE_WORKBOOK_MIME });
+      if (storagePath) metadata.storagePath = storagePath;
+
+      const savedAt = new Date().toISOString();
+      const quote = {
+        ...importedQuote,
+        sourceWorkbook: fileName,
+        sourceDocumentId: documentId,
+        sourceDocumentUrl: metadata.url,
+        sourceImportedAt: savedAt,
+        revision: 1,
+      };
+      const initialSnapshot = { ...quote };
+      delete initialSnapshot.revisions;
+      delete initialSnapshot.acceptedVersion;
+      quote.revisions = [{ number: 1, savedAt, snapshot: initialSnapshot }];
+      const result = await queueSharedStateUpdate(expectedRevision, {
+        ...current.data,
+        quotes: [quote, ...(current.data.quotes || [])],
+        documents: [metadata, ...(current.data.documents || [])],
+      }, { actor: req.auth?.email || 'API key' });
+      if (result.conflict) {
+        await fs.promises.rm(safeDocumentPath(documentId), { force: true }).catch(() => {});
+        await removeDocumentFromSupabase(storagePath);
+        documentId = '';
+        storagePath = '';
+        return res.status(409).json({ error: 'The shared workspace changed before this import. Refresh the workspace and try again.', snapshot: result.conflict });
+      }
+      await recordDocumentInSupabase(metadata).catch(recordError => {
+        console.warn('Imported quote source metadata could not be synced to Supabase:', recordError.message);
+      });
+      enqueueSupabaseSnapshot(result.next);
+      const documentExports = await persistInvoiceQuoteDocuments(current.data, result.next.data);
+      if (documentExports.errors.length) console.warn('Imported quote PDF could not be saved:', documentExports.errors.join('; '));
+      return res.status(201).json({ snapshot: result.next, quote, document: metadata, documentExports });
+    } catch (writeError) {
+      if (documentId) await fs.promises.rm(safeDocumentPath(documentId), { force: true }).catch(() => {});
+      await removeDocumentFromSupabase(storagePath);
+      const status = writeError.statusCode || 500;
+      if (status >= 500) console.error('Quote workbook import failed:', writeError);
+      return res.status(status).json({
+        error: status === 500
+          ? 'The quote workbook could not be saved. No quote was imported; try again or contact the system administrator.'
+          : writeError.message,
+      });
+    } finally {
+      await fs.promises.rm(req.file.path, { force: true }).catch(() => {});
     }
   });
 });
