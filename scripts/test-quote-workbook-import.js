@@ -19,7 +19,9 @@ async function parseTemplate(workbook) {
 }
 
 test('imports template customer data, dates, notes, ordered lines, and checked totals', async () => {
-  const quote = await parseTemplate(await loadTemplate());
+  const workbook = await loadTemplate();
+  workbook.worksheets[0].getCell('F6').value = '20/11/2026';
+  const quote = await parseTemplate(workbook);
   assert.equal(quote.id, 'BB09092605');
   assert.equal(quote.customer, 'Alec Rakow');
   assert.equal(quote.date, '2026-09-09');
@@ -58,6 +60,10 @@ test('rejects missing financial values and incomplete quote identity', async () 
   const secondWorkbook = await loadTemplate();
   secondWorkbook.worksheets[0].getCell('F5').value = '';
   await assert.rejects(() => parseTemplate(secondWorkbook), /Quote number is required/);
+
+  const invalidDateInQuoteNumber = await loadTemplate();
+  invalidDateInQuoteNumber.worksheets[0].getCell('F5').value = 'BB32132601';
+  await assert.rejects(() => parseTemplate(invalidDateInQuoteNumber), /valid DDMMYY date/);
 });
 
 test('computes formula totals from explicit line values when Excel has no cached formula result', async () => {

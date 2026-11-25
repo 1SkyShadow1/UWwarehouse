@@ -23,17 +23,21 @@ acceptance; confirming the editor review clears the message. No prices are
 invented and no source workbooks are modified. Local extraction audit files retain
 source hashes, original imported totals and reconciled line totals.
 
-Manual quotes can also be imported from Excel `.xlsx` workbooks that use the
-current `Quote Template.xlsx` layout. The importer carries customer/contact
-fields, document dates, project reference, notes and ordered line items into a
-native quote draft; it checks required financial values and line/grand totals
-without inventing missing prices. The original workbook is retained as a managed
-source document and linked from the quote. Imports start as `Draft` / `Needs
-review`, remain outside financial totals, and cannot be accepted until the source
-workbook is reviewed in the quote editor. PDF imports are not supported; the
-native quote preview and export continue to use the system's current layout.
+Manual quotes can be imported from Excel `.xlsx` workbooks that use the current
+`Quote Template.xlsx` layout or searchable PDFs exported from the UW quote
+layout. The importer carries customer/contact fields, document dates, project
+reference, notes and ordered line items into a native quote draft; it checks
+required financial values and line/grand totals without inventing missing
+prices. For imports, the date is derived from the quote number's `DDMMYY`
+portion; a different or blank source date does not override it. The original
+file is retained as a managed source document and linked from the quote.
+Scanned/image-only PDFs and PDFs with an unreadable or different layout are not
+parsed. Imports start as `Draft` / `Needs review`, remain outside financial
+totals, and cannot be accepted until the source is reviewed in the quote editor.
+The native quote preview and export continue to use the system's current layout.
 
 Checks: `scripts/test-document-numbers-and-recovery.js`,
-`scripts/test-quote-workbook-import.js`, `scripts/test-quote-recovery-extraction.py`, the browser pricing workflow suite,
+`scripts/test-quote-workbook-import.js`, `scripts/test-quote-pdf-import.js`,
+`scripts/test-quote-recovery-extraction.py`, the browser pricing workflow suite,
 and the existing full regression suite. The browser suite checks every recovered
 quote preview for actual introduction text and the correct number of lines.

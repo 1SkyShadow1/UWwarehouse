@@ -43,6 +43,7 @@ const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const {recoverImportedQuotes}=require('./public/js/imported-quotes');
 const {MIME_TYPE:QUOTE_WORKBOOK_MIME,parseQuoteWorkbook}=require('./lib/quote-workbook-import');
+const {MIME_TYPE:QUOTE_PDF_MIME,parseQuotePdf}=require('./lib/quote-pdf-import');
 const scanDuplicates=require('./public/js/scan-duplicates');
 const {createLedgerActivity}=require('./lib/ledger-activity');
 startupLog(`Core server dependencies loaded in ${Date.now() - startupStartedAt} ms.`);
@@ -1329,21 +1330,27 @@ app.post('/api/quotes/import', requireApiKey, (req, res) => {
       const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
       return res.status(status).json({ error: status === 413 ? 'Quote workbook is too large.' : error.message });
     }
-    if (!req.file) return res.status(400).json({ error: 'Choose an .xlsx quote workbook to import.' });
+    if (!req.file) return res.status(400).json({ error: 'Choose a searchable PDF quote or an .xlsx quote workbook to import.' });
     let documentId = '';
     let storagePath = '';
     try {
       await bootstrapReady;
       const extension = path.extname(req.file.originalname || '').toLowerCase();
-      if (extension !== '.xlsx') return res.status(415).json({ error: 'Only Excel .xlsx quote workbooks are supported. PDF imports are not supported.' });
+      const sourceType = extension === '.pdf' ? 'pdf' : extension === '.xlsx' ? 'xlsx' : '';
+      if (!sourceType) return res.status(415).json({ error: 'Choose a PDF quote or an Excel .xlsx quote workbook.' });
+      const mimeType = sourceType === 'pdf' ? QUOTE_PDF_MIME : QUOTE_WORKBOOK_MIME;
       const signature = await documentBufferPrefix(req.file.path).catch(() => null);
-      if (!hasDocumentSignature(signature, QUOTE_WORKBOOK_MIME)) {
-        return res.status(415).json({ error: 'The file is not a valid .xlsx workbook. Choose an Excel quote workbook and try again.' });
+      if (!hasDocumentSignature(signature, mimeType)) {
+        return res.status(415).json({ error: sourceType === 'pdf'
+          ? 'The file is not a valid PDF. Choose a searchable PDF quote and try again.'
+          : 'The file is not a valid .xlsx workbook. Choose an Excel quote workbook and try again.' });
       }
       const buffer = await fs.promises.readFile(req.file.path);
       const fileName = path.basename(req.file.originalname || 'quote.xlsx')
         .replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').slice(0, 180) || 'quote.xlsx';
-      const importedQuote = await parseQuoteWorkbook(buffer, fileName);
+      const importedQuote = sourceType === 'pdf'
+        ? await parseQuotePdf(buffer, fileName)
+        : await parseQuoteWorkbook(buffer, fileName);
       const expectedRevision = Number(req.body?.revision);
       const current = ensureStorage();
       if (!Number.isInteger(expectedRevision) || expectedRevision !== current.revision) {
@@ -1357,10 +1364,10 @@ app.post('/api/quotes/import', requireApiKey, (req, res) => {
         id: documentId,
         name: fileName,
         size: req.file.size,
-        mimeType: QUOTE_WORKBOOK_MIME,
+        mimeType,
         createdAt: new Date().toISOString(),
         url: `/api/documents/${documentId}`,
-        category: 'Imported quote source workbook',
+        category: `Imported quote source ${sourceType.toUpperCase()}`,
         reviewStatus: 'Needs review',
         quoteId: importedQuote.id,
       };
@@ -1371,7 +1378,8 @@ app.post('/api/quotes/import', requireApiKey, (req, res) => {
       const savedAt = new Date().toISOString();
       const quote = {
         ...importedQuote,
-        sourceWorkbook: fileName,
+        ...(sourceType === 'xlsx' ? { sourceWorkbook: fileName } : {}),
+        sourceDocumentType: sourceType,
         sourceDocumentId: documentId,
         sourceDocumentUrl: metadata.url,
         sourceImportedAt: savedAt,
@@ -1407,7 +1415,7 @@ app.post('/api/quotes/import', requireApiKey, (req, res) => {
       if (status >= 500) console.error('Quote workbook import failed:', writeError);
       return res.status(status).json({
         error: status === 500
-          ? 'The quote workbook could not be saved. No quote was imported; try again or contact the system administrator.'
+          ? 'The quote could not be saved. No quote was imported; try again or contact the system administrator.'
           : writeError.message,
       });
     } finally {

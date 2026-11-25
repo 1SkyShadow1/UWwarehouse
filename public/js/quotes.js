@@ -11,10 +11,10 @@ function quoteItemLabel(value){
 }
 function vQuotes(c){
   const rows=sortDocumentsByDate(DB.quotes.filter(q=>docMatches(q,'quotes','Quotation',q.status)),'quotes');
-  c.innerHTML=`<div class="toolbar">${docFilterHtml('quotes',['Quotation'],['Draft','Sent','Accepted'])}<button class="btn gold" onclick="newQuote()">+ New Quote</button><button type="button" class="btn" id="quote-import-button" aria-describedby="quote-import-help" onclick="document.getElementById('quote-import-file').click()">Import Excel Quote</button><input id="quote-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden aria-label="Select Excel quote workbook" onchange="importQuoteWorkbook(event)"><small id="quote-import-help">Excel .xlsx · current quote template</small></div><p id="quote-import-status" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+  c.innerHTML=`<div class="toolbar">${docFilterHtml('quotes',['Quotation'],['Draft','Sent','Accepted'])}<button class="btn gold" onclick="newQuote()">+ New Quote</button><button type="button" class="btn" id="quote-import-button" aria-describedby="quote-import-help" onclick="document.getElementById('quote-import-file').click()">Import Quote</button><input id="quote-import-file" type="file" accept=".xlsx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden aria-label="Select a PDF quote or Excel quote workbook" onchange="importQuoteDocument(event)"><small id="quote-import-help">Searchable PDF or Excel .xlsx · current quote template</small></div><p id="quote-import-status" role="status" aria-live="polite" aria-atomic="true" hidden></p>
   <div class="panel"><p style="font-size:11px;color:var(--muted);margin-bottom:10px">${rows.length} quote document(s) match the current filters.</p>
   <table><tr><th>Quote No / revision</th><th>Date / validity</th><th>Customer</th><th>Work type</th><th>Colour</th><th class="num">Total</th><th>Status</th><th></th></tr>
-  ${rows.map(q=>`<tr><td style="color:var(--gold2)">${escapeHtml(q.id)} · r${q.revision||1}${q.sourcePricingWarnings?.length?'<small style="display:block">Source pricing needs review</small>':''}${q.sourceDocumentId?'<small style="display:block">Imported from Excel</small>':''}</td><td>${escapeHtml(q.date||'')}<small style="display:block">${escapeHtml(quoteValidity(q))}${q.expiry?' · '+escapeHtml(q.expiry):''}</small></td><td>${escapeHtml(q.customer||'')}</td><td>${escapeHtml(q.workType||(q.sourceDocumentId?'—':'Reupholster'))}</td><td>${escapeHtml(q.colour||'—')}</td>
+  ${rows.map(q=>`<tr><td style="color:var(--gold2)">${escapeHtml(q.id)} · r${q.revision||1}${q.sourcePricingWarnings?.length?'<small style="display:block">Source pricing needs review</small>':''}${q.sourceDocumentId?`<small style="display:block">Imported from ${q.sourceDocumentType==='pdf'?'PDF':'Excel'}</small>`:''}</td><td>${escapeHtml(q.date||'')}<small style="display:block">${escapeHtml(quoteValidity(q))}${q.expiry?' · '+escapeHtml(q.expiry):''}</small></td><td>${escapeHtml(q.customer||'')}</td><td>${escapeHtml(q.workType||(q.sourceDocumentId?'—':'Reupholster'))}</td><td>${escapeHtml(q.colour||'—')}</td>
     <td class="num">${R(q.items.reduce((s,i)=>s+i.qty*i.price,0))}</td><td>${q.status==='Accepted'?'<span class="tag paid">Accepted</span>':'<span class="tag quote">'+escapeHtml(q.status||'Draft')+'</span>'}${q.sourceDocumentId&&q.reviewStatus==='Needs review'?'<small style="display:block">Needs review</small>':''}</td>
     <td style="white-space:nowrap"><button class="btn sm" onclick="viewQuote('${q.id}')">View</button>
     <button class="btn sm" onclick="editQuote('${q.id}')">Edit</button>
@@ -22,11 +22,13 @@ function vQuotes(c){
     <button class="btn sm danger" onclick="del('quotes','${q.id}')">✕</button></td></tr>`).join('')}
   </table></div>`;
 }
-async function importQuoteWorkbook(event){
+async function importQuoteDocument(event){
   const input=event.currentTarget,file=input.files?.[0],button=document.getElementById('quote-import-button'),status=document.getElementById('quote-import-status');
   if(!file)return;
   const showError=message=>{if(status){status.hidden=false;status.textContent=message;status.setAttribute('role','alert');}toast(message);};
-  if(!/\.xlsx$/i.test(file.name)){showError('Choose an Excel .xlsx quote workbook. PDF imports are not supported.');input.value='';return;}
+  const isPdf=/\.pdf$/i.test(file.name),isWorkbook=/\.xlsx$/i.test(file.name);
+  if(!isPdf&&!isWorkbook){showError('Choose a searchable PDF quote or an Excel .xlsx quote workbook.');input.value='';return;}
+  const sourceLabel=isPdf?'PDF':'workbook';
   if(!serverSyncAvailable||serverRevision===null){showError('The shared workspace is not ready. Wait for it to connect, then retry the import.');input.value='';return;}
   button.disabled=true;input.disabled=true;
   if(status){status.hidden=false;status.textContent='Checking the shared workspace before import…';status.setAttribute('role','status');}
@@ -44,17 +46,19 @@ async function importQuoteWorkbook(event){
     if(!response.ok)throw new Error(payload.error||`Quote import failed (HTTP ${response.status}).`);
     if(!payload.snapshot||!payload.quote?.id)throw new Error('The server did not confirm the quote import. Refresh the workspace before retrying.');
     applySharedSnapshot(payload.snapshot);
+    const missingCustomer=!payload.quote.customer;
     toast(payload.documentExports?.errors?.length
       ? `Quote ${payload.quote.id} imported as Draft · Needs review, but its native PDF could not be saved.`
-      : `Quote ${payload.quote.id} imported as Draft · Needs review. Open the source workbook and review before accepting.`);
-  }catch(error){showError(error.message||'The quote workbook could not be imported. Check it and try again.');}
+      : `Quote ${payload.quote.id} imported as Draft · Needs review. Open the source ${sourceLabel} and review before accepting.${missingCustomer?' Its customer account name is blank and must be completed.':''}`);
+  }catch(error){showError(error.message||`The quote ${sourceLabel} could not be imported. Check it and try again.`);}
   finally{input.value='';input.disabled=false;button.disabled=false;}
 }
 function newQuote(){newInvoice('quote');document.querySelector('#modal-root h3').textContent='New Quote';}
 function editQuote(id){
   const q=DB.quotes.find(x=>x.id===id);if(!q)return;
   const sourceReview=q.sourcePricingWarnings?.length?`<div class="panel"><p>${q.sourcePricingWarnings.map(escapeHtml).join('<br>')}</p><label><input type="checkbox" id="eq-source-reviewed"> I have checked these source prices and selected the required options.</label></div>`:'';
-  const importReview=q.sourceDocumentId&&q.reviewStatus==='Needs review'?`<div class="panel"><p>This imported quote is a draft. Check its customer details, line items and totals against the original workbook before accepting it.</p><a class="btn sm" href="${escapeHtml(q.sourceDocumentUrl||'')}" target="_blank" rel="noopener">Open source workbook</a><p><label><input type="checkbox" id="eq-import-reviewed"> I have checked this quote against the source workbook.</label></p></div>`:'';
+  const sourceDocumentLabel=q.sourceDocumentType==='pdf'?'PDF':'workbook';
+  const importReview=q.sourceDocumentId&&q.reviewStatus==='Needs review'?`<div class="panel"><p>This imported quote is a draft. Check its customer details, line items and totals against the original ${sourceDocumentLabel} before accepting it.${q.customer?'':' The customer account name was blank in the source; enter it before marking this quote reviewed.'}</p><a class="btn sm" href="${escapeHtml(q.sourceDocumentUrl||'')}" target="_blank" rel="noopener">Open source ${sourceDocumentLabel}</a><p><label><input type="checkbox" id="eq-import-reviewed"> I have checked this quote against the source ${sourceDocumentLabel}.</label></p></div>`:'';
   modal(`${sourceReview}${importReview}${fabricColourOptions()}<h3>Edit Quote ${q.id} · r${q.revision||1}</h3>${q.status==='Accepted'?'<p>Saving changes creates a draft revision. The accepted version and any issued invoice are preserved.</p>':''}<div class="frm"><div class="fld"><label>Quote No</label><input id="eq-no" value="${q.id}"></div><div class="fld"><label>Date</label><input id="eq-date" type="date" value="${q.date}"></div><div class="fld"><label>Customer</label><input id="eq-cust" value="${escapeHtml(q.customer||'')}"></div><div class="fld"><label>Contact</label><input id="eq-contact" value="${escapeHtml(q.contact||'')}"></div><div class="fld"><label>Telephone</label><input id="eq-phone" value="${escapeHtml(q.phone||'')}"></div><div class="fld"><label>Email</label><input id="eq-email" value="${escapeHtml(q.email||'')}"></div><div class="fld"><label>Billing address</label><textarea id="eq-billing-address">${escapeHtml(q.billingAddress||'')}</textarea></div><div class="fld"><label>Prepared by</label><input id="eq-prepared-by" value="${escapeHtml(q.preparedBy||'')}"></div><div class="fld"><label>Expiry</label><input id="eq-expiry" type="date" value="${q.expiry||''}"></div><div class="fld"><label>Project Reference</label><input id="eq-project" value="${escapeHtml(q.projectReference||'')}"></div><div class="fld"><label>Work type</label><select id="eq-work-type">${['Manufacturing','Repair','Reupholster'].map(x=>`<option ${q.workType===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="fld"><label>Colour</label><input id="eq-colour" list="fabric-colours" value="${escapeHtml(q.colour||'')}" placeholder="e.g. Stone, Charcoal, Navy"></div><div class="fld"><label>Introduction, notes and specifications</label><textarea id="eq-introduction" rows="3">${escapeHtml(q.introduction||q.notes||'')}</textarea></div></div>${quotePresetPickerHtml('eq-items','eq','eq')}<div class="fld"><label>Line Items</label></div><table id="eq-items"><tr><th>Description</th><th>Supplier fabric / price basis</th><th>Item</th><th>Qty</th><th>Selling / unit · internal cost</th><th></th></tr></table><button class="btn sm" onclick="addEditQuoteRow()">+ Add line</button><div class="toolbar" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn gold" onclick="saveEditedQuote('${id}')">Save Changes</button></div>`);
   (q.items||[]).forEach(addEditQuoteRow);if(!(q.items||[]).length)addEditQuoteRow();
 }
@@ -64,7 +68,7 @@ function saveEditedQuote(id){
   const items=collectDocumentItems('eq-items','eq',true);if(!items)return;
   const nextId=fa('eq-no').trim();
   const importReviewRequired=quote.sourceDocumentId&&quote.reviewStatus==='Needs review';
-  if(importReviewRequired&&!document.getElementById('eq-import-reviewed')?.checked){toast('Check the original workbook and confirm the imported quote details before saving it as reviewed.');return;}
+  if(importReviewRequired&&!document.getElementById('eq-import-reviewed')?.checked){toast('Check the original source document and confirm the imported quote details before saving it as reviewed.');return;}
   if(!nextId||!fa('eq-date')||!fa('eq-cust')||!items.length){toast('Complete quote number, date, customer and line items');return;}
   if((nextId!==id||validQuoteNo(id,quote.date))&&!validQuoteNo(nextId,fa('eq-date'))){toast('Quote number must use BB or SS + DDMMYY + daily sequence, for example SS07102601');return;}
   if(DB.quotes.some(other=>other!==quote&&other.id===nextId)){toast('This quote number already exists');return;}
